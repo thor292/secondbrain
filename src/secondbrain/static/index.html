@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecondBrain</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #667085;
+    --border: #e3e6eb; --accent: #4f46e5; --accent-soft: #eef0ff;
+    --dept: #0f766e; --dept-soft: #e6f6f3; --company: #b45309; --company-soft: #fdf3e4;
+    --none: #6b7280; --none-soft: #f1f2f4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151c; --panel: #1a1e27; --text: #e6e8ee; --muted: #98a0b3;
+      --border: #2a303c; --accent: #8b85ff; --accent-soft: #24234a;
+      --dept: #5eead4; --dept-soft: #11302d; --company: #fbbf24; --company-soft: #3a2a10;
+      --none: #9ca3af; --none-soft: #262a33;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.5 system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); }
+  header { padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--panel); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0; }
+  header .model { color: var(--muted); font-size: 13px; margin-left: auto; }
+  main { display: grid; grid-template-columns: 280px 1fr; gap: 16px; padding: 16px; max-width: 1200px; margin: 0 auto; }
+  @media (max-width: 760px) { main { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 10px; }
+  .user { display: block; width: 100%; text-align: left; padding: 8px 10px; border: 1px solid transparent; border-radius: 8px; background: none; color: inherit; cursor: pointer; font: inherit; }
+  .user:hover { background: var(--bg); }
+  .user.active { background: var(--accent-soft); border-color: var(--accent); }
+  .user small { display: block; color: var(--muted); font-family: ui-monospace, monospace; font-size: 12px; }
+  .company-label { font-weight: 600; margin: 12px 0 4px; font-size: 14px; }
+  .company-label:first-of-type { margin-top: 0; }
+  #chat { display: flex; flex-direction: column; min-height: 70vh; }
+  #messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-bottom: 12px; }
+  .msg { max-width: 85%; padding: 10px 14px; border-radius: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .msg.q { align-self: flex-end; background: var(--accent); color: #fff; }
+  .msg.a { align-self: flex-start; background: var(--bg); border: 1px solid var(--border); }
+  .msg.note { align-self: center; color: var(--muted); font-size: 13px; background: none; }
+  .badge { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; margin-bottom: 6px; }
+  .badge.department { color: var(--dept); background: var(--dept-soft); }
+  .badge.company { color: var(--company); background: var(--company-soft); }
+  .badge.none { color: var(--none); background: var(--none-soft); }
+  details { margin-top: 8px; font-size: 13px; color: var(--muted); }
+  details li { margin: 6px 0; white-space: pre-wrap; }
+  details code { font-size: 12px; }
+  form { display: flex; gap: 8px; flex-wrap: wrap; }
+  input, select, button.primary { font: inherit; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: inherit; }
+  input { flex: 1; min-width: 180px; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); cursor: pointer; }
+  button.secondary { font: inherit; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: none; color: inherit; cursor: pointer; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+  .tabs button { font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); background: none; color: var(--muted); cursor: pointer; }
+  .tabs button.active { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+  .hidden { display: none; }
+  .empty { color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>SecondBrain</h1>
+  <span id="who" class="empty">Pick a user</span>
+  <span id="model" class="model"></span>
+</header>
+<main>
+  <section class="panel">
+    <h2>Sign in as</h2>
+    <div id="users"><p class="empty">Loading…</p></div>
+  </section>
+  <section class="panel" id="chat">
+    <div id="messages"><p class="empty">Ask the brain anything. It searches your department first, then your company — never other companies.</p></div>
+    <div class="tabs">
+      <button type="button" data-mode="ask" class="active">Ask</button>
+      <button type="button" data-mode="remember">Remember</button>
+    </div>
+    <form id="ask-form">
+      <input id="question" placeholder="e.g. How many days of annual leave do we get?" autocomplete="off" required>
+      <button class="primary">Ask</button>
+    </form>
+    <form id="remember-form" class="hidden">
+      <input id="note" placeholder="e.g. Met the vendor today, they agreed to 40 dollars per unit" autocomplete="off" required>
+      <select id="sensitivity">
+        <option value="internal">Internal</option>
+        <option value="public">Public</option>
+        <option value="restricted">Restricted</option>
+      </select>
+      <button class="primary">Remember</button>
+      <button type="button" class="secondary" id="consolidate">Save to long-term</button>
+    </form>
+  </section>
+</main>
+<script>
+  const state = { user: null };
+  const $ = (id) => document.getElementById(id);
+
+  async function api(path, options = {}) {
+    const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+    if (state.user) headers["X-User-Id"] = state.user.id;
+    const res = await fetch(path, { ...options, headers });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.detail || res.statusText);
+    return body;
+  }
+
+  function add(cls, text) {
+    const empty = $("messages").querySelector(".empty");
+    if (empty) empty.remove();
+    const el = document.createElement("div");
+    el.className = "msg " + cls;
+    el.textContent = text;
+    $("messages").appendChild(el);
+    el.scrollIntoView({ block: "end" });
+    return el;
+  }
+
+  const LABELS = { department: "Answered from your department", company: "Answered from your company", none: "Not found in your brains" };
+
+  function addAnswer(result) {
+    const el = add("a", "");
+    const badge = document.createElement("span");
+    badge.className = "badge " + result.answered_from;
+    badge.textContent = LABELS[result.answered_from];
+    el.appendChild(badge);
+    el.appendChild(document.createElement("br"));
+    el.appendChild(document.createTextNode(result.answer));
+    if (result.sources.length) {
+      const details = document.createElement("details");
+      const summary = document.createElement("summary");
+      summary.textContent = `${result.sources.length} source${result.sources.length > 1 ? "s" : ""}`;
+      details.appendChild(summary);
+      const list = document.createElement("ol");
+      for (const s of result.sources) {
+        const li = document.createElement("li");
+        const code = document.createElement("code");
+        code.textContent = `${s.brain} · ${s.type} · distance ${s.distance}`;
+        li.appendChild(code);
+        li.appendChild(document.createTextNode("\n" + s.content));
+        list.appendChild(li);
+      }
+      details.appendChild(list);
+      el.appendChild(details);
+    }
+  }
+
+  async function loadUsers() {
+    try {
+      const users = await api("/demo/users");
+      const box = $("users");
+      box.textContent = "";
+      let company = null;
+      for (const u of users) {
+        const c = u.home_brain.split(".").slice(0, 2).join(".");
+        if (c !== company) {
+          company = c;
+          const label = document.createElement("div");
+          label.className = "company-label";
+          label.textContent = c;
+          box.appendChild(label);
+        }
+        const btn = document.createElement("button");
+        btn.className = "user";
+        btn.textContent = u.name;
+        const small = document.createElement("small");
+        small.textContent = u.home_brain;
+        btn.appendChild(small);
+        btn.onclick = () => selectUser(u, btn);
+        box.appendChild(btn);
+      }
+      if (!users.length) box.innerHTML = '<p class="empty">No users yet. Onboard a company first.</p>';
+    } catch (e) {
+      $("users").innerHTML = '<p class="empty"></p>';
+      $("users").firstChild.textContent = "Couldn't load users: " + e.message;
+    }
+  }
+
+  function selectUser(u, btn) {
+    state.user = u;
+    document.querySelectorAll(".user").forEach((b) => b.classList.toggle("active", b === btn));
+    $("who").className = "";
+    $("who").textContent = `${u.name} — ${u.brain_name} (${u.home_brain})`;
+    add("note", `Now signed in as ${u.name}`);
+  }
+
+  function needUser() {
+    if (!state.user) { add("note", "Pick a user on the left first."); return true; }
+    return false;
+  }
+
+  $("ask-form").onsubmit = async (e) => {
+    e.preventDefault();
+    if (needUser()) return;
+    const question = $("question").value.trim();
+    $("question").value = "";
+    add("q", question);
+    try { addAnswer(await api("/ask", { method: "POST", body: JSON.stringify({ question }) })); }
+    catch (err) { add("note", "Error: " + err.message); }
+  };
+
+  $("remember-form").onsubmit = async (e) => {
+    e.preventDefault();
+    if (needUser()) return;
+    const content = $("note").value.trim();
+    $("note").value = "";
+    add("q", "Remember: " + content);
+    try {
+      const item = await api("/remember", { method: "POST", body: JSON.stringify({ content, sensitivity: $("sensitivity").value }) });
+      add("note", `Stored in short-term memory as ${item.memory_type}`);
+    } catch (err) { add("note", "Error: " + err.message); }
+  };
+
+  $("consolidate").onclick = async () => {
+    if (needUser()) return;
+    try {
+      const r = await api("/consolidate", { method: "POST" });
+      add("note", r.consolidated ? `Saved ${r.consolidated} item(s) to long-term memory` : "Nothing in short-term memory");
+    } catch (err) { add("note", "Error: " + err.message); }
+  };
+
+  document.querySelectorAll(".tabs button").forEach((tab) => {
+    tab.onclick = () => {
+      document.querySelectorAll(".tabs button").forEach((t) => t.classList.toggle("active", t === tab));
+      $("ask-form").classList.toggle("hidden", tab.dataset.mode !== "ask");
+      $("remember-form").classList.toggle("hidden", tab.dataset.mode !== "remember");
+    };
+  });
+
+  api("/health").then((h) => { $("model").textContent = `LLM: ${h.llm} · Embeddings: ${h.embedding_model}`; }).catch(() => {});
+  loadUsers();
+</script>
+</body>
+</html>

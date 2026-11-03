@@ -1,0 +1,146 @@
+"""HTTP API and chat screen.
+
+    uv run uvicorn secondbrain.api:app --reload
+
+Users are identified by the X-User-Id header. That is a stand-in for SSO:
+it must not be exposed beyond a trusted demo network.
+"""
+
+import hmac
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Annotated, Literal
+
+import psycopg
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, JSONResponse
+from psycopg.rows import dict_row
+from pydantic import BaseModel
+
+from secondbrain import admin
+from secondbrain.config import Settings, get_settings
+from secondbrain.memory.short_term import ShortTermMemory
+from secondbrain.memory.store import MemoryStore
+from secondbrain.models import build_models
+from secondbrain.sensitivity import Sensitivity
+from secondbrain.service import SecondBrain, UnknownUser
+
+STATIC_DIR = Path(__file__).parent / "static"
+SensitivityName = Literal["public", "internal", "restricted"]
+
+
+class RememberRequest(BaseModel):
+    content: str
+    sensitivity: SensitivityName = "internal"
+
+
+class AskRequest(BaseModel):
+    question: str
+
+
+def create_app(settings: Settings | None = None) -> FastAPI:
+    settings = settings or get_settings()
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        llm, embedder = build_models(settings)
+        store = MemoryStore(settings.app_database_url, settings.embedding_dim)
+        short_term = ShortTermMemory(settings.redis_url, settings.short_term_ttl)
+        app.state.brain = SecondBrain(settings, store, short_term, llm, embedder)
+        yield
+        store.close()
+
+    app = FastAPI(title="SecondBrain", lifespan=lifespan)
+
+    def brain(request: Request) -> SecondBrain:
+        return request.app.state.brain
+
+    def require_admin(x_admin_token: Annotated[str | None, Header()] = None) -> None:
+        if not settings.admin_token:
+            raise HTTPException(404, "Admin API is disabled")
+        if not x_admin_token or not hmac.compare_digest(x_admin_token, settings.admin_token):
+            raise HTTPException(401, "Invalid admin token")
+
+    UserId = Annotated[str, Header(alias="X-User-Id")]
+    Brain = Annotated[SecondBrain, Depends(brain)]
+
+    @app.exception_handler(UnknownUser)
+    async def unknown_user(request: Request, exc: UnknownUser):
+        return JSONResponse({"detail": f"Unknown user {exc}"}, status_code=401)
+
+    @app.get("/", include_in_schema=False)
+    def chat_screen():
+        return FileResponse(STATIC_DIR / "index.html")
+
+    @app.get("/health")
+    def health(brain: Brain):
+        return {"status": "ok", "llm": brain.llm.name, "embedding_model": brain.embedder.name}
+
+    @app.get("/demo/users")
+    def demo_users():
+        if not settings.demo_mode:
+            raise HTTPException(404, "Demo mode is off")
+        with psycopg.connect(settings.admin_database_url, row_factory=dict_row) as conn:
+            return conn.execute(
+                """SELECT u.id, u.name, u.home_brain::text AS home_brain, b.name AS brain_name
+                   FROM users u JOIN brains b ON b.path = u.home_brain ORDER BY u.home_brain, u.id"""
+            ).fetchall()
+
+    @app.post("/remember")
+    def remember(body: RememberRequest, user_id: UserId, brain: Brain):
+        return brain.remember(user_id, body.content, Sensitivity.parse(body.sensitivity))
+
+    @app.post("/consolidate")
+    def consolidate(user_id: UserId, brain: Brain):
+        try:
+            return {"consolidated": brain.consolidate(user_id)}
+        except psycopg.errors.InsufficientPrivilege:
+            raise HTTPException(403, "You can't store memories at that sensitivity in your brain")
+
+    @app.post("/ask")
+    def ask(body: AskRequest, user_id: UserId, brain: Brain):
+        result = brain.ask(user_id, body.question)
+        return {
+            "answer": result.answer,
+            "answered_from": result.answered_from,
+            "sources": [
+                {"brain": h.brain_path, "type": h.memory_type, "content": h.content,
+                 "distance": round(h.distance, 3)}
+                for h in result.sources
+            ],
+        }
+
+    @app.post("/admin/companies", dependencies=[Depends(require_admin)])
+    def onboard_company(spec: dict):
+        with psycopg.connect(settings.admin_database_url) as conn:
+            try:
+                return {"company": admin.onboard(conn, spec)}
+            except (KeyError, ValueError) as exc:
+                raise HTTPException(400, f"Invalid company spec: {exc}")
+
+    @app.post("/admin/brains/{brain_path}/documents", dependencies=[Depends(require_admin)])
+    async def upload_documents(
+        brain_path: str,
+        brain: Brain,
+        files: Annotated[list[UploadFile], File()],
+        sensitivity: Annotated[SensitivityName, Form()] = "internal",
+    ):
+        documents = []
+        for upload in files:
+            if Path(upload.filename or "").suffix.lower() not in admin.ALLOWED_SUFFIXES:
+                raise HTTPException(400, f"{upload.filename}: only .md and .txt are supported")
+            documents.append((upload.filename, (await upload.read()).decode("utf-8")))
+        with psycopg.connect(settings.admin_database_url) as conn:
+            try:
+                count = admin.import_documents(
+                    conn, brain.embedder, settings, brain_path, documents,
+                    Sensitivity.parse(sensitivity),
+                )
+            except ValueError as exc:
+                raise HTTPException(400, str(exc))
+        return {"brain": brain_path, "chunks": count}
+
+    return app
+
+
+app = create_app()

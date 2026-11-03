@@ -1,0 +1,17 @@
+{
+  "id": "acme",
+  "name": "Acme Retail",
+  "departments": [
+    {"id": "sales", "name": "Sales"},
+    {"id": "finance", "name": "Finance"},
+    {"id": "hr", "name": "HR"}
+  ],
+  "users": [
+    {"id": "asha", "name": "Asha (Sales rep)", "department": "sales", "role": "member"},
+    {"id": "vikram", "name": "Vikram (Sales lead)", "department": "sales", "role": "lead",
+     "extra_grants": [{"department": "finance", "max_sensitivity": "internal"}]},
+    {"id": "meera", "name": "Meera (Finance analyst)", "department": "finance", "role": "member"},
+    {"id": "ravi", "name": "Ravi (CFO)", "department": "finance", "role": "executive"},
+    {"id": "sara", "name": "Sara (HR manager)", "department": "hr", "role": "lead"}
+  ]
+}

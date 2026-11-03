@@ -1,0 +1,6 @@
+{
+  "id": "globex",
+  "name": "Globex Corp",
+  "departments": [{"id": "ops", "name": "Operations"}],
+  "users": [{"id": "lee", "name": "Lee (Ops manager)", "department": "ops", "role": "lead"}]
+}
