@@ -33,6 +33,18 @@ five memory types. See [ARCHITECTURE.md](ARCHITECTURE.md) for the design.
     company, department, person and memory. Needs the admin token.
   - **As a person**: only what that person is allowed to see.
   - Replaced and duplicate memories appear faded, linked to what replaced them.
+- **Relationships ("who knows what")**: when memories become long-term
+  (documents imported, notes saved), the model extracts the people, customers,
+  suppliers, products, carriers, places and topics they mention, and how those
+  relate ("Casa Forma supplies the Aria linen sofa"). The results are stored in
+  PostgreSQL and synced to one **FalkorDB** graph per company.
+  - `GET /experts?topic=Black Friday`: who wrote or is mentioned in memories
+    about a topic, and which brains hold them.
+  - `GET /entities/Hearth Freight`: what we know about a customer, supplier,
+    product, person or topic: relationships, related entities, people, memories.
+  - Both only count memories the asking person may read. FalkorDB has no
+    permissions of its own, so every graph query is limited to memory ids that
+    PostgreSQL returns for that person, and the graph holds no memory text.
 - **Model layer**: an offline `stub` provider for tests, and a `litellm`
   provider for the company proxy.
 
@@ -46,7 +58,7 @@ docker compose up -d --wait
 uv sync
 cp .env.example .env               # fill in the LiteLLM settings, SB_DEMO_MODE=true, an SB_ADMIN_TOKEN
 uv run python -m secondbrain.schema --reset
-./scripts/load_examples.sh         # companies, documents, notes, maintenance, root learning
+./scripts/load_examples.sh         # companies, documents, notes, maintenance, root learning, entities
 uv run uvicorn secondbrain.api:app --port 8765
 ```
 
@@ -111,6 +123,26 @@ uv run python -m secondbrain.learning       # send anonymized patterns to the ro
 
 Admin API: `POST /admin/maintain` and `POST /admin/learn`.
 
+## Relationships (FalkorDB)
+
+FalkorDB runs in `docker compose` on port 56380. Entity extraction runs by
+itself after "Save to long-term" in the chat and after a document upload or
+`admin import`. To extract anything not processed yet and rebuild the graphs:
+
+```bash
+uv run python -m secondbrain.relationships                      # every company
+uv run python -m secondbrain.relationships --company root.lumen # one company
+```
+
+On a database created before this feature, the same command first adds the
+new tables (`entities`, `memory_entities`, `entity_relations`,
+`entity_extractions`). Existing tables and rows are not changed. With the
+LiteLLM models it takes about 30 seconds for the Lumen demo data.
+
+PostgreSQL is the source of truth and the graphs are rebuilt from it, so
+FalkorDB keeps no volume: a company graph that is missing (for example after
+a restart) is rebuilt automatically on the first query.
+
 ## Connecting the company models
 
 In `.env`:
@@ -147,12 +179,15 @@ uv run pytest
 ```
 
 Tests use a separate `secondbrain_test` database and their own small companies
-(`tests/fixtures`), and never touch demo data.
+(`tests/fixtures`), and never touch demo data. Their FalkorDB graphs are named
+`sbtest_*`, the demo's `sb_*`.
 
 ## Not built yet
 
 - Real sign-in (SSO). Users are identified by an `X-User-Id` header, so only
   run the demo on a trusted network. Needs the company's identity provider.
 - Connectors (Google Drive, Slack, email). Need app credentials from IT.
-- Pushing root patterns down to companies (variant V1), FalkorDB
-  relationships, MQTT, self-hosting (see ARCHITECTURE.md).
+- Pushing root patterns down to companies (variant V1), MQTT, self-hosting
+  (see ARCHITECTURE.md).
+- Using the relationship graph when answering questions, and showing entities
+  in the graph view (see ARCHITECTURE.md, phase 3).

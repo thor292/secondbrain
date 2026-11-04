@@ -115,6 +115,32 @@ built.
 - **Open item:** license is believed to be SSPL. Legal must confirm it's
   fine for a commercial service before we commit.
 
+**FalkorDB as built (phase 3)**
+- Extracted entities and relationships are stored in PostgreSQL first
+  (`entities`, `memory_entities`, `entity_relations`, `entity_extractions`),
+  then synced to the graph `sb_<company>`. Tests use `sbtest_<company>`.
+- Graph: `(:Brain)`, `(:Person)`, `(:Memory)`, `(:Entity)` with `PARENT_OF`,
+  `MEMBER_OF`, `STORED_IN`, `CREATED`, `MENTIONS`, `SAME_AS` (a person and the
+  entity naming them) and `RELATES_TO` (carries the id of the memory stating it).
+- **Permission rule:** every graph query takes the viewer's *scope*: their
+  company (picks the graph) and the memory ids PostgreSQL returns for them
+  under row-level security. Queries must filter on those ids (code refuses a
+  query that doesn't), so an entity, person or relationship is only reached
+  through a memory the viewer may read. Memory text is never stored in the
+  graph; it is read from PostgreSQL again, as the viewer.
+- The new PostgreSQL tables have row-level security too: a row is visible only
+  through a memory the reader may see. Two independent layers.
+- Hidden and unknown entities give the same "not found", so an answer never
+  reveals that something hidden exists.
+- No volume: a missing graph is rebuilt from PostgreSQL on first use.
+- Rejected: copying grants and sensitivity into the graph and filtering
+  there. It would duplicate the permission logic outside the database that
+  enforces it, and the two could drift.
+- Scale note: the visible id list is sent with each query. Fine for
+  thousands of memories per person; at much larger sizes, filter by brain and
+  sensitivity in the graph *in addition* and keep the id check as the final
+  gate, or cache scopes per person.
+
 **MQTT notes**
 - Topics mirror the tree: `root/companyA/finance/memory/new`,
   `root/companyA/#`.
@@ -266,11 +292,36 @@ To keep the best version, "best" is defined before building:
 | **0. Finish design** | AI models, language, identity, how versions are scored | This document complete |
 | **1. One brain** | Five memory types, memory pipeline, API, PostgreSQL + Redis | A single brain that remembers and answers |
 | **2. The tree** | Company + departments, fallback, access through parent, per-person permissions | A company with two departments; zero leaks |
-| **3. Relationships** | User memory graph in FalkorDB | "Who knows what" queries |
+| **3. Relationships** | User memory graph in FalkorDB | "Who knows what" queries (**first version built**, see 6.1) |
 | **4. Compare versions** | Alternatives for V2 and V4, scored | First variants chosen with data |
 | **5. The root** | Learning flows up, patterns from restricted companies, V1 | Learning across the tree |
 | **6. Edge and scale** | MQTT, self-hosted brains (V3), isolation options (V5) | Deployable on a company's own servers |
 | **7. Product** | Connectors, chat assistant | Usable by a real customer |
+
+### 6.1 Phase 3 status
+
+Built: entity and relationship extraction on consolidation and document
+import (LiteLLM; a deterministic stub for tests), storage in PostgreSQL,
+per-company FalkorDB graphs with incremental sync and full rebuild
+(`python -m secondbrain.relationships`), and two APIs: `GET /experts?topic=`
+and `GET /entities/{name}`. Tests prove no entity, person or relationship
+leaks across permissions or companies, and that the leak tests fail if the
+permission filter is removed.
+
+On the Lumen demo data, extraction takes about 30 seconds and finds about 200
+entities (suppliers, carriers, products, customers, places, topics).
+
+Not done yet:
+- **Entity resolution**: "Halo floor lamp" and "Halo brass floor lamp", or
+  "Nordlys" and "Nordlys lighting", are separate entities. Merge by aliases or
+  an AI pass, measured on the demo data.
+- **Answering with the graph**: feeding related entities into `ask` was not
+  added, because it hasn't been measured. Plan: a fixed question set, compare
+  answers with and without graph context, keep it only if it is better.
+- **Graph view**: entities are not shown in `graph-view` yet; the current
+  fixed nested layout should stay readable, so this needs its own design.
+- Memories retired by maintenance stay in the graph; queries already skip
+  them for people who can see the replacement, like search does.
 
 ## 7. Open items
 

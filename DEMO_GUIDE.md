@@ -16,11 +16,13 @@ to explain it to a client.
    uv run uvicorn secondbrain.api:app --port 8765
    ```
 
+   This also starts **FalkorDB** (the relationship graph, F15).
+
 3. Open **http://localhost:8765** (chat) and **http://localhost:8765/graph-view** (graph).
 4. The admin token for the whole-SecondBrain view is `SB_ADMIN_TOKEN` in `.env`
    (`dev-admin-token` locally).
 
-**To reset everything** to the original demo data (takes about a minute):
+**To reset everything** to the original demo data (takes about two minutes):
 
 ```bash
 uv run python -m secondbrain.schema --reset
@@ -291,13 +293,65 @@ Result: only `root.lumen` and `root.lumen.marketing`.
 
 - **Say:** "Even if someone bypassed our application, the database itself would only return what that person may see."
 
-### F15. Automated tests
+### F15. Who knows what (relationships)
+
+When documents and notes are saved, the AI picks out the people, customers,
+suppliers, products, carriers, places and topics they mention, and how they
+relate. These are kept in PostgreSQL and in a **FalkorDB** graph per company.
+
+- **Setup (once, after loading the data):**
+
+  ```bash
+  uv run python -m secondbrain.relationships
+  ```
+
+  It prints the number of entities per company (about 200 for Lumen). New notes
+  saved with **Save to long-term** are added by themselves.
+
+- **Try it** in a terminal, as different people (`X-User-Id` picks the person):
+
+  ```bash
+  curl -s --get localhost:8765/experts --data-urlencode "topic=Black Friday" -H "X-User-Id: maya" | python3 -m json.tool
+  curl -s localhost:8765/entities/Hearth%20Freight -H "X-User-Id: nina" | python3 -m json.tool
+  ```
+
+  Or open `http://localhost:8765/docs`, pick `GET /experts` or
+  `GET /entities/{name}`, and fill in the user id.
+
+| # | Person | Ask | Expect |
+|---|---|---|---|
+| 1 | Nina | `/experts?topic=Priya Shah` | **Nina Alvarez** (wrote 2 notes), in **Customer Support** |
+| 2 | Sofia | `/experts?topic=Priya Shah` | **Nobody**: the Priya notes are in Support, which Sofia can't read |
+| 3 | Maya (CEO) | `/experts?topic=Halo` | **Ivy Thompson** and **Omar Haddad**; Merchandising and Operations; finds both "Halo floor lamp" and "Halo brass floor lamp" |
+| 4 | Maya | `/experts?topic=Black Friday` | **Leo Park** (2 notes) and **Rachel Kim** (1); Marketing and Finance |
+| 5 | Nina | `/experts?topic=shipping` | **Daniel Okafor** (his $60 free shipping note); 7 memories across the company, Operations and Support |
+| 6 | Sofia | `/experts?topic=shipping` | **No people**, 5 memories: she can't see Daniel's Operations note, the same rule as F5 |
+| 7 | Omar | `/entities/Nordlys` | **Supplier**, based in Denmark, will credit the damaged **Halo floor lamp**; Omar wrote about it |
+| 8 | Maya | `/entities/Hearth Freight` | **Carrier**, 5 memories: missed the **Aria sofa** delivery, ships large furniture from Reno; Arjun wrote about it |
+| 9 | Nina | `/entities/Hearth Freight` | **4 memories**: the restricted Carrier Contracts summary is left out |
+| 10 | Leo | `/entities/Aria linen sofa` | **Product**, **Casa Forma supplies** it, on backorder; Omar wrote about it |
+| 11 | Sofia | `/entities/Casa Forma` | **404, nothing known**: it's only in Merchandising, which Sofia can't read |
+| 12 | Tom | `/entities/gross margin` | **404**: only in the restricted Q3 results |
+| 13 | Rachel | `/entities/gross margin` | **3 memories** in Finance, linked to freight costs and Black Friday discounting |
+| 14 | Karim (Brightpath) | `/entities/Nordlys` | **404**: Lumen's graph is a different graph |
+| 15 | Maya | `/entities/Daniel Okafor` | **Person** (`person_id: daniel`), prefers updates in **#ops-alerts**; Ivy wrote that note |
+
+The AI's extraction varies a little between runs, so names and counts may
+differ slightly; the permission results (2, 6, 9, 11, 12, 14) never do.
+
+- **Say:** "Ask who knows about a customer, a supplier or a topic, and it points
+  you to the people and teams. The relationship graph has no permissions of
+  its own, so we never trust it on its own: every graph question is limited to
+  the memories PostgreSQL says this person may read. That's why Sofia gets
+  nobody for Priya Shah, and Tom gets nothing on gross margin."
+
+### F16. Automated tests
 
 ```bash
 uv run pytest
 ```
 
-Expect **34 passed**. They run on a separate test database.
+Expect **53 passed**, including tests that no entity, person or relationship leaks across permissions or companies. They run on a separate test database.
 
 ---
 
@@ -310,6 +364,7 @@ Expect **34 passed**. They run on a separate test database.
 | Does our data train the AI? | No. Your documents are stored as memory; the AI reads them to answer, but no model is trained on them. |
 | Does our data go to other companies? | Never. Only if you opt in, anonymous lessons with no names or numbers go to our root, and other companies never query it directly. |
 | What happens when information changes? | Newer notes update older facts automatically (F9). Nothing is deleted, so there's a full history. |
+| Can it tell me who knows about something? | Yes: ask who knows about a customer, supplier or topic, or what we know about a product (F15). It only counts what you may read. |
 | Which documents does it read? | PDF, Word, Markdown and text today. Google Drive, Slack and email connectors are planned. |
 | How do people log in? | Today the demo uses a user picker. In production it uses your existing sign-in (Google, Microsoft, Okta). |
 
@@ -318,6 +373,7 @@ Expect **34 passed**. They run on a separate test database.
 ## 6. Know before the demo
 
 - **The VPN must stay on.** Without it, questions fail.
+- **FalkorDB must be running** (`docker compose up -d --wait`) for F15. If it was restarted, the first query rebuilds the graph from PostgreSQL by itself.
 - **Answers take 2 to 5 seconds**, longer for follow-ups and the first question after starting.
 - **Reset the data** before a client demo so practice notes are gone.
 - The **user picker is a demo stand-in** for real sign-in; mention SSO is planned.
