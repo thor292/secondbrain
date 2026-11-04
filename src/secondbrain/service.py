@@ -4,6 +4,7 @@ import json
 from dataclasses import dataclass, field
 
 from secondbrain import tree
+from secondbrain.graph import build_graph
 from secondbrain.config import Settings
 from secondbrain.memory.short_term import ShortTermMemory
 from secondbrain.memory.store import Hit, MemoryStore, User
@@ -132,3 +133,9 @@ class SecondBrain:
         lines += ["", f"Question: {question}"]
         answer = self.llm.complete(ANSWER_SYSTEM, "\n".join(lines))
         return Answer(answer, answered_from if hits else "none", hits)
+
+    def graph(self, user_id: str) -> dict:
+        """Everything this person can see in their company, as nodes and edges."""
+        user = self._user(user_id)
+        with self.store.as_user(user_id) as conn:
+            return build_graph(conn, user, self.short_term.all(user_id))

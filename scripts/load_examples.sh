@@ -14,3 +14,4 @@ run import root.acme.hr examples/acme/docs/hr --sensitivity internal
 
 run onboard examples/globex/company.json
 run import root.globex examples/globex/docs/company --sensitivity internal
+uv run python scripts/seed_activity.py

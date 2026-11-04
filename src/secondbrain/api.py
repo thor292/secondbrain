@@ -18,6 +18,7 @@ from psycopg.rows import dict_row
 from pydantic import BaseModel
 
 from secondbrain import admin
+from secondbrain.graph import build_full_graph
 from secondbrain.config import Settings, get_settings
 from secondbrain.memory.short_term import ShortTermMemory
 from secondbrain.memory.store import MemoryStore
@@ -72,6 +73,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def chat_screen():
         return FileResponse(STATIC_DIR / "index.html")
 
+    @app.get("/graph-view", include_in_schema=False)
+    def graph_screen():
+        return FileResponse(STATIC_DIR / "graph.html")
+
+    @app.get("/graph")
+    def graph(user_id: UserId, brain: Brain):
+        return brain.graph(user_id)
+
     @app.get("/health")
     def health(brain: Brain):
         return {"status": "ok", "llm": brain.llm.name, "embedding_model": brain.embedder.name}
@@ -109,6 +118,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 for h in result.sources
             ],
         }
+
+    @app.get("/admin/graph", dependencies=[Depends(require_admin)])
+    def full_graph():
+        """The whole SecondBrain: root, every company, every memory."""
+        with psycopg.connect(settings.admin_database_url, row_factory=dict_row) as conn:
+            return build_full_graph(conn)
 
     @app.post("/admin/companies", dependencies=[Depends(require_admin)])
     def onboard_company(spec: dict):

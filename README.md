@@ -17,6 +17,12 @@ five memory types. See [ARCHITECTURE.md](ARCHITECTURE.md) for the design.
 - **Company onboarding and document import**: from a JSON spec and `.md`/`.txt`
   files, through the CLI or the admin API.
 - **Chat screen** at `http://localhost:8765` for live demos.
+- **Graph view** at `http://localhost:8765/graph-view`, in the style of a graph
+  database browser, with two kinds of view:
+  - **Whole SecondBrain (admin)**: the root, every company, department, person
+    and memory. Needs the admin token (`SB_ADMIN_TOKEN`).
+  - **As a person**: only what that person is allowed to see, so switching
+    people shows the permissions at work.
 - **Model layer**: an offline `stub` provider for development and tests, and a
   `litellm` provider for the company proxy.
 
@@ -29,7 +35,7 @@ docker compose up -d --wait
 uv sync
 cp .env.example .env               # set SB_DEMO_MODE=true and an SB_ADMIN_TOKEN
 uv run python -m secondbrain.schema --reset
-./scripts/load_examples.sh         # Acme Retail and Globex sample companies
+./scripts/load_examples.sh         # Acme Retail and Globex sample companies, plus notes from Acme people
 uv run uvicorn secondbrain.api:app --port 8765
 ```
 

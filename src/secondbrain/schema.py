@@ -87,6 +87,14 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
     )
 $$;
 
+-- The signed-in user's own grants, without exposing anyone else's.
+CREATE FUNCTION sb_my_grants()
+RETURNS TABLE (brain_path ltree, include_children boolean, max_sensitivity smallint)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+    SELECT g.brain_path, g.include_children, g.max_sensitivity FROM grants g
+    WHERE g.user_id = current_setting('app.user_id', true)
+$$;
+
 ALTER TABLE memories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE memories FORCE ROW LEVEL SECURITY;
 
@@ -99,6 +107,8 @@ CREATE POLICY memories_write ON memories FOR INSERT
 REVOKE ALL ON grants FROM PUBLIC;
 REVOKE ALL ON FUNCTION sb_can_see(ltree, smallint) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION sb_can_see(ltree, smallint) TO secondbrain_app;
+REVOKE ALL ON FUNCTION sb_my_grants() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION sb_my_grants() TO secondbrain_app;
 GRANT SELECT ON brains, users TO secondbrain_app;
 GRANT SELECT, INSERT ON memories TO secondbrain_app;
 """
@@ -107,6 +117,7 @@ GRANT SELECT, INSERT ON memories TO secondbrain_app;
 DROP_SQL = """
 DROP TABLE IF EXISTS memories, grants, users, brains CASCADE;
 DROP FUNCTION IF EXISTS sb_can_see(ltree, smallint);
+DROP FUNCTION IF EXISTS sb_my_grants();
 """
 
 

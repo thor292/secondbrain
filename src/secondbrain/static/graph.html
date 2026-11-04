@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecondBrain Graph</title>
+<style>
+  :root {
+    --bg: #0b0e14; --panel: #12161f; --panel-2: #1a1f2b; --text: #e8ebf2; --muted: #8790a6;
+    --border: #232a38; --accent: #8b85ff;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { font: 14px/1.45 system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); display: flex; flex-direction: column; overflow: hidden; }
+  header { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  header h1 { font-size: 16px; margin: 0 6px 0 0; letter-spacing: .01em; }
+  header h1 span { color: var(--accent); }
+  select, #search, .btn { font: inherit; background: var(--panel-2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; }
+  #search { width: 190px; }
+  .btn { cursor: pointer; }
+  .btn:hover { border-color: var(--accent); }
+  a { color: var(--accent); text-decoration: none; }
+  .stats { color: var(--muted); font-size: 12px; margin-left: auto; }
+  .wrap { flex: 1; display: flex; min-height: 0; position: relative; }
+  canvas { flex: 1; display: block; cursor: grab; min-width: 0; }
+  canvas.dragging { cursor: grabbing; }
+  aside { width: 310px; background: var(--panel); border-left: 1px solid var(--border); padding: 16px; overflow-y: auto; }
+  @media (max-width: 760px) { aside { position: absolute; right: 0; bottom: 0; width: 100%; height: 42%; border-left: none; border-top: 1px solid var(--border); } }
+  aside h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+  .legend label { display: flex; align-items: center; gap: 9px; padding: 3px 0; cursor: pointer; user-select: none; font-size: 13px; }
+  .legend input { margin: 0; accent-color: var(--accent); }
+  .legend .dot { width: 11px; height: 11px; border-radius: 50%; flex: none; }
+  .legend .line { width: 18px; height: 0; border-top: 2px solid; flex: none; }
+  .legend .line.dashed { border-top-style: dashed; }
+  .legend .count { color: var(--muted); margin-left: auto; font-size: 12px; }
+  .section { margin-bottom: 20px; }
+  .props { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .props td { padding: 5px 0; vertical-align: top; border-bottom: 1px solid var(--border); }
+  .props td:first-child { color: var(--muted); width: 90px; padding-right: 8px; }
+  .content { white-space: pre-wrap; background: var(--panel-2); border-radius: 8px; padding: 10px; font-size: 13px; margin-top: 10px; line-height: 1.5; }
+  .kind-tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 999px; margin-bottom: 8px; color: #0b0e14; }
+  .title { font-weight: 600; font-size: 15px; margin-bottom: 10px; }
+  .rel { font-size: 13px; padding: 5px 8px; margin: 0 -8px; color: var(--muted); cursor: pointer; border-radius: 6px; }
+  .rel:hover { background: var(--panel-2); }
+  .rel b { color: var(--text); font-weight: 500; }
+  .rel code { font-size: 11px; color: var(--accent); }
+  .empty { color: var(--muted); font-size: 13px; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Second<span>Brain</span> Graph</h1>
+  <select id="user">
+    <option value="">Choose a view…</option>
+    <option value="__all__">★ Whole SecondBrain (admin)</option>
+  </select>
+  <input id="search" placeholder="Search…" autocomplete="off">
+  <button class="btn" id="fit" type="button">Fit</button>
+  <a href="/">← Chat</a>
+  <span class="stats" id="stats"></span>
+</header>
+<div class="wrap">
+  <canvas id="canvas"></canvas>
+  <aside>
+    <div class="section">
+      <h2>Nodes</h2>
+      <div class="legend" id="node-legend"></div>
+    </div>
+    <div class="section">
+      <h2>Relationships</h2>
+      <div class="legend" id="edge-legend"></div>
+      <p class="hint">Click any node to see all of its relationships. Scroll to zoom, drag to move.</p>
+    </div>
+    <div class="section">
+      <h2>Details</h2>
+      <div id="details"><p class="empty">Choose who is looking, then click a node.</p></div>
+    </div>
+  </aside>
+</div>
+<script>
+const NODE = {
+  root:       { label: "Root brain (our organization)", color: "#f5c451", r: 38 },
+  company:    { label: "Company brain",    color: "#9d97ff", r: 30 },
+  department: { label: "Department brain", color: "#5aa7ff", r: 21 },
+  user:       { label: "Person",           color: "#ffa45c", r: 13 },
+  semantic:   { label: "Fact",             color: "#3fd6a0", r: 9 },
+  episodic:   { label: "Event",            color: "#ff7ab8", r: 9 },
+  user_mem:   { label: "About a person",   color: "#ffd84d", r: 9 },
+  short_term: { label: "Short-term",       color: "#a3aab8", r: 8 },
+};
+// Structural relationships are shown by default; the rest appear on selection
+// or when switched on, so the picture stays readable.
+const EDGE = {
+  PARENT_OF:  { label: "Part of company",  color: "#9d97ff", on: true },
+  MEMBER_OF:  { label: "Works in",         color: "#ffa45c", on: true },
+  STORED_IN:  { label: "Stored in",        color: "#4b5468", on: true },
+  CAN_ACCESS: { label: "Can access",       color: "#ffa45c", on: false, dashed: true },
+  CREATED:    { label: "Created by",       color: "#ffd84d", on: false },
+  RELATED_TO: { label: "Related memory",   color: "#3fd6a0", on: false, dashed: true },
+  WORKING_ON: { label: "Working on",       color: "#a3aab8", on: false, dashed: true },
+};
+
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const state = {
+  nodes: [], edges: [], zones: [], byId: new Map(), hiddenNodes: new Set(),
+  edgeOn: Object.fromEntries(Object.entries(EDGE).map(([k, v]) => [k, v.on])),
+  view: { x: 0, y: 0, k: 1 }, selected: null, hover: null, search: "", userId: null, anim: 1,
+};
+
+const kindOf = (n) => n.kind === "brain" ? n.props.kind : n.kind;
+const isBrain = (k) => k === "root" || k === "company" || k === "department";
+const short = (s, n) => s.length > n ? s.slice(0, n - 1) + "…" : s;
+
+// ---------- layout ----------
+// Deterministic nested layout, so the same tree always looks the same:
+// - a company sits at the center of its own cluster, departments are zones on
+//   a ring around it, with people on an inner arc and memories on outer arcs;
+// - in the whole-SecondBrain view, the root sits in the center and every
+//   company cluster is placed on a ring around it.
+const pathOf = (n) => n.props.path || n.props.home_brain || n.props.brain || null;
+const companyPath = (p) => p.split(".").slice(0, 2).join(".");
+
+// Place nodes on concentric arcs around (cx, cy), facing angle `facing`.
+function arcs(list, cx, cy, facing, span, firstRadius, step, perRing) {
+  let placed = 0, ring = 0, maxR = 0;
+  while (placed < list.length) {
+    const count = Math.min(perRing + ring * 4, list.length - placed);
+    const r = firstRadius + ring * step;
+    for (let i = 0; i < count; i++) {
+      const t = count === 1 ? 0.5 : i / (count - 1);
+      const a = facing - span / 2 + t * span;
+      const n = list[placed + i];
+      n.tx = cx + Math.cos(a) * r; n.ty = cy + Math.sin(a) * r;
+    }
+    placed += count; ring++; maxR = r;
+  }
+  return maxR;
+}
+
+const TYPE_ORDER = { semantic: 0, episodic: 1, user_mem: 2 };
+const sortMem = (a, b) => (TYPE_ORDER[a.k] - TYPE_ORDER[b.k]) || a.label.localeCompare(b.label);
+
+// Lays out one company around (0, 0). `startAngle` is where the first
+// department goes. Returns the zones it drew and how far it extends.
+function layoutCompany(company, items, startAngle) {
+  const depts = items.filter((n) => n.k === "department").sort((a, b) => a.label.localeCompare(b.label));
+  const members = new Map(depts.map((d) => [d.props.path, { people: [], memories: [] }]));
+  const own = { people: [], memories: [] };
+  for (const n of items) {
+    if (n.k === "department" || n.k === "short_term") continue;
+    const group = members.get(pathOf(n)) || own;
+    (n.k === "user" ? group.people : group.memories).push(n);
+  }
+  let zoneR = 150;
+  for (const m of members.values()) zoneR = Math.max(zoneR, 140 + Math.ceil(m.memories.length / 6) * 46);
+  const ringR = depts.length === 0 ? 0
+    : depts.length === 1 ? zoneR + 40
+    : Math.max(300, (zoneR * 1.05) / Math.sin(Math.PI / depts.length));
+  company.tx = 0; company.ty = 0;
+  const zones = [];
+  let extent = 120;
+  depts.forEach((d, i) => {
+    const angle = startAngle + (i / depts.length) * Math.PI * 2;
+    d.tx = Math.cos(angle) * ringR; d.ty = Math.sin(angle) * ringR;
+    const m = members.get(d.props.path);
+    m.memories.sort(sortMem);
+    m.people.sort((a, b) => a.label.localeCompare(b.label));
+    // People sit on a narrow arc facing outward, spaced wide enough for their names.
+    const r1 = arcs(m.people, d.tx, d.ty, angle, Math.min(Math.PI * 0.95, 1.3 * Math.max(m.people.length - 1, 1)), 92, 40, 4);
+    const r2 = arcs(m.memories, d.tx, d.ty, angle, Math.PI * 1.25, Math.max(r1, 92) + 48, 46, 6);
+    const r = Math.max(r2, r1, 80) + 42;
+    zones.push({ x: d.tx, y: d.ty, r, rgb: "90,167,255" });
+    extent = Math.max(extent, ringR + r);
+  });
+  own.memories.sort(sortMem);
+  arcs(own.people, 0, 0, startAngle + Math.PI, Math.PI * 0.6, 70, 30, 5);
+  // Company-level memories sit in the gaps between department zones.
+  const gaps = depts.length ? depts.map((_, i) => startAngle + ((i + 0.5) / depts.length) * Math.PI * 2) : [0];
+  own.memories.forEach((n, i) => {
+    const a = gaps[i % gaps.length], r = 105 + Math.floor(i / gaps.length) * 30;
+    n.tx = Math.cos(a) * r; n.ty = Math.sin(a) * r;
+  });
+  return { zones, extent };
+}
+
+function layout(nodes) {
+  const root = nodes.find((n) => n.k === "root");
+  const companies = nodes.filter((n) => n.k === "company").sort((a, b) => a.label.localeCompare(b.label));
+  const groups = new Map(companies.map((c) => [c.props.path, []]));
+  const rootItems = [];
+  for (const n of nodes) {
+    if (n.k === "root" || n.k === "company" || n.k === "short_term") continue;
+    const p = pathOf(n);
+    if (p && groups.has(companyPath(p))) groups.get(companyPath(p)).push(n);
+    else rootItems.push(n);
+  }
+  state.zones = [];
+  if (!root) {
+    for (const c of companies) state.zones.push(...layoutCompany(c, groups.get(c.props.path), -Math.PI / 2).zones);
+  } else {
+    root.tx = 0; root.ty = 0;
+    const n = companies.length;
+    const placed = companies.map((c, i) => {
+      // Two companies sit side by side, which suits wide screens; more go around a ring.
+      const angle = (n === 2 ? Math.PI : -Math.PI / 2) + (i / Math.max(n, 1)) * Math.PI * 2;
+      // Turn each company so its departments face away from the root.
+      const result = layoutCompany(c, groups.get(c.props.path), angle + Math.PI + Math.PI / 3);
+      return { c, angle, ...result };
+    });
+    const maxExt = Math.max(200, ...placed.map((p) => p.extent));
+    const R = n <= 1 ? maxExt + 160 : Math.max(maxExt + 160, (maxExt * 1.08) / Math.sin(Math.PI / n));
+    for (const p of placed) {
+      const ox = Math.cos(p.angle) * R, oy = Math.sin(p.angle) * R;
+      for (const m of [p.c, ...groups.get(p.c.props.path)]) { m.tx += ox; m.ty += oy; }
+      state.zones.push({ x: ox, y: oy, r: p.extent + 36, rgb: "157,151,255", label: p.c.label });
+      for (const z of p.zones) state.zones.push({ ...z, x: z.x + ox, y: z.y + oy });
+    }
+    rootItems.sort(sortMem);
+    arcs(rootItems, 0, 0, Math.PI / 2, Math.PI * 2 * 0.85, 120, 34, 10);
+  }
+  const shortTerm = nodes.filter((m) => m.k === "short_term");
+  shortTerm.forEach((n, i) => {
+    const owner = state.edges.find((e) => e.t === n);
+    const base = owner ? owner.s : (companies[0] || root);
+    n.tx = base.tx + Math.cos(i * 1.1) * 40; n.ty = base.ty - 34 - i * 4;
+  });
+}
+
+// ---------- data ----------
+async function loadUsers() {
+  const res = await fetch("/demo/users");
+  const users = res.ok ? await res.json() : [];
+  const sel = document.getElementById("user");
+  const group = document.createElement("optgroup");
+  group.label = "As a person (what they're allowed to see)";
+  sel.appendChild(group);
+  for (const u of users) {
+    const o = document.createElement("option");
+    o.value = u.id; o.textContent = `${u.name} — ${u.home_brain}`;
+    group.appendChild(o);
+  }
+  const wanted = new URLSearchParams(location.search).get("user");
+  if (wanted === "__all__" || (wanted && users.some((u) => u.id === wanted))) { sel.value = wanted; loadGraph(wanted); }
+}
+
+// The whole-SecondBrain view needs the admin token. It is kept for this browser
+// tab only (sessionStorage), never in the page or the URL.
+function adminToken() {
+  let token = null;
+  try { token = sessionStorage.getItem("sb-admin-token"); } catch {}
+  if (!token) {
+    token = prompt("Admin token for the whole SecondBrain view:");
+    if (token) try { sessionStorage.setItem("sb-admin-token", token); } catch {}
+  }
+  return token;
+}
+
+async function loadGraph(userId) {
+  state.userId = userId;
+  let res;
+  if (userId === "__all__") {
+    const token = adminToken();
+    if (!token) return;
+    res = await fetch("/admin/graph", { headers: { "X-Admin-Token": token } });
+    if (res.status === 401) try { sessionStorage.removeItem("sb-admin-token"); } catch {}
+  } else {
+    res = await fetch("/graph", { headers: { "X-User-Id": userId } });
+  }
+  if (!res.ok) {
+    document.getElementById("details").textContent =
+      res.status === 401 ? "Wrong admin token. Choose the view again to retry." :
+      res.status === 404 ? "The admin API is disabled on this server." : "Couldn't load graph.";
+    return;
+  }
+  const data = await res.json();
+  state.nodes = data.nodes.map((n) => ({ ...n, k: kindOf(n), x: 0, y: 0, tx: 0, ty: 0 }));
+  state.byId = new Map(state.nodes.map((n) => [n.id, n]));
+  state.edges = data.edges.filter((e) => state.byId.has(e.source) && state.byId.has(e.target))
+    .map((e) => ({ ...e, s: state.byId.get(e.source), t: state.byId.get(e.target) }));
+  layout(state.nodes);
+  state.selected = null; state.anim = 0;
+  fit(true);
+  renderLegends(); renderDetails();
+  document.getElementById("stats").textContent =
+    `${userId === "__all__" ? "Whole SecondBrain · admin view" : `${data.scope} · seen by ${userId}`} · ${state.nodes.length} nodes · ${state.edges.length} relationships`;
+}
+
+// ---------- drawing ----------
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = canvas.clientWidth * dpr;
+  canvas.height = canvas.clientHeight * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+const visible = (n) => !state.hiddenNodes.has(n.k);
+const ease = (t) => 1 - Math.pow(1 - t, 3);
+
+function focusSet() {
+  const f = state.selected || state.hover;
+  if (!f) return null;
+  const set = new Set([f.id]);
+  for (const e of state.edges) { if (e.s === f) set.add(e.t.id); if (e.t === f) set.add(e.s.id); }
+  return set;
+}
+
+function edgeShown(e, focus) {
+  if (!visible(e.s) || !visible(e.t)) return false;
+  const f = state.selected || state.hover;
+  if (f && (e.s === f || e.t === f)) return true;
+  return state.edgeOn[e.label];
+}
+
+function draw() {
+  if (state.anim < 1) {
+    state.anim = Math.min(1, state.anim + 0.035);
+    const t = ease(state.anim);
+    for (const n of state.nodes) { n.x = n.tx * t; n.y = n.ty * t; }
+  }
+  const { x, y, k } = state.view;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  ctx.clearRect(0, 0, w, h);
+  const bg = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h) * 0.7);
+  bg.addColorStop(0, "#121826"); bg.addColorStop(1, "#0b0e14");
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
+
+  ctx.save();
+  ctx.translate(x, y); ctx.scale(k, k);
+  const t = ease(state.anim);
+  const focus = focusSet();
+  const q = state.search.toLowerCase();
+  const matches = (n) => !q || n.label.toLowerCase().includes(q) || JSON.stringify(n.props).toLowerCase().includes(q);
+  const dimmed = (n) => (focus && !focus.has(n.id)) || (q && !matches(n));
+
+  // Department zones
+  for (const z of state.zones) {
+    ctx.globalAlpha = (focus ? 0.5 : 1) * t;
+    const g = ctx.createRadialGradient(z.x * t, z.y * t, 0, z.x * t, z.y * t, z.r);
+    g.addColorStop(0, `rgba(${z.rgb},0.09)`); g.addColorStop(1, `rgba(${z.rgb},0.02)`);
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(z.x * t, z.y * t, z.r, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = `rgba(${z.rgb},0.25)`; ctx.lineWidth = 1 / k; ctx.setLineDash([4 / k, 6 / k]);
+    ctx.stroke(); ctx.setLineDash([]);
+    if (z.label) {
+      // Company name on the rim of its cluster, readable at any zoom.
+      ctx.font = `700 ${16 / Math.sqrt(k)}px system-ui`;
+      ctx.textAlign = "center";
+      ctx.fillStyle = `rgba(${z.rgb},0.85)`;
+      ctx.fillText(z.label.toUpperCase(), z.x * t, z.y * t - z.r - 10 / Math.sqrt(k));
+    }
+  }
+
+  // Edges: gentle curves, faded unless in focus
+  for (const e of state.edges) {
+    if (!edgeShown(e, focus)) continue;
+    const spec = EDGE[e.label] || { color: "#4b5468" };
+    const inFocus = focus && focus.has(e.s.id) && focus.has(e.t.id) && (e.s === (state.selected || state.hover) || e.t === (state.selected || state.hover));
+    const dim = (focus && !inFocus) || (q && !(matches(e.s) && matches(e.t)));
+    ctx.globalAlpha = (dim ? 0.06 : inFocus ? 0.95 : e.label === "STORED_IN" ? 0.35 : 0.55) * t;
+    ctx.strokeStyle = spec.color;
+    ctx.lineWidth = (inFocus ? 2 : e.label === "PARENT_OF" ? 2.2 : 1.1) / Math.sqrt(k);
+    ctx.setLineDash(spec.dashed ? [5 / k, 5 / k] : []);
+    const mx = (e.s.x + e.t.x) / 2, my = (e.s.y + e.t.y) / 2;
+    const dx = e.t.x - e.s.x, dy = e.t.y - e.s.y;
+    const bend = ["CAN_ACCESS", "CREATED", "RELATED_TO"].includes(e.label) ? 0.18 : 0;
+    const cx = mx - dy * bend, cy = my + dx * bend;
+    ctx.beginPath(); ctx.moveTo(e.s.x, e.s.y); ctx.quadraticCurveTo(cx, cy, e.t.x, e.t.y); ctx.stroke();
+    ctx.setLineDash([]);
+    if (inFocus) {
+      ctx.globalAlpha = t;
+      ctx.font = `600 ${10 / Math.sqrt(k)}px system-ui`;
+      const label = e.label + (e.props ? " · " + Object.values(e.props).join(", ") : "");
+      const tw = ctx.measureText(label).width;
+      const lx = (mx + cx) / 2, ly = (my + cy) / 2;
+      ctx.fillStyle = "rgba(11,14,20,0.85)";
+      ctx.fillRect(lx - tw / 2 - 4, ly - 8 / Math.sqrt(k), tw + 8, 14 / Math.sqrt(k));
+      ctx.fillStyle = spec.color; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(label, lx, ly);
+      ctx.textBaseline = "alphabetic";
+    }
+  }
+
+  // Nodes
+  for (const n of state.nodes) {
+    if (!visible(n)) continue;
+    const spec = NODE[n.k];
+    const r = spec.r;
+    const dim = dimmed(n);
+    ctx.globalAlpha = (dim ? 0.18 : 1) * t;
+    if (!dim && (isBrain(n.k) || n === state.selected)) {
+      ctx.shadowColor = spec.color; ctx.shadowBlur = n === state.selected ? 26 : 18;
+    }
+    ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+    const g = ctx.createRadialGradient(n.x - r * 0.35, n.y - r * 0.35, r * 0.1, n.x, n.y, r);
+    g.addColorStop(0, "#ffffff55"); g.addColorStop(0.35, spec.color); g.addColorStop(1, spec.color);
+    ctx.fillStyle = g; ctx.fill();
+    ctx.shadowBlur = 0;
+    if (n.props && n.props.sensitivity === "restricted") {
+      ctx.lineWidth = 2.2; ctx.strokeStyle = "#ff5a5a"; ctx.stroke();
+    }
+    if (n.me) {
+      ctx.beginPath(); ctx.arc(n.x, n.y, r + 4, 0, Math.PI * 2);
+      ctx.lineWidth = 2; ctx.strokeStyle = "#ffffff"; ctx.stroke();
+    }
+    if (n === state.selected) {
+      ctx.beginPath(); ctx.arc(n.x, n.y, r + 7, 0, Math.PI * 2);
+      ctx.lineWidth = 1.5; ctx.strokeStyle = spec.color; ctx.stroke();
+    }
+    // Initials inside people, a short tag inside brains
+    if (n.k === "user" || isBrain(n.k)) {
+      ctx.fillStyle = "#0b0e14";
+      ctx.font = `700 ${n.k === "user" ? 10 : n.k === "root" ? 15 : n.k === "company" ? 13 : 11}px system-ui`;
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      const inner = n.k === "user" ? n.label[0].toUpperCase() : n.k === "root" ? "SB" : n.k === "company" ? "CO" : n.label.slice(0, 2).toUpperCase();
+      ctx.fillText(inner, n.x, n.y + 0.5);
+      ctx.textBaseline = "alphabetic";
+    }
+  }
+
+  // Labels last, so they sit above everything
+  for (const n of state.nodes) {
+    if (!visible(n) || dimmed(n)) continue;
+    const spec = NODE[n.k];
+    const isMemory = n.k !== "user" && !isBrain(n.k);
+    const show = !isMemory || k > 1.5 || n === state.selected || n === state.hover || (focus && focus.has(n.id)) || (q && matches(n));
+    if (!show) continue;
+    const big = isBrain(n.k);
+    const size = (big ? (n.k === "root" ? 17 : n.k === "company" ? 15 : 13) : isMemory ? 10.5 : 11.5) / Math.sqrt(Math.max(k, 0.6));
+    ctx.font = `${big ? 700 : 500} ${size}px system-ui`;
+    ctx.textAlign = "center";
+    // People show their first name on the canvas; the full name and role are in the details panel.
+    const personName = n.label.replace(/\s*\(.*\)\s*$/, "");
+    const text = isMemory ? short(n.label, 34) : n.k === "user" ? (n.me ? personName + " · you" : personName)
+      : n.k === "root" ? "SecondBrain Root" : n.label;
+    const ly = n.y + spec.r + size + 3;
+    ctx.globalAlpha = t;
+    ctx.lineWidth = 3; ctx.strokeStyle = "rgba(11,14,20,0.9)"; ctx.strokeText(text, n.x, ly);
+    ctx.fillStyle = big ? "#ffffff" : isMemory ? "#c9cfdc" : "#f1e4d8";
+    ctx.fillText(text, n.x, ly);
+  }
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+function fit(useTargets) {
+  const nodes = state.nodes.filter(visible);
+  if (!nodes.length) return;
+  const xs = [], ys = [];
+  for (const n of nodes) {
+    const nx = useTargets ? n.tx : n.x, ny = useTargets ? n.ty : n.y;
+    xs.push(nx); ys.push(ny);
+  }
+  for (const z of state.zones) { xs.push(z.x - z.r, z.x + z.r); ys.push(z.y - z.r, z.y + z.r); }
+  const [minX, maxX, minY, maxY] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+  const w = canvas.clientWidth, h = canvas.clientHeight, pad = 60;
+  const k = Math.min(1.4, (w - pad) / (maxX - minX || 1), (h - pad) / (maxY - minY || 1));
+  state.view = { k, x: w / 2 - ((minX + maxX) / 2) * k, y: h / 2 - ((minY + maxY) / 2) * k };
+}
+
+function loop() { if (state.nodes.length) draw(); requestAnimationFrame(loop); }
+
+// ---------- legends & details ----------
+function renderLegends() {
+  const counts = {};
+  for (const n of state.nodes) counts[n.k] = (counts[n.k] || 0) + 1;
+  const nodeBox = document.getElementById("node-legend");
+  nodeBox.textContent = "";
+  for (const [key, spec] of Object.entries(NODE)) {
+    if (!counts[key]) continue;
+    const label = document.createElement("label");
+    const cb = document.createElement("input");
+    cb.type = "checkbox"; cb.checked = !state.hiddenNodes.has(key);
+    cb.onchange = () => cb.checked ? state.hiddenNodes.delete(key) : state.hiddenNodes.add(key);
+    const dot = document.createElement("span"); dot.className = "dot"; dot.style.background = spec.color;
+    const text = document.createElement("span"); text.textContent = spec.label;
+    const count = document.createElement("span"); count.className = "count"; count.textContent = counts[key];
+    label.append(cb, dot, text, count);
+    nodeBox.appendChild(label);
+  }
+  if (state.nodes.some((n) => n.props && n.props.sensitivity === "restricted")) {
+    const r = document.createElement("label");
+    r.innerHTML = '<span style="width:11px;height:11px;border-radius:50%;border:2px solid #ff5a5a;flex:none;margin-left:22px"></span><span>Restricted memory</span>';
+    nodeBox.appendChild(r);
+  }
+  const edgeCounts = {};
+  for (const e of state.edges) edgeCounts[e.label] = (edgeCounts[e.label] || 0) + 1;
+  const edgeBox = document.getElementById("edge-legend");
+  edgeBox.textContent = "";
+  for (const [key, spec] of Object.entries(EDGE)) {
+    if (!edgeCounts[key]) continue;
+    const label = document.createElement("label");
+    const cb = document.createElement("input");
+    cb.type = "checkbox"; cb.checked = state.edgeOn[key];
+    cb.onchange = () => { state.edgeOn[key] = cb.checked; };
+    const line = document.createElement("span");
+    line.className = "line" + (spec.dashed ? " dashed" : ""); line.style.borderColor = spec.color;
+    const text = document.createElement("span"); text.textContent = spec.label;
+    const count = document.createElement("span"); count.className = "count"; count.textContent = edgeCounts[key];
+    label.append(cb, line, text, count);
+    edgeBox.appendChild(label);
+  }
+}
+
+function renderDetails() {
+  const box = document.getElementById("details");
+  const n = state.selected;
+  box.textContent = "";
+  if (!n) {
+    const p = document.createElement("p"); p.className = "empty";
+    p.textContent = state.userId ? "Click a node to see its properties and relationships." : "Choose who is looking, then click a node.";
+    box.appendChild(p); return;
+  }
+  const tag = document.createElement("span");
+  tag.className = "kind-tag"; tag.style.background = NODE[n.k].color; tag.textContent = NODE[n.k].label;
+  const title = document.createElement("div"); title.className = "title"; title.textContent = n.label;
+  box.append(tag, title);
+  const table = document.createElement("table"); table.className = "props";
+  for (const [key, value] of Object.entries(n.props || {})) {
+    if (key === "content") continue;
+    const tr = document.createElement("tr");
+    const a = document.createElement("td"); a.textContent = key;
+    const b = document.createElement("td"); b.textContent = value;
+    tr.append(a, b); table.appendChild(tr);
+  }
+  box.appendChild(table);
+  if (n.props && n.props.content) {
+    const c = document.createElement("div"); c.className = "content"; c.textContent = n.props.content;
+    box.appendChild(c);
+  }
+  const rels = state.edges.filter((e) => e.s === n || e.t === n);
+  if (rels.length) {
+    const h = document.createElement("h2"); h.style.marginTop = "16px"; h.textContent = `Relationships (${rels.length})`;
+    box.appendChild(h);
+    for (const e of rels) {
+      const other = e.s === n ? e.t : e.s;
+      const div = document.createElement("div"); div.className = "rel";
+      const code = document.createElement("code"); code.textContent = e.label;
+      const b = document.createElement("b"); b.textContent = short(other.label, 40);
+      div.append(e.s === n ? "→ " : "← ", code, " ", b);
+      if (e.props) div.append(" · " + Object.values(e.props).join(", "));
+      div.onclick = () => { state.selected = other; renderDetails(); };
+      box.appendChild(div);
+    }
+  }
+}
+
+// ---------- interaction ----------
+const toWorld = (px, py) => { const { x, y, k } = state.view; return [(px - x) / k, (py - y) / k]; };
+function nodeAt(px, py) {
+  const [wx, wy] = toWorld(px, py);
+  for (let i = state.nodes.length - 1; i >= 0; i--) {
+    const n = state.nodes[i];
+    if (!visible(n)) continue;
+    // At least ~14 screen pixels, so small nodes stay easy to click when zoomed out.
+    const r = Math.max(NODE[n.k].r + 4, 14 / state.view.k);
+    if ((n.x - wx) ** 2 + (n.y - wy) ** 2 <= r * r) return n;
+  }
+  return null;
+}
+
+let drag = null;
+canvas.addEventListener("pointerdown", (ev) => {
+  const n = nodeAt(ev.offsetX, ev.offsetY);
+  drag = { node: n, sx: ev.offsetX, sy: ev.offsetY, vx: state.view.x, vy: state.view.y, moved: false };
+  canvas.classList.add("dragging");
+  canvas.setPointerCapture(ev.pointerId);
+});
+canvas.addEventListener("pointermove", (ev) => {
+  if (!drag) {
+    state.hover = nodeAt(ev.offsetX, ev.offsetY);
+    canvas.style.cursor = state.hover ? "pointer" : "grab";
+    return;
+  }
+  const dx = ev.offsetX - drag.sx, dy = ev.offsetY - drag.sy;
+  if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
+  if (drag.node && drag.moved) {
+    const [wx, wy] = toWorld(ev.offsetX, ev.offsetY);
+    drag.node.x = drag.node.tx = wx; drag.node.y = drag.node.ty = wy;
+  } else if (!drag.node) {
+    state.view.x = drag.vx + dx; state.view.y = drag.vy + dy;
+  }
+});
+canvas.addEventListener("pointerup", () => {
+  if (drag && !drag.moved) { state.selected = drag.node; renderDetails(); }
+  drag = null; canvas.classList.remove("dragging");
+});
+canvas.addEventListener("pointerleave", () => { state.hover = null; });
+canvas.addEventListener("wheel", (ev) => {
+  ev.preventDefault();
+  const k = Math.min(4, Math.max(0.2, state.view.k * Math.exp(-ev.deltaY * 0.0015)));
+  const [wx, wy] = toWorld(ev.offsetX, ev.offsetY);
+  state.view = { k, x: ev.offsetX - wx * k, y: ev.offsetY - wy * k };
+}, { passive: false });
+
+document.getElementById("user").onchange = (ev) => {
+  if (!ev.target.value) return;
+  history.replaceState(null, "", "?user=" + encodeURIComponent(ev.target.value));
+  loadGraph(ev.target.value);
+};
+document.getElementById("fit").onclick = () => fit(false);
+document.getElementById("search").oninput = (ev) => { state.search = ev.target.value.trim(); };
+document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") { state.selected = null; renderDetails(); } });
+
+window.addEventListener("resize", () => { resize(); });
+resize();
+loadUsers();
+loop();
+</script>
+</body>
+</html>

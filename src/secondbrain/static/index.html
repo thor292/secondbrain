@@ -63,6 +63,7 @@
 <header>
   <h1>SecondBrain</h1>
   <span id="who" class="empty">Pick a user</span>
+  <a id="graph-link" href="/graph-view" style="color: var(--accent); text-decoration: none;">Graph view →</a>
   <span id="model" class="model"></span>
 </header>
 <main>
@@ -181,6 +182,7 @@
     document.querySelectorAll(".user").forEach((b) => b.classList.toggle("active", b === btn));
     $("who").className = "";
     $("who").textContent = `${u.name} — ${u.brain_name} (${u.home_brain})`;
+    $("graph-link").href = "/graph-view?user=" + encodeURIComponent(u.id);
     add("note", `Now signed in as ${u.name}`);
   }
 
