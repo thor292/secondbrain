@@ -126,7 +126,12 @@ def parse(reply: str) -> Extraction:
 
 def extract(llm: LLM, content: str, company_name: str, people: list[str]) -> Extraction:
     prompt = f"Company: {company_name}\nPeople: {'; '.join(people)}\n\nMemory:\n{content}"
-    return parse(llm.complete(EXTRACT_SYSTEM, prompt))
+    result = parse(llm.complete(EXTRACT_SYSTEM, prompt))
+    # Models sometimes list the company itself anyway; it would link everything to everything.
+    own = normalize(company_name)
+    result.entities = [(n, k) for n, k in result.entities if normalize(n) != own]
+    result.relations = [r for r in result.relations if own not in (r[0], r[2])]
+    return result
 
 
 def _people(conn: psycopg.Connection, company: str) -> tuple[list[str], dict[str, str]]:
