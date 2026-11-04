@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from psycopg.rows import dict_row
 from pydantic import BaseModel
 
-from secondbrain import admin, learning, maintenance, relationships, signals, tree
+from secondbrain import admin, evolution, learning, maintenance, relationships, signals, tree
 from secondbrain.documents import UnsupportedDocument, extract_text
 from secondbrain.forecasting.api import build_router as forecast_router
 from secondbrain.graph import build_full_graph
@@ -149,6 +149,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 raise HTTPException(404, "No such signal that you can see")
         return {"ok": True}
 
+    @app.get("/brain/evolution")
+    def brain_evolution(user_id: UserId, brain: Brain):
+        """Track record, feedback, outcomes and updated facts this person may see."""
+        brain._user(user_id)
+        with brain.store.as_user(user_id) as conn:
+            return evolution.history(conn)
+
     @app.post("/conversation/reset")
     def reset_conversation(user_id: UserId, brain: Brain):
         brain.new_conversation(user_id)
@@ -201,6 +208,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         """Recalculate every company's decision signals."""
         result = signals.run(settings, brain.llm)
         return {company: len(items) for company, items in result.items()}
+
+    class Simulation(BaseModel):
+        company: str = "root.lumen"
+        days: int = 14
+
+    @app.post("/admin/simulate", dependencies=[Depends(require_admin)])
+    def simulate(body: Simulation, brain: Brain):
+        """Demo only: move a company's clock forward, judge outcomes, recalculate."""
+        if not 1 <= body.days <= 90:
+            raise HTTPException(400, "days must be between 1 and 90")
+        return evolution.advance(settings, brain.llm, brain.embedder, body.company, body.days)
+
+    @app.get("/admin/hq", dependencies=[Depends(require_admin)])
+    def hq():
+        with psycopg.connect(settings.admin_database_url, row_factory=dict_row) as conn:
+            return evolution.hq(conn)
+
+    @app.get("/hq", include_in_schema=False)
+    def hq_screen():
+        return FileResponse(STATIC_DIR / "hq.html", headers=NO_CACHE)
 
     @app.post("/admin/learn", dependencies=[Depends(require_admin)])
     def learn(brain: Brain):

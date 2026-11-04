@@ -48,7 +48,11 @@ CREATE TABLE signals (
     -- {"memories": [ids], "products": [{"brain", "sku"}], "lessons": [text],
     --  "facts": [text]}; lessons are copied in because company users can't read the root.
     evidence       jsonb NOT NULL,
-    status         text NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'acted', 'dismissed')),
+    -- Structured facts behind a stock signal (sku, quantity, lead time, run-out
+    -- date), so its outcome can be judged later.
+    details        jsonb NOT NULL DEFAULT '{}',
+    -- expired: nobody answered before the deadline passed.
+    status         text NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'acted', 'dismissed', 'expired')),
     feedback_by    text REFERENCES users(id),
     feedback_note  text,
     feedback_at    timestamptz,
@@ -56,6 +60,23 @@ CREATE TABLE signals (
 );
 
 CREATE INDEX signals_company_idx ON signals USING gist (company);
+
+-- What actually happened after a signal: did the run-out it warned about happen?
+CREATE TABLE signal_outcomes (
+    signal_id    uuid PRIMARY KEY REFERENCES signals(id) ON DELETE CASCADE,
+    result       text NOT NULL CHECK (result IN ('prevented', 'happened', 'happened_anyway', 'false_alarm')),
+    detail       text NOT NULL,
+    value        numeric(14, 2),  -- dollars saved or lost
+    evaluated_on date NOT NULL,
+    memory_id    uuid REFERENCES memories(id) ON DELETE SET NULL
+);
+
+ALTER TABLE signal_outcomes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE signal_outcomes FORCE ROW LEVEL SECURITY;
+-- An outcome is visible exactly when its signal is.
+CREATE POLICY outcomes_read ON signal_outcomes FOR SELECT
+    USING (EXISTS (SELECT 1 FROM signals s WHERE s.id = signal_id));
+GRANT SELECT ON signal_outcomes TO secondbrain_app;
 
 -- Visible only within the viewer's company, and only if every memory and
 -- product it cites is visible to them; the subqueries run under their own
@@ -85,7 +106,7 @@ GRANT EXECUTE ON FUNCTION sb_can_see_signal(ltree, jsonb) TO secondbrain_app;
 """
 
 DROP_SQL = """
-DROP TABLE IF EXISTS signals CASCADE;
+DROP TABLE IF EXISTS signal_outcomes, signals CASCADE;
 DROP FUNCTION IF EXISTS sb_can_see_signal(ltree, jsonb);
 """
 
@@ -114,6 +135,7 @@ class Signal:
     due: date | None = None
     impact_value: float | None = None
     evidence: dict = field(default_factory=dict)
+    details: dict = field(default_factory=dict)
 
 
 def _day(d) -> date:
@@ -140,8 +162,31 @@ def project_stock(on_hand: int, on_order: int, eta: date | None, points: list[di
     return out
 
 
+def track_record(conn: psycopg.Connection, company: str) -> dict:
+    """How the brain's run-out warnings have done at this company.
+
+    Only warnings nobody acted on show whether the prediction was right (a
+    prevented run-out can't tell us), so accuracy comes from those.
+    """
+    counts = {r["result"]: r["n"] for r in conn.execute(
+        """SELECT o.result, count(*) AS n FROM signal_outcomes o JOIN signals s ON s.id = o.signal_id
+           WHERE s.company = %s::ltree GROUP BY o.result""",
+        (company,),
+    ).fetchall()}
+    came_true, false_alarms = counts.get("happened", 0), counts.get("false_alarm", 0)
+    saved = conn.execute(
+        """SELECT coalesce(sum(o.value), 0)::float AS v FROM signal_outcomes o JOIN signals s ON s.id = o.signal_id
+           WHERE s.company = %s::ltree AND o.result = 'prevented'""",
+        (company,),
+    ).fetchone()["v"]
+    return {**counts, "came_true": came_true, "false_alarms": false_alarms, "saved": saved,
+            # Smoothed: with no history it is 0.5 and leaves confidence unchanged.
+            "accuracy": (came_true + 1) / (came_true + false_alarms + 2)}
+
+
 def stock_signals(conn: psycopg.Connection, company: str) -> list[Signal]:
     """Run-out, backorder and excess-stock signals for every product with stock data."""
+    record = track_record(conn, company)
     rows = conn.execute(
         """SELECT i.brain_path::text AS brain, i.sku, p.name, p.base_price::float AS price, i.as_of,
                   i.on_hand, i.on_order, i.order_eta, i.supplier, i.lead_time_days, i.unit_cost::float AS unit_cost,
@@ -157,12 +202,14 @@ def stock_signals(conn: psycopg.Connection, company: str) -> list[Signal]:
     for r in rows:
         points, today = r["points"], r["as_of"]
         wape = r["backtest"][r["model"]]["wape"]
-        confidence = round(max(0.3, min(0.95, 1 - wape)), 2)
+        # Forecast accuracy, adjusted by how this company's past warnings turned out.
+        confidence = round(max(0.3, min(0.97, (1 - wape) * (0.6 + 0.8 * record["accuracy"]))), 2)
         evidence = {"products": [{"brain": r["brain"], "sku": r["sku"]}], "facts": [
             f"{r['on_hand']:,} on hand" + (f", {r['on_order']:,} on order arriving {_fmt(r['order_eta'])}" if r["on_order"] else ""),
             f"{r['supplier']} lead time: {r['lead_time_days']} days",
             f"Forecast model: {r['model']} (typical error {wape:.0%})",
-        ]}
+        ] + ([f"Track record here: {record['came_true']} of {record['came_true'] + record['false_alarms']} "
+              f"ignored run-out warnings came true"] if record["came_true"] + record["false_alarms"] else [])}
         daily = sum(p["forecast"] for p in points) / len(points)
         projection = project_stock(r["on_hand"], r["on_order"], r["order_eta"], points)
         runout = next((d for d, s in projection if s <= 0), None)
@@ -202,6 +249,20 @@ def stock_signals(conn: psycopg.Connection, company: str) -> list[Signal]:
             peak = max(points, key=lambda p: p["forecast"])
             before_peak = runout <= _day(peak["day"])
             days_left = (order_by - today).days
+            if r["on_hand"] <= 0 and not r["on_order"]:
+                out.append(Signal(
+                    kind="stockout", fingerprint=f"stockout:{r['sku']}",
+                    title=f"{r['name']} is out of stock now, with nothing on order",
+                    action=f"Order {quantity:,} units from {r['supplier']} today; they arrive about "
+                           f"{_fmt(today + timedelta(days=r['lead_time_days']))} ({r['lead_time_days']}-day lead time).",
+                    reason=f"Nothing on hand or on order. The forecast expects about {daily:.0f} orders a day.",
+                    impact=f"About ${at_risk:,.0f} in sales lost before new stock can arrive", impact_value=round(at_risk, 2),
+                    urgency="high", confidence=confidence, due=today, evidence=evidence,
+                    details={"brain": r["brain"], "sku": r["sku"], "name": r["name"], "price": r["price"],
+                             "quantity": quantity, "supplier": r["supplier"], "lead_time_days": r["lead_time_days"],
+                             "runs_out": today.isoformat(), "order_by": today.isoformat(), "as_of": today.isoformat(),
+                             "already_out": True}))
+                continue
             if order_by < today:
                 action = (f"Order {quantity:,} units from {r['supplier']} today and ask them to expedite: at the normal "
                           f"{r['lead_time_days']}-day lead time they arrive {_fmt(arrival)}, after the run-out.")
@@ -218,7 +279,10 @@ def stock_signals(conn: psycopg.Connection, company: str) -> list[Signal]:
                        (f"; ~{lost_units:,.0f} units lost even if ordered today" if lost_units else ""),
                 impact_value=round(at_risk, 2),
                 urgency="high" if days_left <= 7 else "medium" if days_left <= 21 else "low",
-                confidence=confidence, due=max(today, order_by), evidence=evidence))
+                confidence=confidence, due=max(today, order_by), evidence=evidence,
+                details={"brain": r["brain"], "sku": r["sku"], "name": r["name"], "price": r["price"],
+                         "quantity": quantity, "supplier": r["supplier"], "lead_time_days": r["lead_time_days"],
+                         "runs_out": runout.isoformat(), "order_by": order_by.isoformat(), "as_of": today.isoformat()}))
             continue
 
         cover = r["on_hand"] / daily if daily else float("inf")
@@ -247,6 +311,8 @@ Rules, all mandatory:
 - Skip stock and reordering; those are handled separately.
 - Prefer fewer, stronger signals over many weak ones.
 - Never mention the ids (N1, L2, ...) in the title, action, reason or impact; put them only in "notes" and "lessons".
+- Learn from the feedback section: don't propose again what people dismissed (respect their reasons) unless
+  something new changes the case, and favour the kinds of action they acted on. Use outcomes as evidence.
 
 Reply with JSON only:
 {{"signals": [{{"title": "...", "action": "...", "reason": "...", "impact": "...",
@@ -256,7 +322,7 @@ Reply with JSON only:
 def business_signals(conn: psycopg.Connection, llm: LLM, company: str) -> list[Signal]:
     notes = conn.execute(
         """SELECT id::text, brain_path::text AS brain, memory_type, content, created_at FROM memories
-           WHERE brain_path <@ %s::ltree AND source IS NULL AND status = 'active'
+           WHERE brain_path <@ %s::ltree AND (source IS NULL OR source = 'signal outcome') AND status = 'active'
              AND created_at > now() - interval '60 days'
            ORDER BY created_at DESC LIMIT 40""",
         (company,),
@@ -266,12 +332,22 @@ def business_signals(conn: psycopg.Connection, llm: LLM, company: str) -> list[S
     ).fetchall()]
     if not notes and not lessons:
         return []
+    feedback = conn.execute(
+        """SELECT s.title, s.status, s.feedback_note, o.detail AS outcome FROM signals s
+           LEFT JOIN signal_outcomes o ON o.signal_id = s.id
+           WHERE s.company = %s::ltree AND s.status <> 'open'
+           ORDER BY coalesce(s.feedback_at, s.created_at) DESC LIMIT 15""",
+        (company,),
+    ).fetchall()
     note_ids = {f"N{i}": n for i, n in enumerate(notes, 1)}
     lesson_ids = {f"L{i}": text for i, text in enumerate(lessons, 1)}
     prompt = "\n".join(
         ["Recent notes:"] + [f"{k} ({n['created_at']:%Y-%m-%d}, {n['brain'].split('.')[-1]}): {n['content']}"
                              for k, n in note_ids.items()]
         + ["", "Lessons learned across businesses:"] + [f"{k}: {t}" for k, t in lesson_ids.items()]
+        + ["", "Feedback on earlier signals at this business:"]
+        + ([f"- {f['status'].upper()}: {f['title']}" + (f" (reason: {f['feedback_note']})" if f["feedback_note"] else "")
+            + (f" -> outcome: {f['outcome']}" if f["outcome"] else "") for f in feedback] or ["(none yet)"])
     )
     reply = llm.complete(BUSINESS_SYSTEM, prompt)
     match = re.search(r"\{.*\}", reply, re.DOTALL)
@@ -317,10 +393,10 @@ def generate(conn: psycopg.Connection, llm: LLM, company: str) -> list[Signal]:
     for s in fresh:
         conn.execute(
             """INSERT INTO signals (company, kind, fingerprint, title, action, reason, impact, impact_value,
-                                    urgency, confidence, due, evidence)
-               VALUES (%s::ltree, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                                    urgency, confidence, due, evidence, details)
+               VALUES (%s::ltree, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
             (company, s.kind, s.fingerprint, s.title, s.action, s.reason, s.impact, s.impact_value,
-             s.urgency, s.confidence, s.due, Jsonb(s.evidence)),
+             s.urgency, s.confidence, s.due, Jsonb(s.evidence), Jsonb(s.details)),
         )
     conn.commit()
     return fresh
@@ -338,9 +414,13 @@ def run(settings: Settings, llm: LLM, company: str | None = None) -> dict[str, l
 def visible(conn: psycopg.Connection, include_closed: bool = False) -> list[dict]:
     with conn.cursor(row_factory=dict_row) as cur:
         rows = cur.execute(
-            f"""SELECT id::text, company::text, kind, title, action, reason, impact, impact_value::float AS impact_value,
-                       urgency, confidence, due, evidence, status, feedback_by, feedback_note, feedback_at, created_at
-                FROM signals {"" if include_closed else "WHERE status = 'open'"}"""
+            f"""SELECT s.id::text, s.company::text, s.kind, s.title, s.action, s.reason, s.impact,
+                       s.impact_value::float AS impact_value, s.urgency, s.confidence, s.due, s.evidence,
+                       s.status, s.feedback_by, s.feedback_note, s.feedback_at, s.created_at,
+                       o.result AS outcome, o.detail AS outcome_detail, o.value::float AS outcome_value,
+                       o.evaluated_on AS outcome_on
+                FROM signals s LEFT JOIN signal_outcomes o ON o.signal_id = s.id
+                {"" if include_closed else "WHERE s.status = 'open'"}"""
         ).fetchall()
     rows.sort(key=lambda r: (r["status"] != "open", URGENCY_ORDER[r["urgency"]], r["due"] or date.max, -(r["impact_value"] or 0)))
     return rows

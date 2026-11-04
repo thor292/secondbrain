@@ -83,6 +83,14 @@
   .driver .e { font-size: 13px; color: var(--muted); }
   .callout { padding: 12px 14px; border-radius: 10px; border-left: 5px solid #d92d20; background: var(--accent-soft); margin: 10px 0; }
   .callout.ok { border-left-color: var(--good); }
+  .timeline { list-style: none; padding: 0; margin: 0; }
+  .timeline li { display: grid; grid-template-columns: 110px 130px 1fr; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+  @media (max-width: 700px) { .timeline li { grid-template-columns: 1fr; } }
+  .pill { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+  .pill.prevented, .pill.acted { background: #e7f6ec; color: #0f7a3d; }
+  .pill.happened, .pill.happened_anyway, .pill.expired { background: #fdecea; color: #b42318; }
+  .pill.false_alarm, .pill.dismissed { background: #f2f4f7; color: #475467; }
+  .outcome { margin-top: 8px; padding: 8px 10px; border-radius: 8px; font-size: 14px; background: var(--accent-soft); }
   input[type=range] { padding: 0; width: 200px; vertical-align: middle; }
 
   /* FalkorDB-style graph */
@@ -109,12 +117,14 @@
   <label class="muted">Looking as <select id="user"></select></label>
   <a href="/">← Chat</a>
   <a href="/graph-view">Graph view →</a>
+  <a href="/hq">HQ →</a>
 </header>
 <main>
   <div class="tabs">
     <button type="button" data-tab="signals" class="active">Decision signals</button>
     <button type="button" data-tab="forecast">Sales forecast</button>
     <button type="button" data-tab="experts">Who knows what</button>
+    <button type="button" data-tab="evolution">Brain evolution</button>
   </div>
 
   <section id="tab-signals">
@@ -136,6 +146,14 @@
       <p class="muted">Sales history is generated sample data for Lumen Home. Forecasts follow the same permissions as everything else: they live in Merchandising.</p>
     </div>
     <div id="forecast-out"></div>
+  </section>
+
+  <section id="tab-evolution" class="hidden">
+    <div class="panel">
+      <p style="margin:0">How the brain is learning: what happened after its signals, how often its warnings came true, what
+      people did with them, and which facts it updated. Every outcome is also saved as a memory, so the brain remembers it.</p>
+    </div>
+    <div id="evolution-out"></div>
   </section>
 
   <section id="tab-experts" class="hidden">
@@ -173,6 +191,7 @@ function denied(who, what) {
 }
 
 // ---------- decision signals ----------
+const OUTCOME = { prevented: "Prevented", happened: "Happened", happened_anyway: "Happened anyway", false_alarm: "False alarm" };
 const KIND = { stockout: "Stock: runs out", backorder: "Stock: out of stock", excess_stock: "Stock: too much", business: "Business" };
 
 async function loadSignals() {
@@ -227,7 +246,9 @@ function signalCard(s) {
       buttons.append(b);
     }
   } else {
-    buttons.append(el("span", { class: "muted" }, `${s.status === "acted" ? "Acted on" : "Dismissed"} by ${s.feedback_by} on ${s.feedback_at.slice(0, 10)}${s.feedback_note ? ": " + s.feedback_note : ""}`));
+    if (s.outcome) card.insertBefore(el("div", { class: "outcome" }, el("span", { class: `pill ${s.outcome}` }, OUTCOME[s.outcome]), " " + s.outcome_detail), buttons);
+    buttons.append(el("span", { class: "muted" }, s.status === "expired" ? "Nobody answered before the deadline"
+      : `${s.status === "acted" ? "Acted on" : "Dismissed"} by ${s.feedback_by} on ${s.feedback_at.slice(0, 10)}${s.feedback_note ? ": " + s.feedback_note : ""}`));
     const reopen = el("button", { type: "button" }, "Reopen");
     reopen.onclick = async () => {
       await fetch(`/signals/${s.id}/feedback`, { method: "POST", headers: { "Content-Type": "application/json", "X-User-Id": state.user }, body: JSON.stringify({ status: "open" }) });
@@ -237,6 +258,30 @@ function signalCard(s) {
   }
   card.append(buttons);
   return card;
+}
+
+// ---------- brain evolution ----------
+async function loadEvolution() {
+  const out = $("evolution-out");
+  out.textContent = "Loading…";
+  const { status, body } = await api("/brain/evolution");
+  out.textContent = "";
+  if (status !== 200) { out.append(el("div", { class: "denied" }, "Couldn't load.")); return; }
+  const o = body.outcomes, f = body.feedback, n = (k) => (o[k] ? o[k].count : 0);
+  out.append(el("div", { class: "summary" },
+    stat("Brain's date", body.today ? fmtDay(body.today) : "—"),
+    stat("Run-outs prevented", String(n("prevented"))),
+    stat("Sales saved", "$" + Math.round(body.saved || 0).toLocaleString()),
+    stat("Lost when ignored", "$" + Math.round(body.lost || 0).toLocaleString()),
+    stat("Warnings that came true", body.warning_accuracy == null ? "Not judged yet" : Math.round(body.warning_accuracy * 100) + "%"),
+    stat("Acted / dismissed / expired", `${f.acted || 0} / ${f.dismissed || 0} / ${f.expired || 0}`)));
+  const list = el("ul", { class: "timeline" });
+  const LABEL = { outcome: "Outcome", feedback: "Feedback", expired: "Expired", updated: "Fact updated" };
+  for (const e of body.events) list.append(el("li", {}, el("span", { class: "muted" }, e.at ? e.at.slice(0, 10) : ""),
+    el("span", {}, el("span", { class: `pill ${e.label}` }, e.kind === "expired" ? "Expired unanswered" : `${LABEL[e.kind]}: ${OUTCOME[e.label] || e.label}`)),
+    el("span", {}, e.text + (e.who ? ` — ${e.who}` : ""))));
+  out.append(el("div", { class: "panel" }, el("h3", { style: "margin-top:0" }, "What the brain learned, most recent first"),
+    body.events.length ? list : el("p", { class: "muted" }, "Nothing yet. Act on or dismiss signals; outcomes appear when time passes (HQ can simulate weeks).")));
 }
 
 // ---------- forecast ----------
@@ -650,7 +695,7 @@ async function init() {
   state.user = select.value;
   for (const q of EXAMPLES) { const b = el("button", { type: "button" }, q); b.onclick = () => search(q); $("examples").append(b); }
   const tab = new URLSearchParams(location.search).get("tab");
-  if (tab === "experts" || tab === "forecast") showTab(tab);
+  if (["experts", "forecast", "evolution"].includes(tab)) showTab(tab);
   loadSignals();
   loadProducts();
   graphLoop();
@@ -659,6 +704,8 @@ async function init() {
 function showTab(name) {
   document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
   $("tab-signals").classList.toggle("hidden", name !== "signals");
+  $("tab-evolution").classList.toggle("hidden", name !== "evolution");
+  if (name === "evolution") loadEvolution();
   $("tab-forecast").classList.toggle("hidden", name !== "forecast");
   $("tab-experts").classList.toggle("hidden", name !== "experts");
 }
@@ -666,6 +713,7 @@ function showTab(name) {
 $("user").onchange = () => {
   state.user = $("user").value;
   loadSignals();
+  if (!$("tab-evolution").classList.contains("hidden")) loadEvolution();
   loadProducts();
   if ($("query").value) search($("query").value);
 };

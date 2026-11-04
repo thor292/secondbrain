@@ -153,6 +153,29 @@ Admin API: `POST /admin/maintain` and `POST /admin/learn`.
   browser (labelled nodes, typed relationship arrows, properties on click,
   double-click to expand), built only from what the selected person may see.
 
+## The evolving brain and SecondBrain HQ
+
+- **Outcomes**: every run-out warning is judged once its date comes: prevented
+  (acted on, didn't run out), happened (ignored, ran out), happened anyway, or
+  false alarm. Each outcome is saved as a memory in the product's brain, so the
+  brain remembers it. Signals nobody answered before their deadline expire.
+- **Learning**: stock-signal confidence follows the company's track record
+  ("4 of 4 ignored warnings came true"), and business signals see what people
+  acted on and dismissed (with their reasons) and stop repeating dismissed
+  advice.
+- **Brain evolution** tab on Explore: sales saved, sales lost when ignored,
+  how often warnings came true, and a timeline of outcomes, feedback and facts
+  the brain updated.
+- **SecondBrain HQ** at `http://localhost:8765/hq` (admin token): the root
+  brain's view of every connected business — signals, money at stake, outcomes,
+  track record, lessons at the root. Aggregates only, never a business's notes.
+- **Moving time forward (demo only)**: HQ's "Simulate 14/28 days" or
+  `uv run python -m secondbrain.evolution --days 28` draws sales from the
+  forecast with randomness, runs stock down, delivers orders placed by acting
+  on signals after the lead time, judges outcomes, and recalculates forecasts
+  and signals. With real businesses the same judging runs on real sales.
+  Reset to Nov 4 with `schema --reset` and `load_examples.sh`.
+
 ## Decision signals
 
 Recalculated by `load_examples.sh`, or on demand:

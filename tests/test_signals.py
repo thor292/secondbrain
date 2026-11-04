@@ -97,3 +97,74 @@ def test_app_role_cannot_create_signals(client, settings):
         except psycopg.errors.InsufficientPrivilege:
             raised = True
     assert raised
+
+
+def test_time_passing_judges_outcomes_and_the_brain_remembers(client, settings, history):  # noqa: F811
+    from secondbrain import evolution
+    from secondbrain.models import build_models
+
+    load_acme_sales(settings, history)
+    run_forecasts(settings.admin_database_url, under="root.acme", horizon=56)
+    with psycopg.connect(settings.admin_database_url) as conn:
+        daily = {sku: sum(p["forecast"] for p in store.latest_forecast(conn, "root.acme.sales", sku)["points"]) / 56
+                 for sku in ("halo-lamp", "cloud-throw")}
+        store.save_inventory(conn, "root.acme.sales", [
+            # Runs out in ~40 days; a 14-day lead time leaves time to reorder.
+            {"sku": "halo-lamp", "as_of": date(2026, 11, 4), "on_hand": int(daily["halo-lamp"] * 40), "on_order": 0,
+             "order_eta": None, "supplier": "Lampworks", "lead_time_days": 14, "unit_cost": 150},
+            # Runs out in ~20 days and will be ignored.
+            {"sku": "cloud-throw", "as_of": date(2026, 11, 4), "on_hand": int(daily["cloud-throw"] * 20), "on_order": 0,
+             "order_eta": None, "supplier": "Weavers", "lead_time_days": 21, "unit_cost": 46},
+        ])
+    llm, embedder = build_models(settings)
+    signals.run(settings, llm, "root.acme")
+    by_sku = {s["evidence"]["products"][0]["sku"]: s for s in get_signals(client, "ravi") if s["kind"] == "stockout"}
+    client.post(f"/signals/{by_sku['halo-lamp']['id']}/feedback", json={"status": "acted"}, headers={"X-User-Id": "ravi"})
+    client.post(f"/signals/{by_sku['cloud-throw']['id']}/feedback", json={"status": "dismissed", "note": "not a priority"},
+                headers={"X-User-Id": "ravi"})
+
+    result = evolution.advance(settings, llm, embedder, "root.acme", days=45)
+    outcomes = {o["title"].split(" runs out")[0]: o["result"] for o in result["outcomes"]}
+    assert outcomes == {"Halo brass floor lamp": "prevented", "Cloud waffle throw": "happened"}
+    assert any("on order arrived" in a for a in result["products"]["halo-lamp"]["arrivals"])
+    assert result["products"]["cloud-throw"]["out_of_stock_days"] > 0
+
+    closed = {s["evidence"]["products"][0]["sku"]: s for s in get_signals(client, "ravi", include_closed=True)
+              if s["kind"] == "stockout" and s["status"] != "open"}
+    assert closed["halo-lamp"]["outcome"] == "prevented" and closed["cloud-throw"]["outcome"] == "happened"
+
+    # The brain remembers what happened, visible to the people who can see the product.
+    with psycopg.connect(settings.admin_database_url) as conn:
+        remembered = [r[0] for r in conn.execute(
+            "SELECT content FROM memories WHERE source = 'signal outcome' AND brain_path = 'root.acme.sales'")]
+        as_of = conn.execute("SELECT max(as_of) FROM inventory WHERE brain_path = 'root.acme.sales'").fetchone()[0]
+    assert len(remembered) == 2 and all(m.startswith("Outcome: ") for m in remembered)
+    assert as_of == date(2026, 11, 4) + timedelta(days=45)
+    # The order Ravi's action placed arrived once and isn't counted again.
+    with psycopg.connect(settings.admin_database_url) as conn:
+        on_order = conn.execute("SELECT on_order FROM inventory WHERE sku = 'halo-lamp' AND brain_path = 'root.acme.sales'").fetchone()[0]
+    assert on_order == 0
+
+    # New signals carry the track record: the one ignored warning came true.
+    fresh = [s for s in get_signals(client, "ravi") if s["kind"] == "stockout"]
+    for s in fresh:
+        assert "Track record here: 1 of 1 ignored run-out warnings came true" in s["evidence"]["facts"]
+    # Outcomes stay hidden from people who can't see the product.
+    assert all(s["company"] != "root.acme" or s["kind"] == "business" for s in get_signals(client, "meera", include_closed=True))
+
+
+def test_evolution_and_hq_endpoints(client):
+    from tests.conftest import ADMIN_TOKEN
+
+    body = client.get("/brain/evolution", headers={"X-User-Id": "asha"}).json()
+    assert {"today", "outcomes", "feedback", "saved", "lost", "events"} <= set(body)
+    assert client.get("/brain/evolution", headers={"X-User-Id": "nobody"}).status_code == 401
+    assert client.get("/admin/hq").status_code == 401
+    assert client.post("/admin/simulate", json={"days": 7}).status_code == 401
+    assert client.post("/admin/simulate", json={"days": 500}, headers={"X-Admin-Token": ADMIN_TOKEN}).status_code == 400
+    hq = client.get("/admin/hq", headers={"X-Admin-Token": ADMIN_TOKEN}).json()
+    names = {c["name"] for c in hq["companies"]}
+    assert {"Acme Retail", "Globex Corp"} <= names
+    # Aggregates only: no company's note or document text reaches HQ.
+    assert "24 days" not in str(hq["companies"]) and "18 percent" not in str(hq)
+    assert "SecondBrain HQ" in client.get("/hq").text

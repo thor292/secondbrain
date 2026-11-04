@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecondBrain HQ</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='7' fill='%23f5c451'/></svg>">
+<style>
+  :root { --bg: #f6f7f9; --panel: #fff; --text: #1d2330; --muted: #667085; --border: #e3e6eb; --accent: #4f46e5;
+          --accent-soft: #eef0ff; --gold: #b7791f; --good: #0f7a3d; --bad: #b42318; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #12151c; --panel: #1a1e27; --text: #e6e8ee; --muted: #98a0b3; --border: #2a303c;
+          --accent: #8b85ff; --accent-soft: #24234a; --gold: #f5c451; --good: #5ee0a0; --bad: #ff8080; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.5 system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); }
+  header { display: flex; gap: 14px; align-items: center; padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0; } header h1 span { color: var(--gold); }
+  header a { color: var(--accent); text-decoration: none; font-size: 14px; }
+  input, select, button { font: inherit; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: inherit; }
+  button { cursor: pointer; } button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled { opacity: .6; cursor: wait; }
+  main { max-width: 1150px; margin: 0 auto; padding: 16px; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .hidden { display: none !important; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
+  .company h3 { margin: 0; } .company .sub { color: var(--muted); font-size: 13px; margin-bottom: 10px; }
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .kpi { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; }
+  .kpi .k { font-size: 12px; color: var(--muted); } .kpi .v { font-size: 19px; font-weight: 700; }
+  .kpi .v.good { color: var(--good); } .kpi .v.bad { color: var(--bad); }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+  ul.lessons { margin: 0; padding-left: 18px; } ul.lessons li { margin: 6px 0; }
+  .tag { font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+  .tag.none { background: #f2f4f7; color: #475467; }
+  .result li { margin: 4px 0; font-size: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Second<span>Brain</span> HQ</h1>
+  <span class="muted">The root brain's view of every connected business</span>
+  <form id="token-form" class="row hidden">
+    <input id="token" type="password" placeholder="Admin token" autocomplete="off">
+    <button class="primary">Open</button>
+  </form>
+  <a href="/explore">Explore →</a>
+  <a href="/graph-view?user=__all__">Whole graph →</a>
+</header>
+<main>
+  <div id="out"><p class="muted">Loading…</p></div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const money = (v) => (v < 0 ? "-$" : "$") + Math.abs(Math.round(v || 0)).toLocaleString();
+function el(tag, attrs = {}, ...children) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) k === "class" ? n.className = v : n.setAttribute(k, v);
+  for (const c of children) n.append(c instanceof Node ? c : document.createTextNode(c ?? ""));
+  return n;
+}
+const token = () => { try { return sessionStorage.getItem("sb-admin-token"); } catch { return null; } };
+const kpi = (k, v, cls = "") => el("div", { class: "kpi" }, el("div", { class: "k" }, k), el("div", { class: "v " + cls }, v));
+
+async function admin(path, options = {}) {
+  const res = await fetch(path, { ...options, headers: { "Content-Type": "application/json", "X-Admin-Token": token() || "" } });
+  if (res.status === 401 || res.status === 404) { try { sessionStorage.removeItem("sb-admin-token"); } catch {} ; askToken(res.status === 404); return null; }
+  return res.json();
+}
+
+function askToken(disabled) {
+  $("token-form").classList.remove("hidden");
+  $("out").textContent = "";
+  $("out").append(el("div", { class: "panel" }, disabled ? "The admin API is disabled on this server (set SB_ADMIN_TOKEN)." : "Enter the admin token at the top. HQ is only for the team running the root brain."));
+}
+
+async function load() {
+  if (!token()) return askToken(false);
+  const data = await admin("/admin/hq");
+  if (!data) return;
+  $("token-form").classList.add("hidden");
+  const out = $("out"); out.textContent = "";
+  const sum = (f) => data.companies.reduce((t, c) => t + f(c), 0);
+  const oc = (c, k) => (c.outcomes[k] || { count: 0, value: 0 });
+  out.append(el("div", { class: "panel" },
+    el("h2", { style: "margin-top:0" }, "Network"),
+    el("div", { class: "totals" },
+      kpi("Connected businesses", String(data.companies.length)),
+      kpi("Open decision signals", String(sum((c) => c.signals.open || 0))),
+      kpi("Money at stake now", money(sum((c) => c.at_stake))),
+      kpi("Sales saved by acting", money(sum((c) => oc(c, "prevented").value)), "good"),
+      kpi("Lost when ignored", money(-sum((c) => oc(c, "happened").value + oc(c, "happened_anyway").value)), "bad"),
+      kpi("Lessons at the root", String(data.lessons.length))),
+    el("p", { class: "muted", style: "margin-bottom:0" }, "Aggregates only: HQ never shows a business's own notes or documents, consistent with businesses sharing only anonymous patterns with the root.")));
+
+  const grid = el("div", { class: "grid" });
+  for (const c of data.companies) {
+    const s = c.signals, judged = oc(c, "happened").count + oc(c, "false_alarm").count;
+    grid.append(el("div", { class: "panel company" },
+      el("div", { class: "row", style: "justify-content:space-between" }, el("h3", {}, c.name),
+        el("span", { class: "tag " + (c.sharing === "patterns" ? "" : "none") }, c.sharing === "patterns" ? "Shares patterns" : "Shares nothing")),
+      el("div", { class: "sub" }, `${c.departments} departments · ${c.people} people · ${c.document_sections} document sections · ${c.notes} notes · ${c.entities} entities${c.today ? " · brain's date " + c.today : ""}`),
+      el("div", { class: "kpis" },
+        kpi("Open signals", String(s.open || 0)),
+        kpi("Acted / dismissed", `${s.acted || 0} / ${s.dismissed || 0}`),
+        kpi("Expired unanswered", String(s.expired || 0), s.expired ? "bad" : ""),
+        kpi("At stake now", money(c.at_stake)),
+        kpi("Saved by acting", money(oc(c, "prevented").value), "good"),
+        kpi("Warnings came true", judged ? `${oc(c, "happened").count} of ${judged}` : "—"),
+        kpi("Facts updated", String(c.facts_updated)),
+        kpi("Run-outs prevented", String(oc(c, "prevented").count), "good"),
+        kpi("Run-outs missed", String(oc(c, "happened").count + oc(c, "happened_anyway").count), "bad"))));
+  }
+  out.append(grid);
+
+  const companySelect = el("select", { id: "sim-company" });
+  for (const c of data.companies.filter((c) => c.today)) companySelect.append(el("option", { value: c.path }, c.name));
+  const result = el("div", { id: "sim-result" });
+  const simButton = (days) => {
+    const b = el("button", { type: "button", class: "primary" }, `Simulate ${days} days`);
+    b.onclick = async () => {
+      document.querySelectorAll("button").forEach((x) => (x.disabled = true));
+      result.textContent = `Simulating ${days} days: sales, deliveries, outcomes, new forecasts and signals… (about a minute)`;
+      const r = await admin("/admin/simulate", { method: "POST", body: JSON.stringify({ company: companySelect.value, days }) });
+      document.querySelectorAll("button").forEach((x) => (x.disabled = false));
+      if (!r) return;
+      await load();
+      showResult(r);
+    };
+    return b;
+  };
+  out.append(el("div", { class: "panel" },
+    el("h2", { style: "margin-top:0" }, "Move time forward (demo)"),
+    el("p", { class: "muted" }, "Sales happen from the forecast with realistic randomness, stock runs down, orders from acted-on signals arrive after the supplier's lead time, every warning whose date has come is judged, and forecasts and signals are recalculated. With real businesses this happens as real sales arrive."),
+    el("div", { class: "row" }, companySelect, simButton(14), simButton(28)), result));
+
+  const lessons = el("ul", { class: "lessons" });
+  for (const l of data.lessons) lessons.append(el("li", {}, l));
+  out.append(el("div", { class: "panel" }, el("h2", { style: "margin-top:0" }, `What the root has learned (${data.lessons.length})`),
+    el("p", { class: "muted" }, "Anonymous lessons from businesses that share patterns. They feed every business's decision signals."), lessons));
+}
+
+function showResult(r) {
+  const box = $("sim-result");
+  if (!box) return;
+  box.textContent = "";
+  box.append(el("h3", {}, `${r.company}: ${r.from} to ${r.to}`));
+  const list = el("ul", { class: "result" });
+  for (const o of r.outcomes) list.append(el("li", {}, `${o.result.replace("_", " ").toUpperCase()}: ${o.detail}`));
+  for (const [sku, p] of Object.entries(r.products)) if (p.out_of_stock_days) list.append(el("li", {}, `${sku}: out of stock on ${p.out_of_stock_days} day(s), ${p.lost.toLocaleString()} sales lost`));
+  if (!list.children.length) list.append(el("li", {}, "No warnings came due in this period."));
+  box.append(list, el("p", { class: "muted" }, `${r.signals ?? 0} open signals after recalculating.`));
+}
+
+$("token-form").onsubmit = (e) => {
+  e.preventDefault();
+  try { sessionStorage.setItem("sb-admin-token", $("token").value.trim()); } catch {}
+  $("token").value = "";
+  load();
+};
+load();
+</script>
+</body>
+</html>
