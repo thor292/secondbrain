@@ -19,6 +19,7 @@ from pydantic import BaseModel
 
 from secondbrain import admin, learning, maintenance, tree
 from secondbrain.documents import UnsupportedDocument, extract_text
+from secondbrain.forecasting.api import build_router as forecast_router
 from secondbrain.graph import build_full_graph
 from secondbrain.config import Settings, get_settings
 from secondbrain.memory.short_term import ShortTermMemory
@@ -53,6 +54,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         store.close()
 
     app = FastAPI(title="SecondBrain", lifespan=lifespan)
+    app.include_router(forecast_router())
 
     def brain(request: Request) -> SecondBrain:
         return request.app.state.brain

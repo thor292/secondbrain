@@ -1,0 +1,27 @@
+# PostgreSQL with TimescaleDB, pgvector and ltree, on its own ports so it can
+# run next to the main stack while we try it:
+#
+#   docker compose -f docker-compose.timescale.yml -p secondbrain-ts up -d --wait
+#
+# Then point SB_ADMIN_DATABASE_URL / SB_APP_DATABASE_URL at port 55433.
+# The same init script creates the roles and the test database. To make it the
+# main database, swap this image into docker-compose.yml (see docs/FORECASTING.md).
+services:
+  postgres:
+    image: timescale/timescaledb-ha:pg17
+    environment:
+      POSTGRES_USER: secondbrain_admin
+      POSTGRES_PASSWORD: dev_admin_password
+      POSTGRES_DB: secondbrain
+    ports:
+      - "55433:5432"
+    volumes:
+      - tsdata:/home/postgres/pgdata
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U secondbrain_admin -d secondbrain"]
+      interval: 2s
+      retries: 30
+
+volumes:
+  tsdata:

@@ -5,3 +5,5 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 uv run python scripts/load_examples.py
 uv run python scripts/seed_activity.py
+uv run python scripts/generate_lumen_sales.py
+uv run python -m secondbrain.forecasting --under root.lumen
