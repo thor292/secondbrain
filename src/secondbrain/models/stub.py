@@ -44,6 +44,28 @@ def _relation(prompt: str) -> str:
     return "unrelated"
 
 
+def _entities(prompt: str) -> dict:
+    """Crude offline extraction: capitalized words and runs of them are entities,
+    the company's people (by full or first name) are persons, and the first
+    entity is related to each of the others."""
+    company = re.search(r"^Company: (.*)$", prompt, re.MULTILINE)
+    people = re.search(r"^People: (.*)$", prompt, re.MULTILINE)
+    company_words = set(company.group(1).split()) if company else set()
+    names = [p for p in people.group(1).split("; ") if p] if people else []
+    text = prompt.split("\nMemory:\n", 1)[-1]
+    entities: list[dict] = []
+    for run in re.findall(r"\b[A-Z][A-Za-z0-9]*(?:[ ]+[A-Z][A-Za-z0-9]*)*", text):
+        if run.lower() in STOPWORDS or set(run.split()) <= company_words:
+            continue
+        person = next((p for p in names if run in (p, p.split()[0])), None)
+        name = person or run
+        if all(e["name"] != name for e in entities):
+            entities.append({"name": name, "kind": "person" if person else "topic"})
+    relations = [{"source": entities[0]["name"], "relation": "mentioned with", "target": e["name"]}
+                 for e in entities[1:]]
+    return {"entities": entities, "relations": relations}
+
+
 class StubEmbedder:
     name = "stub-hash"
 
@@ -66,6 +88,8 @@ class StubLLM:
     name = "stub-rules"
 
     def complete(self, system: str, prompt: str) -> str:
+        if "extract the entities" in system.lower():
+            return json.dumps(_entities(prompt))
         if "classify" in system.lower():
             words = set(_words(prompt))
             if words & {_stem(w) for w in USER_HINTS}:

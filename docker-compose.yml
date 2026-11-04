@@ -24,5 +24,16 @@ services:
       interval: 2s
       retries: 30
 
+  # Relationship layer. Rebuildable from PostgreSQL, so it keeps no volume:
+  # a missing company graph is rebuilt on first use.
+  falkordb:
+    image: falkordb/falkordb:v4.22.3
+    ports:
+      - "56380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      retries: 30
+
 volumes:
   pgdata:
