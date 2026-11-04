@@ -30,6 +30,10 @@ services:
     image: falkordb/falkordb:v4.22.3
     ports:
       - "56380:6379"
+      # FalkorDB Browser, the graph's own viewer. Admin use only: it shows a
+      # company's whole graph with no per-person permissions (the graph holds
+      # entities and links, not memory text).
+      - "53000:3000"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 2s

@@ -85,6 +85,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def chat_screen():
         return FileResponse(STATIC_DIR / "index.html", headers=NO_CACHE)
 
+    @app.get("/explore", include_in_schema=False)
+    def explore_screen():
+        return FileResponse(STATIC_DIR / "explore.html", headers=NO_CACHE)
+
     @app.get("/graph-view", include_in_schema=False)
     def graph_screen():
         return FileResponse(STATIC_DIR / "graph.html", headers=NO_CACHE)

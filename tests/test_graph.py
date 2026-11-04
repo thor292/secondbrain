@@ -74,3 +74,7 @@ def test_full_graph_shows_whole_tree(client):
         if e["label"] == "RELATED_TO":
             a, b = brain_of[e["source"]], brain_of[e["target"]]
             assert a.split(".")[:2] == b.split(".")[:2], "related memories must stay within one company"
+
+
+def test_explore_screen_is_served(client):
+    assert "SecondBrain Explore" in client.get("/explore").text

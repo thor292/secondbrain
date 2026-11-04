@@ -130,9 +130,24 @@ uv run python -m secondbrain.learning       # send anonymized patterns to the ro
 
 Admin API: `POST /admin/maintain` and `POST /admin/learn`.
 
+## Explore page
+
+`http://localhost:8765/explore` shows the two newest features to anyone, with
+"Looking as" choosing whose permissions apply:
+
+- **Sales forecast**: a chart of past sales and the forecast with 80% and 95%
+  ranges, the chosen model and why, and every model's backtest scores.
+- **Who knows what**: a search drawn as a graph in the style of FalkorDB's own
+  browser (labelled nodes, typed relationship arrows, properties on click,
+  double-click to expand), built only from what the selected person may see.
+
 ## Relationships (FalkorDB)
 
-FalkorDB runs in `docker compose` on port 56380. Entity extraction runs by
+FalkorDB runs in `docker compose` on port 56380. Its own **FalkorDB Browser**
+is on `http://localhost:53000` (log in with host `localhost`, port `6379`,
+then pick the graph `sb_lumen`). It is an admin tool: it shows a company's
+whole graph without per-person permissions, so never show it to a client with
+another company's data loaded. Entity extraction runs by
 itself after "Save to long-term" in the chat and after a document upload or
 `admin import`. To extract anything not processed yet and rebuild the graphs:
 
