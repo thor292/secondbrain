@@ -159,9 +159,12 @@ class SecondBrain:
         standalone = self._standalone(question, history)
         [embedding] = self.embedder.embed([standalone])
         recent = self.short_term.recent(user_id)
-        levels = [(user.home_brain, False, "company" if user.home_brain == company else "department")]
-        if user.home_brain != company:
-            levels.append((company, True, "company"))
+        if user.home_brain == company:
+            # People placed at the company level (e.g. the CEO) search the whole
+            # company; row-level security still limits it to what they may see.
+            levels = [(company, True, "company")]
+        else:
+            levels = [(user.home_brain, False, "department"), (company, True, "company")]
 
         for path, include_children, answered_from in levels:
             # Search inside a short transaction; the model call happens outside it.

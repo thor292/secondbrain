@@ -163,3 +163,15 @@ def test_replaced_fact_stays_visible_to_people_who_cannot_see_the_update(client,
 
     assert "15 dollars" in ask(client, "meera", "How much does office parking cost per day?")["answer"]
     assert "12 dollars" in ask(client, "asha", "How much does office parking cost per day?")["answer"]
+
+
+def test_company_level_person_searches_departments_they_may_see(client):
+    """Someone placed at the company level (no department) still reaches department knowledge."""
+    from secondbrain import admin
+    import psycopg
+
+    with psycopg.connect(client.app.state.brain.settings.admin_database_url) as conn:
+        admin.onboard(conn, {"id": "acme", "name": "Acme Retail", "sharing": "patterns",
+                             "users": [{"id": "ceo", "name": "Chief Executive", "role": "executive"}]})
+    result = ask(client, "ceo", "What was the Q3 profit margin?")
+    assert "18 percent" in result["answer"]
