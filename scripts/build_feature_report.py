@@ -62,7 +62,10 @@ def bullets(items):
     for i in items:
         story.append(Paragraph(i, BULLET, bulletText="•"))
     story.append(Spacer(1, 3))
-def code(t): story.append(Paragraph(esc(t).replace(" ", "&nbsp;").replace("\n", "<br/>"), CODE))
+def code(t):
+    # Keep line breaks and spacing as written (esc() would collapse them).
+    text = t.encode("cp1252", "replace").decode("cp1252").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    story.append(Paragraph(text.replace(" ", "&nbsp;").replace("\n", "<br/>"), CODE))
 
 
 def result_cell(passed: bool):
@@ -132,6 +135,8 @@ def main() -> None:
         "F10": [c for c in d["checks"] if c["feature"] == "F10"],
         "F11": [c for c in d["checks"] if c["feature"] == "F11"],
         "F12": [c for c in d["checks"] if c["feature"] == "F12"],
+        "F13": [c for c in d["checks"] if c["feature"] == "F13"],
+        "F14": [c for c in d["checks"] if c["feature"] == "F14"],
     }
     total = sum(len(v) for v in groups.values())
     passed = sum(r["passed"] for v in groups.values() for r in v)
@@ -207,13 +212,14 @@ def main() -> None:
         "F7": "Conversation memory (follow-up questions)", "F8": "Remembering new information, sorted automatically",
         "F9": "Memory keeps itself up to date", "F10": "Learning at the root (anonymous lessons)",
         "F11": "Graph views (per person and whole SecondBrain)", "F12": "Security enforced by the database",
+        "F13": "Relationships: who knows what (FalkorDB)", "F14": "Sales forecasting",
     }
     table([["", "Feature", "Checks", "Passed"]] + [
         [fid, names[fid], len(groups[fid]), f"{sum(r['passed'] for r in groups[fid])} / {len(groups[fid])}"]
         for fid in names
     ] + [["", "<b>Total</b>", f"<b>{total}</b>", f"<b>{passed} / {total}</b>"]], [12, 110, 22, 34])
-    p("Also built and covered by the automated test suite (35 tests): onboarding a company from one file, document upload "
-      "through the admin API, maintenance and learning jobs, and the permission rules above.")
+    p("Also built and covered by the automated test suite (64 tests): onboarding a company from one file, document upload "
+      "through the admin API, maintenance, learning, relationship extraction, forecasting models, and the permission rules above.")
     story.append(PageBreak())
 
     # Features
@@ -312,7 +318,7 @@ def main() -> None:
     h2("How to test it")
     bullets(["Open the graph, choose <b>Whole SecondBrain (admin)</b>, enter the admin token.",
              "Click the small nodes around the gold root to read the lessons."])
-    h2("The lessons the root learned from Lumen")
+    h2(f"The {len(d.get('lessons', []))} lessons the root learned from Lumen in this run")
     for lesson in d.get("lessons", []):
         story.append(Paragraph(esc(lesson), BULLET, bulletText="•"))
     story.append(Spacer(1, 4))
@@ -348,7 +354,46 @@ def main() -> None:
     ], [6, 82, 40, 34, 13], status_col=4)
     note("<b>How to explain it:</b> even if someone bypassed our application, the database itself would only return what that person may see.")
 
-    h1("F13. Onboarding a new company")
+    def checks_table(fid):
+        table([["#", "Check", "Expected", "Got", "Result"]] + [
+            [i, esc(c["check"]), esc(c["expected"]), clean(c["got"], 80), c["passed"]] for i, c in enumerate(groups[fid], 1)
+        ], [6, 82, 34, 40, 13], status_col=4)
+
+    h1("F13. Relationships: who knows what (FalkorDB)")
+    p("<b>What it does:</b> when notes and documents are saved, the AI picks out the people, customers, suppliers, products, "
+      "carriers and places they mention, and how they relate (\"Casa Forma supplies the Aria linen sofa\"). Each company gets its "
+      "own graph in FalkorDB. Two new questions can be answered: <b>who knows about X?</b> and <b>what do we know about X?</b> "
+      "FalkorDB has no permissions of its own, so every graph query is limited to the memories PostgreSQL says the person may see.")
+    h2("How to test it")
+    p("There is no screen for this yet; use these commands in Terminal (the person is set with X-User-Id):")
+    code('curl -s "http://localhost:8765/experts?topic=Priya%20Shah" -H "X-User-Id: nina"\n'
+         'curl -s "http://localhost:8765/experts?topic=Priya%20Shah" -H "X-User-Id: sofia"\n'
+         'curl -s "http://localhost:8765/entities/Nordlys" -H "X-User-Id: omar"\n'
+         'curl -s "http://localhost:8765/entities/Nordlys" -H "X-User-Id: karim"')
+    p("The first returns Nina as the person who knows about Priya Shah; the second returns nobody, because Support's notes are "
+      "hidden from Sofia; the third describes Nordlys as a supplier; the fourth is not found, because Karim is in another company.")
+    checks_table("F13")
+    note("<b>How to explain it:</b> SecondBrain knows who in the company knows about a customer, supplier or product, but only "
+         "tells you about the people and notes you're allowed to see.")
+
+    h1("F14. Sales forecasting")
+    p("<b>What it does:</b> forecasts daily sales per product with 80% and 95% ranges. Four models are compared on past data "
+      "(repeat last week, last year with growth, ETS, and gradient boosting with promotions and holidays), including the same "
+      "weeks last year, and the most accurate one is picked per product with the reason. Sales data follows the same "
+      "permissions: it lives in Merchandising. The sales history is <b>generated sample data</b> for Lumen (2 years, 8 products), "
+      "not real sales.")
+    h2("How to test it")
+    code('curl -s "http://localhost:8765/forecast/products" -H "X-User-Id: omar"\n'
+         'curl -s "http://localhost:8765/forecast?product=halo-lamp&horizon=30" -H "X-User-Id: omar"\n'
+         'curl -s "http://localhost:8765/forecast?product=halo-lamp&horizon=30" -H "X-User-Id: nina"')
+    p("The second shows the chosen model, why it was chosen, every model's backtest scores and 30 days of forecasts; look for "
+      "the Black Friday peak around November 27. The third is not found: Nina has no access to Merchandising.")
+    checks_table("F14")
+    note("<b>How to explain it:</b> SecondBrain doesn't trust one model: it tests several on the merchant's own history and "
+         "uses the one that would have been most accurate, and says so. Caveat: on this sample data the best model still "
+         "under-predicts the very top of the Black Friday peak.")
+
+    h1("F15. Onboarding a new company")
     p("<b>What it does:</b> a company is described in one file (departments, people, roles, sharing) and its documents are imported. "
       "Verified by the automated test suite. Steps to show it live:")
     code('~/Desktop/nova_demo/company.json:\n{"id": "nova", "name": "Nova Tech", "sharing": "none",\n'
@@ -362,8 +407,10 @@ def main() -> None:
     # Pending
     h1("What is still pending")
     table([["Area", "Status", "What it needs"],
-           ["Relationship graph (FalkorDB): \"who knows what\", entities like customers, suppliers, products", "In progress (separate work stream)", "Integration, permission-safe queries, tests"],
-           ["Forecasting (sales and demand per product)", "In progress (separate work stream)", "Research, synthetic order history, models and backtests"],
+           ["Screens for relationships and forecasts", "Not started (API only today)", "A simple page in the chat or graph view"],
+           ["Relationships: merging similar names, using the graph in answers", "Not started", "Name matching; measure whether answers improve"],
+           ["Forecasting: foundation models (Chronos, TimesFM) for new products", "Not started", "PyTorch and model downloads; compare in the backtest"],
+           ["Forecasting on real merchant data; TimescaleDB in the main setup", "Not started", "A merchant's order history; switch when raw orders arrive"],
            ["Real-time checkout discounts with reasons", "Concept only", "Live event data from a merchant, decision engine, guardrails"],
            ["Real sign-in (SSO)", "Not started", "The company's identity provider (Google, Microsoft, Okta)"],
            ["Connectors: Google Drive, Slack, email", "Not started", "App credentials and approval from IT"],
@@ -385,7 +432,9 @@ def main() -> None:
            ["<b>No real sign-in</b>", "The demo uses a person picker; fine for a guided demo, not for client self-service.",
             "SSO with the client's identity provider."],
            ["<b>Admin view shows every company</b>", "Must never show another real client's data.", "Only demo with sample companies, or restrict the view per client."],
-           ["<b>FalkorDB license</b>", "Believed to be SSPL; matters for a commercial service.", "Confirmation from legal before production use."]],
+           ["<b>FalkorDB license</b>", "Believed to be SSPL; matters for a commercial service.", "Confirmation from legal before production use."],
+           ["<b>No screens for relationships and forecasts</b>", "They can only be shown with Terminal commands today.", "A simple page for each before showing them to a client."],
+           ["<b>Forecasts use sample sales</b>", "The numbers are generated, not a real merchant's history.", "A merchant's real order history (and their consent)."]],
           [42, 66, 70])
     note("<b>Bottom line:</b> a <b>guided demo</b> on this laptop with the Lumen sample data is ready now. A demo the "
          "<b>client can use on their own</b> needs hosting, model access without the VPN, and real sign-in.")

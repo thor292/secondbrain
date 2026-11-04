@@ -18,6 +18,9 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 import httpx
+import psycopg
+
+from secondbrain.config import get_settings
 
 BASE = "http://localhost:8765"
 NONE = None  # expect "not found"
@@ -167,6 +170,171 @@ PRELOADED_UPDATES = [
 ]
 
 
+LESSON_NAMES = ["lumen", "brightpath", "nina", "arjun", "priya", "shah", "nordlys", "casa forma", "hearth",
+                "aria", "halo", "portland", "reno", "daniel", "maya", "rachel", "zenith", "bluebird", "ups", "fedex"]
+
+
+def run_checks(http: httpx.Client) -> tuple[list[dict], list[str]]:
+    """Checks that aren't chat questions: learning, graph views, database security,
+    relationships and forecasting. Returns (checks, lessons learned at the root)."""
+    settings = get_settings()
+    token = {"X-Admin-Token": settings.admin_token}
+    checks: list[dict] = []
+
+    def add(feature, what, expected, got, ok):
+        checks.append({"feature": feature, "check": what, "expected": expected, "got": str(got), "passed": bool(ok)})
+
+    def get(path, user, **params):
+        response = http.get(path, params=params, headers={"X-User-Id": user})
+        return response.status_code, (response.json() if response.status_code == 200 else None)
+
+    # F10 Learning at the root
+    with psycopg.connect(settings.admin_database_url) as conn:
+        lessons = [r[0] for r in conn.execute(
+            "SELECT content FROM memories WHERE brain_path = 'root' AND source = 'learned pattern' ORDER BY created_at")]
+        links = conn.execute("SELECT count(*) FROM memories WHERE brain_path = 'root' AND created_by IS NOT NULL").fetchone()[0]
+        sharing = dict(conn.execute("SELECT path::text, sharing FROM brains WHERE kind = 'company'").fetchall())
+    add("F10", "Lessons stored at the root", "at least 5", len(lessons), len(lessons) >= 5)
+    digits = [l for l in lessons if re.search(r"\d", l)]
+    add("F10", "Lessons containing any digit", "0", len(digits), not digits)
+    found = [n for n in LESSON_NAMES if any(re.search(rf"\b{n}\b", l.lower()) for l in lessons)]
+    add("F10", "Lessons containing a company, person, customer, supplier, product or place name", "none", found or "none", not found)
+    add("F10", "Lessons linked to the person or company they came from", "0", links, links == 0)
+    add("F10", "Brightpath sharing setting (contributes nothing)", "none", sharing.get("root.brightpath"), sharing.get("root.brightpath") == "none")
+    add("F10", "Lumen sharing setting", "patterns", sharing.get("root.lumen"), sharing.get("root.lumen") == "patterns")
+    http.post("/conversation/reset", headers={"X-User-Id": "nina"})
+    answer = http.post("/ask", json={"question": "Should we lower the free-shipping threshold during peak season?"},
+                       headers={"X-User-Id": "nina"}).json()
+    from_root = [s_ for s_ in answer["sources"] if s_["brain"] == "root"]
+    add("F10", "Company user's answer uses any root memory", "no", "yes" if from_root else "no", not from_root)
+    status = http.post("/admin/learn").status_code
+    add("F10", "Running learning without the admin token", "refused (401)", status, status == 401)
+
+    # F11 Graph views
+    def graph(user):
+        return http.get("/graph", headers={"X-User-Id": user}).json()
+
+    def memories(g):
+        return [n for n in g["nodes"] if n["id"].startswith("memory:")]
+
+    rachel, sofia, karim, tom, leo = (graph(u) for u in ("rachel", "sofia", "karim", "tom", "leo"))
+    restricted = lambda g: [n for n in memories(g) if n["props"].get("sensitivity") == "restricted"]
+    add("F11", "Rachel (CFO): restricted memories in her graph", "more than 0", len(restricted(rachel)), restricted(rachel))
+    add("F11", "Sofia (content marketer): restricted memories in her graph", "0", len(restricted(sofia)), not restricted(sofia))
+    add("F11", "Sofia sees fewer memories than Rachel", "fewer", f"{len(memories(sofia))} vs {len(memories(rachel))}",
+        len(memories(sofia)) < len(memories(rachel)))
+    leo_restricted = sorted({n["props"]["brain"] for n in restricted(leo)})
+    add("F11", "Leo (lead) sees restricted memories only from Marketing", "root.lumen.marketing", leo_restricted,
+        leo_restricted == ["root.lumen.marketing"])
+    add("F11", "Karim's graph scope", "root.brightpath", karim["scope"], karim["scope"] == "root.brightpath")
+    leaked = [n for n in karim["nodes"] if "lumen" in json.dumps(n).lower()]
+    add("F11", "Lumen nodes in Karim's graph", "0", len(leaked), not leaked)
+    tom_brains = sorted({n["props"]["brain"] for n in memories(tom)})
+    add("F11", "Brains whose memories Tom sees", "company + Finance only", tom_brains,
+        set(tom_brains) <= {"root.lumen", "root.lumen.finance"})
+    status = http.get("/admin/graph").status_code
+    add("F11", "Whole-SecondBrain view without the token", "refused (401)", status, status == 401)
+    full = http.get("/admin/graph", headers=token).json()
+    brains = {n["id"] for n in full["nodes"] if n["id"].startswith("brain:")}
+    add("F11", "Whole view contains root, both companies and all departments", "10 brains", len(brains),
+        {"brain:root", "brain:root.lumen", "brain:root.brightpath"} <= brains and len(brains) == 10)
+    links_ = [e for e in full["edges"] if e["label"] in ("REPLACED_BY", "PARTLY_UPDATED_BY", "DUPLICATE_OF")]
+    add("F11", "Update links (replaced / partly updated / duplicate) in the whole view", "at least 4", len(links_), len(links_) >= 4)
+
+    # F12 Security enforced by the database
+    with psycopg.connect(settings.app_database_url) as conn:
+        visible = conn.execute("SELECT count(*) FROM memories").fetchone()[0]
+        add("F12", "App database login with no person set: memories visible", "0", visible, visible == 0)
+        conn.execute("SELECT set_config('app.user_id', 'sofia', true)")
+        paths = sorted(r[0] for r in conn.execute("SELECT DISTINCT brain_path::text FROM memories"))
+        add("F12", "Same login as Sofia: brains visible", "root.lumen, root.lumen.marketing", paths,
+            paths == ["root.lumen", "root.lumen.marketing"])
+        hidden = conn.execute("SELECT count(*) FROM memories WHERE sensitivity = 2").fetchone()[0]
+        add("F12", "Same login as Sofia: restricted memories visible", "0", hidden, hidden == 0)
+        try:
+            conn.execute("SELECT count(*) FROM grants")
+            ok, got = False, "readable"
+        except psycopg.errors.InsufficientPrivilege:
+            ok, got = True, "permission denied"
+        add("F12", "App login reading everyone's permissions table", "permission denied", got, ok)
+    with psycopg.connect(settings.app_database_url) as conn:
+        conn.execute("SELECT set_config('app.user_id', 'sofia', true)")
+        try:
+            conn.execute(
+                "INSERT INTO memories (brain_path, memory_type, tier, sensitivity, content, embedding, embedding_model, created_by)"
+                f" VALUES ('root.lumen.finance', 'semantic', 'long_term', 1, 'x', array_fill(0.1, ARRAY[{settings.embedding_dim}])::vector, 'x', 'sofia')")
+            ok, got = False, "inserted"
+        except psycopg.errors.InsufficientPrivilege:
+            ok, got = True, "blocked by row-level security"
+        add("F12", "Sofia writing a memory into Finance", "blocked", got, ok)
+    status = http.post("/ask", json={"question": "hi"}, headers={"X-User-Id": "nobody"}).status_code
+    add("F12", "Unknown person asking a question", "refused (401)", status, status == 401)
+
+    # F13 Relationships (FalkorDB)
+    people = lambda body: [p["id"] for p in (body or {}).get("people", [])]
+    _, body = get("/experts", "nina", topic="Priya Shah")
+    add("F13", "Nina: who knows about customer Priya Shah?", "Nina", people(body), "nina" in people(body))
+    _, body = get("/experts", "sofia", topic="Priya Shah")
+    add("F13", "Sofia: who knows about Priya Shah? (Support is hidden from her)", "nobody", people(body) or "nobody", not people(body))
+    _, body = get("/experts", "maya", topic="Black Friday")
+    add("F13", "Maya (CEO): who knows about Black Friday?", "includes Leo", people(body), "leo" in people(body))
+    _, body = get("/experts", "tom", topic="Black Friday")
+    add("F13", "Tom: who knows about Black Friday? (the CFO's board note is restricted)", "not Rachel",
+        people(body) or "nobody", "rachel" not in people(body))
+    _, body = get("/experts", "karim", topic="Black Friday")
+    add("F13", "Karim (Brightpath): who knows about Black Friday?", "nobody", people(body) or "nobody", not people(body))
+    code, body = get("/entities/Nordlys", "omar")
+    add("F13", "Omar: what do we know about Nordlys?", "a supplier", (body or {}).get("kind", code), code == 200 and body["kind"] == "supplier")
+    code, _ = get("/entities/Nordlys", "karim")
+    add("F13", "Karim: what do we know about Nordlys? (other company)", "not found (404)", code, code == 404)
+    code, body = get("/entities/Aria linen sofa", "leo")
+    suppliers = [r["entity"]["name"] for r in (body or {}).get("relations", []) if "suppl" in r["relation"]]
+    add("F13", "Leo: who supplies the Aria linen sofa?", "Casa Forma", suppliers or code, any("casa forma" in s_.lower() for s_ in suppliers))
+    _, maya_hf = get("/entities/Hearth Freight", "maya")
+    _, nina_hf = get("/entities/Hearth Freight", "nina")
+    counts = ((maya_hf or {}).get("memory_count", 0), (nina_hf or {}).get("memory_count", 0))
+    add("F13", "Hearth Freight memories: Maya vs Nina (restricted contract hidden from Nina)", "Maya sees more",
+        f"{counts[0]} vs {counts[1]}", counts[0] > counts[1] > 0)
+    code_r, _ = get("/entities/gross margin", "rachel")
+    code_t, _ = get("/entities/gross margin", "tom")
+    add("F13", "Entity 'gross margin': Rachel vs Tom (restricted Finance)", "200 vs 404", f"{code_r} vs {code_t}",
+        code_r == 200 and code_t == 404)
+    leaked_text = "carrier contract" in json.dumps(nina_hf or {}).lower() or "42 percent" in json.dumps(nina_hf or {}).lower()
+    add("F13", "Restricted contract text in Nina's Hearth Freight answer", "absent", "present" if leaked_text else "absent", not leaked_text)
+    status = http.get("/experts", params={"topic": "x"}, headers={"X-User-Id": "nobody"}).status_code
+    add("F13", "Unknown person asking who knows what", "refused (401)", status, status == 401)
+
+    # F14 Forecasting
+    code, products = get("/forecast/products", "omar")
+    skus = [p["sku"] for p in products or []]
+    add("F14", "Omar: products with forecasts", "8", len(skus), len(skus) == 8)
+    code, fc = get("/forecast", "omar", product="halo-lamp", horizon=30)
+    days = (fc or {}).get("forecast", [])
+    add("F14", "Halo lamp forecast for 30 days", "30 days", len(days), len(days) == 30)
+    ordered = all(d["lo95"] <= d["lo80"] <= d["forecast"] <= d["hi80"] <= d["hi95"] for d in days)
+    add("F14", "Every day has 80% and 95% ranges around the forecast", "yes", "yes" if ordered else "no", days and ordered)
+    backtest = (fc or {}).get("backtest", {})
+    best = min(backtest, key=lambda m: backtest[m]["wape"]) if backtest else None
+    add("F14", "Chosen model is the one with the lowest backtest error", best, (fc or {}).get("model"), best and fc["model"] == best)
+    add("F14", "Models compared in the backtest", "4", sorted(backtest), len(backtest) == 4)
+    windows = set().union(*(set(m["windows"]) for m in backtest.values())) if backtest else set()
+    add("F14", "Backtest includes the same weeks last year", "yes", sorted(windows), "same weeks last year" in windows)
+    add("F14", "Forecast explains why the model was chosen", "mentions WAPE", (fc or {}).get("reason", "")[:90],
+        "wape" in (fc or {}).get("reason", "").lower())
+    black_friday = [d["forecast"] for d in days if "2026-11-27" <= d["day"] <= "2026-12-01"]
+    early = [d["forecast"] for d in days if d["day"] < "2026-11-11"]
+    lift = (max(black_friday) / (sum(early) / len(early))) if black_friday and early else 0
+    add("F14", "Black Friday peak vs early November (Halo lamp)", "clearly higher", f"{lift:.1f}x", lift > 1.5)
+    for user in ("maya", "leo"):
+        code, _ = get("/forecast", user, product="halo-lamp", horizon=7)
+        add("F14", f"{user.capitalize()} can see forecasts (Merchandising access)", "200", code, code == 200)
+    for user in ("nina", "sofia", "karim"):
+        code, _ = get("/forecast", user, product="halo-lamp", horizon=7)
+        add("F14", f"{user.capitalize()} asking for a forecast (no access)", "not found (404)", code, code == 404)
+
+    return checks, lessons
+
+
 def check(answer: dict, expected) -> bool:
     if expected is NONE:
         return answer["answered_from"] == "none"
@@ -245,6 +413,9 @@ def main() -> None:
                                    "before": before["answer"], "after": after["answer"], "expected": expected,
                                    "passed": check(after, expected)})
     print("updates:", sum(r["passed"] for r in results["updates"]), "/", len(UPDATES))
+
+    results["checks"], results["lessons"] = run_checks(http)
+    print("checks:", sum(c["passed"] for c in results["checks"]), "/", len(results["checks"]))
 
     with open(args.out, "w") as f:
         json.dump(results, f, indent=2)
