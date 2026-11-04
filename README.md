@@ -45,6 +45,13 @@ five memory types. See [ARCHITECTURE.md](ARCHITECTURE.md) for the design.
   - Both only count memories the asking person may read. FalkorDB has no
     permissions of its own, so every graph query is limited to memory ids that
     PostgreSQL returns for that person, and the graph holds no memory text.
+
+- **Sales forecasting** (first version): daily units per product, eight weeks
+  ahead, with 80% and 95% ranges. Four model variants (last week, last year
+  scaled by growth, exponential smoothing, LightGBM with promotions and
+  holidays) are backtested on each merchant's history and the best one per
+  product is kept, with its reason. Sales are permission-checked like memories.
+  See [docs/FORECASTING.md](docs/FORECASTING.md).
 - **Model layer**: an offline `stub` provider for tests, and a `litellm`
   provider for the company proxy.
 
@@ -142,6 +149,35 @@ LiteLLM models it takes about 30 seconds for the Lumen demo data.
 PostgreSQL is the source of truth and the graphs are rebuilt from it, so
 FalkorDB keeps no volume: a company graph that is missing (for example after
 a restart) is rebuilt automatically on the first query.
+
+## Forecasting
+
+Lumen's sales history is synthetic: two years of daily sales for eight
+products, with seasons, Black Friday, promotions and a stockout. Both steps
+also run at the end of `load_examples.sh`.
+
+```bash
+uv run python scripts/generate_lumen_sales.py         # load history and promotions into root.lumen.merchandising
+uv run python -m secondbrain.forecasting              # backtest, choose a model per product, store forecasts
+uv run python scripts/generate_lumen_sales.py --csv data/lumen_sales.csv --no-db   # CSV only
+```
+
+The forecasting job prints each model's backtest error (WAPE) per product and
+is meant to run nightly. Then, as someone allowed to see Merchandising's data:
+
+```bash
+curl -H 'X-User-Id: omar' 'localhost:8765/forecast?product=halo-lamp&horizon=28'
+curl -H 'X-User-Id: omar' localhost:8765/forecast/products
+```
+
+The answer has the forecast with ranges, the chosen model and why, every
+model's backtest scores, recent sales, and a nowcast adjustment when sales
+since the last run differ from the forecast. Nina (Support) gets a 404: she
+can't see Merchandising.
+
+`sales_daily` becomes a TimescaleDB hypertable when the extension is there.
+To try it next to the running stack (port 55433):
+`docker compose -f docker-compose.timescale.yml -p secondbrain-ts up -d --wait`.
 
 ## Connecting the company models
 
