@@ -8,6 +8,7 @@ permissions itself.
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import datetime
 
 import psycopg
 from psycopg.rows import dict_row
@@ -30,6 +31,8 @@ class Hit:
     memory_type: str
     content: str
     distance: float
+    created_at: datetime
+    amended: bool = False  # a newer memory this viewer can see changed one of its facts
 
 
 def vector_literal(embedding: list[float]) -> str:
@@ -95,10 +98,17 @@ class MemoryStore:
         scope = "brain_path <@ %(path)s::ltree" if include_children else "brain_path = %(path)s::ltree"
         rows = conn.execute(
             f"""
-            SELECT id::text, brain_path::text, memory_type, content,
-                   embedding <=> %(vec)s::{self._cast} AS distance
-            FROM memories
+            SELECT id::text, brain_path::text, memory_type, content, created_at,
+                   embedding <=> %(vec)s::{self._cast} AS distance,
+                   (m.amended_by IS NOT NULL
+                    AND EXISTS (SELECT 1 FROM memories n WHERE n.id = m.amended_by)) AS amended
+            FROM memories m
             WHERE {scope}
+              -- A replaced memory is hidden only from people who can see its
+              -- replacement (row-level security applies inside the subquery),
+              -- so nobody loses a fact because of a note they may not read.
+              AND (m.superseded_by IS NULL
+                   OR NOT EXISTS (SELECT 1 FROM memories n WHERE n.id = m.superseded_by))
             ORDER BY distance
             LIMIT %(limit)s
             """,

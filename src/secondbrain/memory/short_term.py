@@ -38,3 +38,24 @@ class ShortTermMemory:
 
     def clear(self, user_id: str) -> None:
         self._redis.delete(self._key(user_id))
+
+    # Conversation history: recent question/answer turns, so follow-up
+    # questions ("and for express?") can be understood. Kept apart from notes
+    # and never consolidated into long-term memory.
+    @staticmethod
+    def _chat_key(user_id: str) -> str:
+        return f"sb:chat:{user_id}"
+
+    def add_turn(self, user_id: str, question: str, answer: str, keep: int = 10) -> None:
+        key = self._chat_key(user_id)
+        pipe = self._redis.pipeline()
+        pipe.rpush(key, json.dumps({"question": question, "answer": answer, "at": time.time()}))
+        pipe.ltrim(key, -keep, -1)
+        pipe.expire(key, self._ttl)
+        pipe.execute()
+
+    def history(self, user_id: str, limit: int = 6) -> list[dict]:
+        return [json.loads(raw) for raw in self._redis.lrange(self._chat_key(user_id), -limit, -1)]
+
+    def clear_history(self, user_id: str) -> None:
+        self._redis.delete(self._chat_key(user_id))

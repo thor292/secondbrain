@@ -35,9 +35,11 @@ def schema_sql(dim: int) -> str:
     column_type, ops = vector_type(dim)
     return f"""
 CREATE TABLE brains (
-    path  ltree PRIMARY KEY,
-    name  text NOT NULL,
-    kind  text NOT NULL CHECK (kind IN ('root', 'company', 'department'))
+    path     ltree PRIMARY KEY,
+    name     text NOT NULL,
+    kind     text NOT NULL CHECK (kind IN ('root', 'company', 'department')),
+    -- What a company lets flow up to the root: nothing, or anonymized patterns.
+    sharing  text NOT NULL DEFAULT 'none' CHECK (sharing IN ('none', 'patterns'))
 );
 
 CREATE TABLE users (
@@ -67,11 +69,23 @@ CREATE TABLE memories (
     embedding        {column_type} NOT NULL,
     embedding_model  text NOT NULL,
     created_by       text REFERENCES users(id),
-    created_at       timestamptz NOT NULL DEFAULT now()
+    source           text,  -- document a chunk came from; NULL for notes
+    -- clock_timestamp, not now(): rows saved in one transaction still get
+    -- distinct times, so maintenance can tell which memory is newer.
+    created_at       timestamptz NOT NULL DEFAULT clock_timestamp(),
+    -- Memory maintenance: a memory replaced by a newer one ("superseded") or
+    -- folded into an earlier one ("merged") points at it. Nothing is deleted.
+    status           text NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'superseded', 'merged')),
+    superseded_by    uuid REFERENCES memories(id),
+    status_reason    text,
+    -- Still active, but one of its facts was changed by a newer memory.
+    amended_by       uuid REFERENCES memories(id),
+    maintained_at    timestamptz
 );
 
 CREATE INDEX memories_brain_path_idx ON memories USING gist (brain_path);
 CREATE INDEX memories_created_at_idx ON memories (created_at);
+CREATE INDEX memories_unmaintained_idx ON memories (created_at) WHERE maintained_at IS NULL;
 CREATE INDEX memories_embedding_idx ON memories USING hnsw (embedding {ops});
 
 -- Security definer: runs with the owner's rights, so the app role can check

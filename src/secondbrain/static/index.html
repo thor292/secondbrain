@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SecondBrain</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='7' fill='%234f46e5'/></svg>">
 <style>
   :root {
     --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #667085;
@@ -44,6 +45,8 @@
   .badge.department { color: var(--dept); background: var(--dept-soft); }
   .badge.company { color: var(--company); background: var(--company-soft); }
   .badge.none { color: var(--none); background: var(--none-soft); }
+  .searched { margin-top: 6px; font-size: 12px; color: var(--muted); font-style: italic; }
+  #new-conversation { margin-left: auto; }
   details { margin-top: 8px; font-size: 13px; color: var(--muted); }
   details li { margin: 6px 0; white-space: pre-wrap; }
   details code { font-size: 12px; }
@@ -76,6 +79,7 @@
     <div class="tabs">
       <button type="button" data-mode="ask" class="active">Ask</button>
       <button type="button" data-mode="remember">Remember</button>
+      <button type="button" id="new-conversation" title="Forget the questions asked so far">New conversation</button>
     </div>
     <form id="ask-form">
       <input id="question" placeholder="e.g. How many days of annual leave do we get?" autocomplete="off" required>
@@ -128,7 +132,7 @@
     });
   }
 
-  function addAnswer(result) {
+  function addAnswer(result, question) {
     const el = add("a", "");
     const badge = document.createElement("span");
     badge.className = "badge " + result.answered_from;
@@ -136,6 +140,12 @@
     el.appendChild(badge);
     el.appendChild(document.createElement("br"));
     appendFormatted(el, result.answer);
+    if (result.searched_for && result.searched_for.trim().toLowerCase() !== question.trim().toLowerCase()) {
+      const note = document.createElement("div");
+      note.className = "searched";
+      note.textContent = "Understood as: " + result.searched_for;
+      el.appendChild(note);
+    }
     if (result.sources.length) {
       const details = document.createElement("details");
       const summary = document.createElement("summary");
@@ -206,7 +216,7 @@
     const question = $("question").value.trim();
     $("question").value = "";
     add("q", question);
-    try { addAnswer(await api("/ask", { method: "POST", body: JSON.stringify({ question }) })); }
+    try { addAnswer(await api("/ask", { method: "POST", body: JSON.stringify({ question }) }), question); }
     catch (err) { add("note", "Error: " + err.message); }
   };
 
@@ -230,9 +240,15 @@
     } catch (err) { add("note", "Error: " + err.message); }
   };
 
-  document.querySelectorAll(".tabs button").forEach((tab) => {
+  $("new-conversation").onclick = async () => {
+    if (needUser()) return;
+    try { await api("/conversation/reset", { method: "POST" }); add("note", "Started a new conversation"); }
+    catch (err) { add("note", "Error: " + err.message); }
+  };
+
+  document.querySelectorAll(".tabs button[data-mode]").forEach((tab) => {
     tab.onclick = () => {
-      document.querySelectorAll(".tabs button").forEach((t) => t.classList.toggle("active", t === tab));
+      document.querySelectorAll(".tabs button[data-mode]").forEach((t) => t.classList.toggle("active", t === tab));
       $("ask-form").classList.toggle("hidden", tab.dataset.mode !== "ask");
       $("remember-form").classList.toggle("hidden", tab.dataset.mode !== "remember");
     };

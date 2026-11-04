@@ -16,7 +16,7 @@ from secondbrain.models import build_models
 from secondbrain.schema import create_schema
 from secondbrain.sensitivity import Sensitivity
 
-EXAMPLES = Path(__file__).parent.parent / "examples"
+EXAMPLES = Path(__file__).parent / "fixtures"
 ADMIN_TOKEN = "test-admin-token"
 
 

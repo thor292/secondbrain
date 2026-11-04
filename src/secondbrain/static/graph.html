@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SecondBrain Graph</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='7' fill='%238b85ff'/></svg>">
 <style>
   :root {
     --bg: #0b0e14; --panel: #12161f; --panel-2: #1a1f2b; --text: #e8ebf2; --muted: #8790a6;
@@ -15,7 +16,10 @@
   header { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
   header h1 { font-size: 16px; margin: 0 6px 0 0; letter-spacing: .01em; }
   header h1 span { color: var(--accent); }
-  select, #search, .btn { font: inherit; background: var(--panel-2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; }
+  .hidden { display: none !important; }
+  #token-form { display: flex; gap: 6px; }
+  #token { width: 150px; }
+  select, #search, #token, .btn { font: inherit; background: var(--panel-2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; }
   #search { width: 190px; }
   .btn { cursor: pointer; }
   .btn:hover { border-color: var(--accent); }
@@ -55,6 +59,10 @@
     <option value="">Choose a view…</option>
     <option value="__all__">★ Whole SecondBrain (admin)</option>
   </select>
+  <form id="token-form" class="hidden">
+    <input id="token" type="password" placeholder="Admin token" autocomplete="off">
+    <button class="btn" type="submit">Open</button>
+  </form>
   <input id="search" placeholder="Search…" autocomplete="off">
   <button class="btn" id="fit" type="button">Fit</button>
   <a href="/">← Chat</a>
@@ -99,6 +107,9 @@ const EDGE = {
   CREATED:    { label: "Created by",       color: "#ffd84d", on: false },
   RELATED_TO: { label: "Related memory",   color: "#3fd6a0", on: false, dashed: true },
   WORKING_ON: { label: "Working on",       color: "#a3aab8", on: false, dashed: true },
+  REPLACED_BY:  { label: "Replaced by newer", color: "#ff9f43", on: true, dashed: true },
+  DUPLICATE_OF: { label: "Duplicate of",      color: "#a3aab8", on: true, dashed: true },
+  PARTLY_UPDATED_BY: { label: "Partly updated by", color: "#ffd84d", on: true, dashed: true },
 };
 
 const canvas = document.getElementById("canvas");
@@ -245,47 +256,73 @@ async function loadUsers() {
   if (wanted === "__all__" || (wanted && users.some((u) => u.id === wanted))) { sel.value = wanted; loadGraph(wanted); }
 }
 
-// The whole-SecondBrain view needs the admin token. It is kept for this browser
-// tab only (sessionStorage), never in the page or the URL.
-function adminToken() {
-  let token = null;
-  try { token = sessionStorage.getItem("sb-admin-token"); } catch {}
-  if (!token) {
-    token = prompt("Admin token for the whole SecondBrain view:");
-    if (token) try { sessionStorage.setItem("sb-admin-token", token); } catch {}
-  }
-  return token;
+// The whole-SecondBrain view needs the admin token. It is typed into the header
+// and kept for this browser tab only (sessionStorage), never in the page or URL.
+const tokenForm = document.getElementById("token-form");
+function storedToken() { try { return sessionStorage.getItem("sb-admin-token"); } catch { return null; } }
+function storeToken(token) { try { token ? sessionStorage.setItem("sb-admin-token", token) : sessionStorage.removeItem("sb-admin-token"); } catch {} }
+
+// Empty the canvas right away when the view changes, so the old graph never
+// shows under the new view's name.
+function clearGraph(message) {
+  state.nodes = []; state.edges = []; state.zones = []; state.byId = new Map();
+  state.selected = null; state.hover = null; state.message = message;
+  document.getElementById("stats").textContent = "";
+  renderLegends(); renderDetails();
 }
 
 async function loadGraph(userId) {
   state.userId = userId;
+  tokenForm.classList.add("hidden");
+  clearGraph("Loading…");
   let res;
   if (userId === "__all__") {
-    const token = adminToken();
-    if (!token) return;
+    const token = storedToken();
+    if (!token) {
+      tokenForm.classList.remove("hidden");
+      document.getElementById("token").focus();
+      clearGraph("Enter the admin token at the top to open the whole SecondBrain");
+      return;
+    }
     res = await fetch("/admin/graph", { headers: { "X-Admin-Token": token } });
-    if (res.status === 401) try { sessionStorage.removeItem("sb-admin-token"); } catch {}
+    if (res.status === 401) {
+      storeToken(null);
+      tokenForm.classList.remove("hidden");
+      clearGraph("Wrong admin token — try again at the top");
+      return;
+    }
   } else {
     res = await fetch("/graph", { headers: { "X-User-Id": userId } });
   }
+  if (state.userId !== userId) return;  // the view changed while this one was loading
   if (!res.ok) {
-    document.getElementById("details").textContent =
-      res.status === 401 ? "Wrong admin token. Choose the view again to retry." :
-      res.status === 404 ? "The admin API is disabled on this server." : "Couldn't load graph.";
+    clearGraph(res.status === 404 && userId === "__all__"
+      ? "The admin API is disabled on this server (set SB_ADMIN_TOKEN)"
+      : "Couldn't load this view");
     return;
   }
   const data = await res.json();
+  if (state.userId !== userId) return;
   state.nodes = data.nodes.map((n) => ({ ...n, k: kindOf(n), x: 0, y: 0, tx: 0, ty: 0 }));
   state.byId = new Map(state.nodes.map((n) => [n.id, n]));
   state.edges = data.edges.filter((e) => state.byId.has(e.source) && state.byId.has(e.target))
     .map((e) => ({ ...e, s: state.byId.get(e.source), t: state.byId.get(e.target) }));
   layout(state.nodes);
-  state.selected = null; state.anim = 0;
+  state.selected = null; state.anim = 0; state.message = null;
   fit(true);
   renderLegends(); renderDetails();
   document.getElementById("stats").textContent =
     `${userId === "__all__" ? "Whole SecondBrain · admin view" : `${data.scope} · seen by ${userId}`} · ${state.nodes.length} nodes · ${state.edges.length} relationships`;
 }
+
+tokenForm.onsubmit = (ev) => {
+  ev.preventDefault();
+  const token = document.getElementById("token").value.trim();
+  if (!token) return;
+  storeToken(token);
+  document.getElementById("token").value = "";
+  loadGraph("__all__");
+};
 
 // ---------- drawing ----------
 function resize() {
@@ -388,17 +425,20 @@ function draw() {
     const spec = NODE[n.k];
     const r = spec.r;
     const dim = dimmed(n);
-    ctx.globalAlpha = (dim ? 0.18 : 1) * t;
+    const retired = n.props && n.props.status && n.props.status !== "active";
+    ctx.globalAlpha = (dim ? 0.18 : retired ? 0.4 : 1) * t;
     if (!dim && (isBrain(n.k) || n === state.selected)) {
       ctx.shadowColor = spec.color; ctx.shadowBlur = n === state.selected ? 26 : 18;
     }
     ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
-    const g = ctx.createRadialGradient(n.x - r * 0.35, n.y - r * 0.35, r * 0.1, n.x, n.y, r);
-    g.addColorStop(0, "#ffffff55"); g.addColorStop(0.35, spec.color); g.addColorStop(1, spec.color);
-    ctx.fillStyle = g; ctx.fill();
+    ctx.fillStyle = spec.color; ctx.fill();
     ctx.shadowBlur = 0;
     if (n.props && n.props.sensitivity === "restricted") {
       ctx.lineWidth = 2.2; ctx.strokeStyle = "#ff5a5a"; ctx.stroke();
+    }
+    if (retired) {
+      ctx.beginPath(); ctx.arc(n.x, n.y, r + 3, 0, Math.PI * 2);
+      ctx.setLineDash([3, 3]); ctx.lineWidth = 1.5; ctx.strokeStyle = "#ff9f43"; ctx.stroke(); ctx.setLineDash([]);
     }
     if (n.me) {
       ctx.beginPath(); ctx.arc(n.x, n.y, r + 4, 0, Math.PI * 2);
@@ -455,11 +495,25 @@ function fit(useTargets) {
   for (const z of state.zones) { xs.push(z.x - z.r, z.x + z.r); ys.push(z.y - z.r, z.y + z.r); }
   const [minX, maxX, minY, maxY] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
   const w = canvas.clientWidth, h = canvas.clientHeight, pad = 60;
-  const k = Math.min(1.4, (w - pad) / (maxX - minX || 1), (h - pad) / (maxY - minY || 1));
+  // Capped at 1, so a small company isn't blown up to fill a large screen.
+  const k = Math.min(1, (w - pad) / (maxX - minX || 1), (h - pad) / (maxY - minY || 1));
   state.view = { k, x: w / 2 - ((minX + maxX) / 2) * k, y: h / 2 - ((minY + maxY) / 2) * k };
 }
 
-function loop() { if (state.nodes.length) draw(); requestAnimationFrame(loop); }
+// Until a view is chosen, say so instead of showing an empty canvas.
+function drawPlaceholder() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  ctx.clearRect(0, 0, w, h);
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#e8ebf2";
+  ctx.font = "600 18px system-ui";
+  ctx.fillText(state.message || "Choose a view in the dropdown above", w / 2, h / 2 - 10);
+  ctx.fillStyle = "#8790a6";
+  ctx.font = "14px system-ui";
+  if (!state.message) ctx.fillText("★ Whole SecondBrain, or a person to see what they're allowed to see", w / 2, h / 2 + 18);
+}
+
+function loop() { state.nodes.length ? draw() : drawPlaceholder(); requestAnimationFrame(loop); }
 
 // ---------- legends & details ----------
 function renderLegends() {
@@ -478,6 +532,11 @@ function renderLegends() {
     const count = document.createElement("span"); count.className = "count"; count.textContent = counts[key];
     label.append(cb, dot, text, count);
     nodeBox.appendChild(label);
+  }
+  if (state.nodes.some((n) => n.props && n.props.status && n.props.status !== "active")) {
+    const r = document.createElement("label");
+    r.innerHTML = '<span style="width:11px;height:11px;border-radius:50%;border:2px dashed #ff9f43;flex:none;margin-left:22px;opacity:.7"></span><span>Outdated or duplicate memory</span>';
+    nodeBox.appendChild(r);
   }
   if (state.nodes.some((n) => n.props && n.props.sensitivity === "restricted")) {
     const r = document.createElement("label");

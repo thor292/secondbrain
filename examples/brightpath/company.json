@@ -1,0 +1,11 @@
+{
+  "id": "brightpath",
+  "name": "Brightpath Logistics",
+  "sharing": "none",
+  "departments": [
+    {"id": "operations", "name": "Operations"}
+  ],
+  "users": [
+    {"id": "karim", "name": "Karim Nasser (Operations director)", "department": "operations", "role": "lead"}
+  ]
+}

@@ -62,7 +62,8 @@ def _collect(conn: psycopg.Connection, scope: str, memory_limit: int, viewer: st
         edges.append({"source": f"user:{row['id']}", "target": f"brain:{row['home_brain']}", "label": "MEMBER_OF"})
 
     memories = conn.execute(
-        """SELECT id::text, brain_path::text, memory_type, sensitivity, content, created_by, created_at
+        """SELECT id::text, brain_path::text, memory_type, sensitivity, content, created_by, created_at,
+                  status, superseded_by::text, amended_by::text, status_reason, source
            FROM memories WHERE brain_path <@ %s::ltree ORDER BY created_at DESC LIMIT %s""",
         (scope, memory_limit),
     ).fetchall()
@@ -75,13 +76,25 @@ def _collect(conn: psycopg.Connection, scope: str, memory_limit: int, viewer: st
             "props": {"type": row["memory_type"], "tier": "long_term",
                       "sensitivity": Sensitivity(row["sensitivity"]).name.lower(),
                       "brain": row["brain_path"], "created": row["created_at"].isoformat(timespec="seconds"),
+                      "status": row["status"], **({"source": row["source"]} if row["source"] else {}),
+                      **({"why": row["status_reason"]} if row["status_reason"] else {}),
                       "content": row["content"]},
         })
         edges.append({"source": node_id, "target": f"brain:{row['brain_path']}", "label": "STORED_IN"})
         if row["created_by"]:
             edges.append({"source": f"user:{row['created_by']}", "target": node_id, "label": "CREATED"})
 
-    edges += _related_edges(conn, [row["id"] for row in memories])
+    shown = {row["id"] for row in memories}
+    for row in memories:
+        # Only link to memories this viewer can see; the database decides which.
+        if row["superseded_by"] and row["superseded_by"] in shown:
+            label = "REPLACED_BY" if row["status"] == "superseded" else "DUPLICATE_OF"
+            edges.append({"source": f"memory:{row['id']}", "target": f"memory:{row['superseded_by']}",
+                          "label": label, "props": {"why": row["status_reason"] or ""}})
+        if row["amended_by"] and row["amended_by"] in shown:
+            edges.append({"source": f"memory:{row['id']}", "target": f"memory:{row['amended_by']}",
+                          "label": "PARTLY_UPDATED_BY", "props": {"why": row["status_reason"] or ""}})
+    edges += _related_edges(conn, [row["id"] for row in memories if row["status"] == "active"])
     return nodes, edges
 
 

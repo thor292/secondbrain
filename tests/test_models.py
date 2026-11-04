@@ -1,6 +1,6 @@
 import math
 
-from secondbrain import admin, tree
+from secondbrain import documents, tree
 from secondbrain.models.stub import StubEmbedder, StubLLM
 from secondbrain.schema import vector_type
 from secondbrain.service import CLASSIFY_SYSTEM
@@ -40,6 +40,6 @@ def test_vector_type_respects_index_limits():
 
 def test_chunk_splits_on_paragraphs():
     text = "\n\n".join(["a" * 500] * 5)
-    chunks = admin.chunk(text, max_chars=1200)
+    chunks = documents.chunk(text, max_chars=1200)
     assert len(chunks) == 3
     assert all(len(c) <= 1200 for c in chunks)

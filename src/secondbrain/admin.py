@@ -3,8 +3,8 @@
 These run as the admin role, outside row-level security, so they are only
 reachable from the CLI or the token-protected admin API.
 
-    uv run python -m secondbrain.admin onboard examples/acme/company.json
-    uv run python -m secondbrain.admin import root.acme.hr examples/acme/docs/hr --sensitivity internal
+    uv run python -m secondbrain.admin onboard examples/lumen/company.json
+    uv run python -m secondbrain.admin import root.lumen.support examples/lumen/docs/support --sensitivity internal
 """
 
 import argparse
@@ -16,6 +16,7 @@ import psycopg
 
 from secondbrain import tree
 from secondbrain.config import Settings, get_settings
+from secondbrain.documents import SUPPORTED_SUFFIXES, chunk_document, extract_text
 from secondbrain.memory.store import vector_literal
 from secondbrain.models import Embedder
 from secondbrain.schema import vector_type
@@ -30,8 +31,6 @@ ROLES = {
     "executive": [("company", True, Sensitivity.RESTRICTED)],
 }
 
-ALLOWED_SUFFIXES = {".md", ".txt"}
-CHUNK_CHARS = 1200
 
 
 def _label(name: str) -> str:
@@ -51,7 +50,11 @@ def onboard(conn: psycopg.Connection, spec: dict) -> str:
         "INSERT INTO brains (path, name, kind) VALUES ('root', 'Root', 'root') ON CONFLICT DO NOTHING"
     )
     company = f"{tree.ROOT}.{spec.get('id') or _label(spec['name'])}"
+    sharing = spec.get("sharing", "none")
+    if sharing not in {"none", "patterns"}:
+        raise ValueError(f"sharing must be 'none' or 'patterns', not {sharing!r}")
     _upsert_brain(conn, company, spec["name"], "company")
+    conn.execute("UPDATE brains SET sharing = %s WHERE path = %s::ltree", (sharing, company))
     departments = {}
     for dept in spec.get("departments", []):
         path = f"{company}.{dept.get('id') or _label(dept['name'])}"
@@ -95,21 +98,6 @@ def _upsert_brain(conn: psycopg.Connection, path: str, name: str, kind: str) -> 
     )
 
 
-def chunk(text: str, max_chars: int = CHUNK_CHARS) -> list[str]:
-    """Split a document on paragraph boundaries into chunks of at most ~max_chars."""
-    paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
-    chunks, current = [], ""
-    for paragraph in paragraphs:
-        if current and len(current) + len(paragraph) + 2 > max_chars:
-            chunks.append(current)
-            current = paragraph
-        else:
-            current = f"{current}\n\n{paragraph}" if current else paragraph
-    if current:
-        chunks.append(current)
-    return chunks
-
-
 def import_documents(
     conn: psycopg.Connection,
     embedder: Embedder,
@@ -122,24 +110,26 @@ def import_documents(
     if conn.execute("SELECT 1 FROM brains WHERE path = %s::ltree", (brain_path,)).fetchone() is None:
         raise ValueError(f"No brain {brain_path!r}; onboard the company first")
     cast = vector_type(settings.embedding_dim)[0].split("(")[0]
-    pieces = [(name, part) for name, text in documents for part in chunk(text)]
+    pieces = [(name, part) for name, text in documents for part in chunk_document(name, text)]
     if not pieces:
         return 0
     embeddings = embedder.embed([part for _, part in pieces])
     for (name, part), embedding in zip(pieces, embeddings):
         conn.execute(
             f"""INSERT INTO memories (brain_path, memory_type, tier, sensitivity, content,
-                                      embedding, embedding_model)
-                VALUES (%s::ltree, 'semantic', 'long_term', %s, %s, %s::{cast}, %s)""",
+                                      embedding, embedding_model, source)
+                VALUES (%s::ltree, 'semantic', 'long_term', %s, %s, %s::{cast}, %s, %s)""",
             (brain_path, int(sensitivity), f"{part}\n\n(Source: {name})",
-             vector_literal(embedding), embedder.name),
+             vector_literal(embedding), embedder.name, name),
         )
     return len(pieces)
 
 
 def read_documents(path: Path) -> list[tuple[str, str]]:
+    """(name, text) for every supported document at a path (a file or a folder)."""
     files = [path] if path.is_file() else sorted(p for p in path.rglob("*") if p.is_file())
-    return [(f.name, f.read_text()) for f in files if f.suffix.lower() in ALLOWED_SUFFIXES]
+    return [(f.name, extract_text(f.name, f.read_bytes())) for f in files
+            if f.suffix.lower() in SUPPORTED_SUFFIXES and not f.name.startswith(".")]
 
 
 def main() -> None:
@@ -149,7 +139,7 @@ def main() -> None:
     commands = parser.add_subparsers(dest="command", required=True)
     onboard_cmd = commands.add_parser("onboard", help="create or update a company from a JSON spec")
     onboard_cmd.add_argument("spec", type=Path)
-    import_cmd = commands.add_parser("import", help="import .md/.txt documents into a brain")
+    import_cmd = commands.add_parser("import", help="import .md/.txt/.pdf/.docx documents into a brain")
     import_cmd.add_argument("brain_path")
     import_cmd.add_argument("path", type=Path)
     import_cmd.add_argument("--sensitivity", default="internal", choices=["public", "internal", "restricted"])

@@ -12,12 +12,13 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 import psycopg
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from psycopg.rows import dict_row
 from pydantic import BaseModel
 
-from secondbrain import admin
+from secondbrain import admin, learning, maintenance, tree
+from secondbrain.documents import UnsupportedDocument, extract_text
 from secondbrain.graph import build_full_graph
 from secondbrain.config import Settings, get_settings
 from secondbrain.memory.short_term import ShortTermMemory
@@ -69,13 +70,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def unknown_user(request: Request, exc: UnknownUser):
         return JSONResponse({"detail": f"Unknown user {exc}"}, status_code=401)
 
+    # Pages are revalidated on every load, so browsers never show a stale copy after an update.
+    NO_CACHE = {"Cache-Control": "no-cache"}
+
     @app.get("/", include_in_schema=False)
     def chat_screen():
-        return FileResponse(STATIC_DIR / "index.html")
+        return FileResponse(STATIC_DIR / "index.html", headers=NO_CACHE)
 
     @app.get("/graph-view", include_in_schema=False)
     def graph_screen():
-        return FileResponse(STATIC_DIR / "graph.html")
+        return FileResponse(STATIC_DIR / "graph.html", headers=NO_CACHE)
 
     @app.get("/graph")
     def graph(user_id: UserId, brain: Brain):
@@ -100,11 +104,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return brain.remember(user_id, body.content, Sensitivity.parse(body.sensitivity))
 
     @app.post("/consolidate")
-    def consolidate(user_id: UserId, brain: Brain):
+    def consolidate(user_id: UserId, brain: Brain, background: BackgroundTasks):
         try:
-            return {"consolidated": brain.consolidate(user_id)}
+            count = brain.consolidate(user_id)
+            if count:
+                # New long-term memories may duplicate or update older ones.
+                company = tree.company_of(brain.store.get_user(user_id).home_brain)
+                background.add_task(maintenance.run, settings, brain.llm, company)
+            return {"consolidated": count}
         except psycopg.errors.InsufficientPrivilege:
             raise HTTPException(403, "You can't store memories at that sensitivity in your brain")
+
+    @app.post("/conversation/reset")
+    def reset_conversation(user_id: UserId, brain: Brain):
+        brain.new_conversation(user_id)
+        return {"ok": True}
 
     @app.post("/ask")
     def ask(body: AskRequest, user_id: UserId, brain: Brain):
@@ -112,6 +126,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {
             "answer": result.answer,
             "answered_from": result.answered_from,
+            "searched_for": result.searched_for,
             "sources": [
                 {"brain": h.brain_path, "type": h.memory_type, "content": h.content,
                  "distance": round(h.distance, 3)}
@@ -124,6 +139,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         """The whole SecondBrain: root, every company, every memory."""
         with psycopg.connect(settings.admin_database_url, row_factory=dict_row) as conn:
             return build_full_graph(conn)
+
+    @app.post("/admin/maintain", dependencies=[Depends(require_admin)])
+    def maintain(brain: Brain):
+        """Merge duplicate memories and retire outdated ones, across all companies."""
+        changes = maintenance.run(settings, brain.llm)
+        return {"changes": [
+            {"relation": c.relation, "old": c.old, "new": c.new, "reason": c.reason} for c in changes
+        ]}
+
+    @app.post("/admin/learn", dependencies=[Depends(require_admin)])
+    def learn(brain: Brain):
+        """Send anonymized patterns from companies that allow sharing up to the root."""
+        result = learning.run(settings, brain.llm, brain.embedder)
+        return {**result, "stored": [{"pattern": p.text, "topic": p.topic} for p in result["stored"]]}
 
     @app.post("/admin/companies", dependencies=[Depends(require_admin)])
     def onboard_company(spec: dict):
@@ -142,9 +171,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     ):
         documents = []
         for upload in files:
-            if Path(upload.filename or "").suffix.lower() not in admin.ALLOWED_SUFFIXES:
-                raise HTTPException(400, f"{upload.filename}: only .md and .txt are supported")
-            documents.append((upload.filename, (await upload.read()).decode("utf-8")))
+            try:
+                documents.append((upload.filename, extract_text(upload.filename or "", await upload.read())))
+            except UnsupportedDocument as exc:
+                raise HTTPException(400, str(exc))
         with psycopg.connect(settings.admin_database_url) as conn:
             try:
                 count = admin.import_documents(

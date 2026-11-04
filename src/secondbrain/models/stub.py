@@ -27,6 +27,23 @@ def _words(text: str) -> list[str]:
     return [_stem(w) for w in words if w not in STOPWORDS]
 
 
+def _relation(prompt: str) -> str:
+    """Crude offline judgement: near-identical wording is a duplicate; the same
+    words with different numbers is an update."""
+    match = re.search(r"OLD: (.*)\n\nNEW: (.*)", prompt, re.DOTALL)
+    if not match:
+        return "unrelated"
+    old, new = (set(_words(part)) for part in match.groups())
+    words = lambda ws: {w for w in ws if not w.isdigit()}
+    numbers = lambda ws: {w for w in ws if w.isdigit()}
+    overlap = len(words(old) & words(new)) / max(len(words(old) | words(new)), 1)
+    if overlap > 0.8 and numbers(old) == numbers(new):
+        return "duplicate"
+    if overlap > 0.5 and numbers(old) != numbers(new):
+        return "updates"
+    return "unrelated"
+
+
 class StubEmbedder:
     name = "stub-hash"
 
@@ -58,8 +75,25 @@ class StubLLM:
             else:
                 memory_type = "semantic"
             return json.dumps({"memory_type": memory_type})
+        if "reusable business lessons" in system.lower():
+            # Offline: one clean lesson, plus two the anonymity check must reject.
+            # The company's name is the first word of its documents' titles.
+            titles = re.findall(r"^(\w+)[^\n]*›", prompt, re.MULTILINE)
+            name = titles[0] if titles else "Acme"
+            return json.dumps({"patterns": [
+                {"pattern": "Escalating larger customer credits to a lead keeps goodwill spending consistent.", "topic": "support"},
+                {"pattern": "Free shipping above 60 dollars lifts conversion.", "topic": "pricing"},
+                {"pattern": f"Teams at {name} prefer short briefs.", "topic": "process"},
+            ]})
+        if "maintain a company's memory" in system.lower():
+            return json.dumps({"relation": _relation(prompt), "reason": "stub judgement"})
+        if "rewrite" in system.lower():
+            # No real understanding offline: search with the follow-up as written.
+            match = re.search(r"^Follow-up question: (.+)$", prompt, re.MULTILINE)
+            return match.group(1) if match else prompt
         # Answering: echo the most relevant memory, which is listed first.
         match = re.search(
-            r"^\[1\] (.*?)\n*(?=^\[2\] |^Recent context:|^Question:)", prompt, re.MULTILINE | re.DOTALL
+            r"^\[1\] (?:\(\d{4}-\d{2}-\d{2}[^)]*\) )?(.*?)\n*(?=^\[2\] |^Recent context:|^Conversation so far:|^Question:)",
+            prompt, re.MULTILINE | re.DOTALL
         )
         return match.group(1).strip() if match else "NOT_FOUND"

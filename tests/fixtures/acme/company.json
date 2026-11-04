@@ -1,6 +1,7 @@
 {
   "id": "acme",
   "name": "Acme Retail",
+  "sharing": "patterns",
   "departments": [
     {"id": "sales", "name": "Sales"},
     {"id": "finance", "name": "Finance"},
