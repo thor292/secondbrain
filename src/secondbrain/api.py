@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from psycopg.rows import dict_row
 from pydantic import BaseModel
 
-from secondbrain import admin, learning, maintenance, tree
+from secondbrain import admin, learning, maintenance, relationships, tree
 from secondbrain.documents import UnsupportedDocument, extract_text
 from secondbrain.graph import build_full_graph
 from secondbrain.config import Settings, get_settings
@@ -25,6 +25,7 @@ from secondbrain.memory.short_term import ShortTermMemory
 from secondbrain.memory.store import MemoryStore
 from secondbrain.models import build_models
 from secondbrain.sensitivity import Sensitivity
+from secondbrain.relationships import GraphUnavailable, RelationshipGraph
 from secondbrain.service import SecondBrain, UnknownUser
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -48,7 +49,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         llm, embedder = build_models(settings)
         store = MemoryStore(settings.app_database_url, settings.embedding_dim)
         short_term = ShortTermMemory(settings.redis_url, settings.short_term_ttl)
-        app.state.brain = SecondBrain(settings, store, short_term, llm, embedder)
+        graph = RelationshipGraph(settings.falkordb_url, settings.graph_prefix)
+        app.state.brain = SecondBrain(settings, store, short_term, llm, embedder, graph)
         yield
         store.close()
 
@@ -69,6 +71,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.exception_handler(UnknownUser)
     async def unknown_user(request: Request, exc: UnknownUser):
         return JSONResponse({"detail": f"Unknown user {exc}"}, status_code=401)
+
+    @app.exception_handler(GraphUnavailable)
+    async def graph_unavailable(request: Request, exc: GraphUnavailable):
+        return JSONResponse({"detail": "The relationship graph (FalkorDB) is unavailable"}, status_code=503)
 
     # Pages are revalidated on every load, so browsers never show a stale copy after an update.
     NO_CACHE = {"Cache-Control": "no-cache"}
@@ -111,6 +117,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 # New long-term memories may duplicate or update older ones.
                 company = tree.company_of(brain.store.get_user(user_id).home_brain)
                 background.add_task(maintenance.run, settings, brain.llm, company)
+                background.add_task(relationships.run, settings, brain.llm, brain.relationships, company)
             return {"consolidated": count}
         except psycopg.errors.InsufficientPrivilege:
             raise HTTPException(403, "You can't store memories at that sensitivity in your brain")
@@ -133,6 +140,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 for h in result.sources
             ],
         }
+
+    @app.get("/experts")
+    def experts(topic: str, user_id: UserId, brain: Brain):
+        """Who knows about a topic, counting only memories this person may see."""
+        return brain.experts(user_id, topic)
+
+    @app.get("/entities/{name}")
+    def entity(name: str, user_id: UserId, brain: Brain):
+        """What we know about a customer, supplier, product, person or topic."""
+        result = brain.entity(user_id, name)
+        if result is None:
+            # Same answer whether it doesn't exist or this person may not see it.
+            raise HTTPException(404, f"Nothing known about {name!r}")
+        return result
 
     @app.get("/admin/graph", dependencies=[Depends(require_admin)])
     def full_graph():
@@ -166,6 +187,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def upload_documents(
         brain_path: str,
         brain: Brain,
+        background: BackgroundTasks,
         files: Annotated[list[UploadFile], File()],
         sensitivity: Annotated[SensitivityName, Form()] = "internal",
     ):
@@ -183,6 +205,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 )
             except ValueError as exc:
                 raise HTTPException(400, str(exc))
+        if count and tree.level(brain_path) >= tree.COMPANY_LEVEL:
+            background.add_task(
+                relationships.run, settings, brain.llm, brain.relationships, tree.company_of(brain_path)
+            )
         return {"brain": brain_path, "chunks": count}
 
     return app

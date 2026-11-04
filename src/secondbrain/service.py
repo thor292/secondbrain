@@ -4,12 +4,15 @@ import json
 import re
 from dataclasses import dataclass, field
 
+import psycopg
+
 from secondbrain import tree
 from secondbrain.graph import build_graph
 from secondbrain.config import Settings
 from secondbrain.memory.short_term import ShortTermMemory
 from secondbrain.memory.store import Hit, MemoryStore, User
 from secondbrain.models import LLM, Embedder
+from secondbrain.relationships import GraphUnavailable, RelationshipGraph, viewer_scope
 from secondbrain.sensitivity import Sensitivity
 
 MEMORY_TYPES = {"episodic", "semantic", "user"}
@@ -51,13 +54,14 @@ class Answer:
 class SecondBrain:
     def __init__(
         self, settings: Settings, store: MemoryStore, short_term: ShortTermMemory,
-        llm: LLM, embedder: Embedder,
+        llm: LLM, embedder: Embedder, relationships: RelationshipGraph | None = None,
     ) -> None:
         self.settings = settings
         self.store = store
         self.short_term = short_term
         self.llm = llm
         self.embedder = embedder
+        self.relationships = relationships
 
     def _user(self, user_id: str) -> User:
         user = self.store.get_user(user_id)
@@ -187,3 +191,47 @@ class SecondBrain:
         user = self._user(user_id)
         with self.store.as_user(user_id) as conn:
             return build_graph(conn, user, self.short_term.all(user_id))
+
+    def _graph_scope(self, user_id: str):
+        """The relationship graph and what this person may see in it.
+
+        A company graph that doesn't exist yet (FalkorDB restarted, or never
+        built) is rebuilt from PostgreSQL first.
+        """
+        if self.relationships is None:
+            raise GraphUnavailable("No relationship graph configured")
+        user = self._user(user_id)
+        with self.store.as_user(user_id) as conn:
+            scope = viewer_scope(conn, user.home_brain)
+        if not self.relationships.exists(scope.company):
+            with psycopg.connect(self.settings.admin_database_url) as admin:
+                self.relationships.rebuild(admin, scope.company)
+        return self.relationships, scope
+
+    def _memories(self, user_id: str, ids: list[str], limit: int) -> list[dict]:
+        """Memory text comes from PostgreSQL as this person, never from the graph."""
+        if not ids:
+            return []
+        with self.store.as_user(user_id) as conn:
+            return conn.execute(
+                """SELECT id::text, brain_path::text AS brain, memory_type AS type, content,
+                          created_by, created_at
+                   FROM memories WHERE id = ANY(%s::uuid[]) ORDER BY created_at DESC LIMIT %s""",
+                (ids, limit),
+            ).fetchall()
+
+    def experts(self, user_id: str, topic: str, limit: int = 10) -> dict:
+        """Who knows about a topic, within what this person may see."""
+        graph, scope = self._graph_scope(user_id)
+        result = graph.experts(scope, topic)
+        ids = result.pop("memory_ids")
+        return {**result, "memory_count": len(ids), "memories": self._memories(user_id, ids, limit)}
+
+    def entity(self, user_id: str, name: str, limit: int = 10) -> dict | None:
+        """What we know about one entity, within what this person may see."""
+        graph, scope = self._graph_scope(user_id)
+        result = graph.entity(scope, name)
+        if result is None:
+            return None
+        ids = result.pop("memory_ids")
+        return {**result, "memory_count": len(ids), "memories": self._memories(user_id, ids, limit)}

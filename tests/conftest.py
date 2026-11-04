@@ -27,6 +27,8 @@ def settings() -> Settings:
         admin_database_url="postgresql://secondbrain_admin:dev_admin_password@localhost:55432/secondbrain_test",
         app_database_url="postgresql://secondbrain_app:dev_app_password@localhost:55432/secondbrain_test",
         redis_url="redis://localhost:56379/15",
+        # Test graphs get their own prefix, so they never touch the demo's "sb_" graphs.
+        graph_prefix="sbtest",
         model_provider="stub",
         embedding_dim=256,
         admin_token=ADMIN_TOKEN,
@@ -67,6 +69,7 @@ def client(settings: Settings):
     app = create_app(settings)
     with TestClient(app) as client:
         app.state.brain.short_term._redis.flushdb()
+        app.state.brain.relationships.drop_all()
         yield client
 
 

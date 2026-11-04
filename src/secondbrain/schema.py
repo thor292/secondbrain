@@ -125,10 +125,69 @@ REVOKE ALL ON FUNCTION sb_my_grants() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION sb_my_grants() TO secondbrain_app;
 GRANT SELECT ON brains, users TO secondbrain_app;
 GRANT SELECT, INSERT ON memories TO secondbrain_app;
+""" + RELATIONSHIP_SQL
+
+
+# Entities and relationships extracted from memories (see relationships.py).
+# They are the source of truth for the FalkorDB graph, which can always be
+# rebuilt from them. Each row is visible only through a memory the reader may
+# see, so a name mentioned only in a restricted note stays hidden even here.
+RELATIONSHIP_SQL = """
+CREATE TABLE entities (
+    id       uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    company  ltree NOT NULL REFERENCES brains(path),
+    key      text NOT NULL,  -- normalized name, so "Nordlys" and "nordlys" are one entity
+    name     text NOT NULL,
+    kind     text NOT NULL CHECK (kind IN ('person', 'customer', 'supplier', 'product', 'carrier',
+                                           'place', 'organization', 'topic')),
+    user_id  text REFERENCES users(id),  -- set when the entity is one of the company's people
+    UNIQUE (company, key)
+);
+
+CREATE TABLE memory_entities (
+    memory_id  uuid NOT NULL REFERENCES memories(id),
+    entity_id  uuid NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+    PRIMARY KEY (memory_id, entity_id)
+);
+
+-- A relationship is only as visible as the memory that states it.
+CREATE TABLE entity_relations (
+    memory_id  uuid NOT NULL REFERENCES memories(id),
+    source_id  uuid NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+    relation   text NOT NULL,
+    target_id  uuid NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+    PRIMARY KEY (memory_id, source_id, relation, target_id)
+);
+
+-- Which memories have been through extraction, so each is processed once.
+CREATE TABLE entity_extractions (
+    memory_id     uuid PRIMARY KEY REFERENCES memories(id),
+    model         text NOT NULL,
+    extracted_at  timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE memory_entities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE memory_entities FORCE ROW LEVEL SECURITY;
+ALTER TABLE entity_relations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE entity_relations FORCE ROW LEVEL SECURITY;
+ALTER TABLE entities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE entities FORCE ROW LEVEL SECURITY;
+
+-- The subqueries are themselves filtered by row-level security on memories
+-- (and memory_entities), so visibility always comes from sb_can_see.
+CREATE POLICY memory_entities_read ON memory_entities FOR SELECT
+    USING (EXISTS (SELECT 1 FROM memories m WHERE m.id = memory_id));
+CREATE POLICY entity_relations_read ON entity_relations FOR SELECT
+    USING (EXISTS (SELECT 1 FROM memories m WHERE m.id = memory_id));
+CREATE POLICY entities_read ON entities FOR SELECT
+    USING (EXISTS (SELECT 1 FROM memory_entities me WHERE me.entity_id = id));
+
+GRANT SELECT ON entities, memory_entities, entity_relations TO secondbrain_app;
 """
 
 
 DROP_SQL = """
+DROP TABLE IF EXISTS entity_extractions, entity_relations, memory_entities, entities CASCADE;
 DROP TABLE IF EXISTS memories, grants, users, brains CASCADE;
 DROP FUNCTION IF EXISTS sb_can_see(ltree, smallint);
 DROP FUNCTION IF EXISTS sb_my_grants();
@@ -141,6 +200,20 @@ def create_schema(settings: Settings | None = None, reset: bool = False) -> None
         if reset:
             conn.execute(DROP_SQL)
         conn.execute(schema_sql(settings.embedding_dim))
+
+
+def ensure_relationship_schema(settings: Settings | None = None) -> bool:
+    """Add the relationship tables to a database created before they existed.
+
+    Purely additive: existing tables and rows are not touched. Returns True
+    if the tables were created.
+    """
+    settings = settings or get_settings()
+    with psycopg.connect(settings.admin_database_url) as conn:
+        if conn.execute("SELECT to_regclass('entities')").fetchone()[0] is not None:
+            return False
+        conn.execute(RELATIONSHIP_SQL)
+        return True
 
 
 def main() -> None:
