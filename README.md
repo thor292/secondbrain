@@ -77,12 +77,20 @@ SB_EMBEDDING_MODEL=<embedding model name>
 SB_EMBEDDING_DIM=<its dimensions>
 ```
 
+`SB_LITELLM_BASE_URL` includes the `/v1` suffix if the proxy uses one (for
+example `http://10.21.64.70:4000/v1`). The company proxy is only reachable on
+the company network or VPN.
+
+The demo uses `claude-sonnet` for answers and `gemini-embedding-001` at 1536
+dimensions (it supports 768, 1536 or 3072; we request the size explicitly).
+
 Changing the embedding model or its dimensions requires recreating the schema
 and re-importing documents (`schema --reset`, then import again), because
 stored vectors must all come from the same model.
 
-The stub provider only matches questions that share words with a memory and
-answers by quoting the best match. Real answers need the LiteLLM provider.
+The stub provider (used by the tests) only matches questions that share words
+with a memory and answers by quoting the best match. Real answers need the
+LiteLLM provider.
 
 ## Tests
 

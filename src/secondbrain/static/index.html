@@ -119,6 +119,15 @@
 
   const LABELS = { department: "Answered from your department", company: "Answered from your company", none: "Not found in your brains" };
 
+  // Renders **bold** from the model's answer as <b>, everything else as plain text
+  // (never as HTML, so an answer can't inject markup into the page).
+  function appendFormatted(el, text) {
+    text.split(/\*\*(.+?)\*\*/g).forEach((part, i) => {
+      if (i % 2) { const b = document.createElement("b"); b.textContent = part; el.appendChild(b); }
+      else el.appendChild(document.createTextNode(part));
+    });
+  }
+
   function addAnswer(result) {
     const el = add("a", "");
     const badge = document.createElement("span");
@@ -126,7 +135,7 @@
     badge.textContent = LABELS[result.answered_from];
     el.appendChild(badge);
     el.appendChild(document.createElement("br"));
-    el.appendChild(document.createTextNode(result.answer));
+    appendFormatted(el, result.answer);
     if (result.sources.length) {
       const details = document.createElement("details");
       const summary = document.createElement("summary");

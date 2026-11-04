@@ -1,8 +1,30 @@
 """Client for a LiteLLM proxy, which exposes an OpenAI-compatible API."""
 
+import time
+
 import httpx
 
 from secondbrain.config import Settings
+
+EMBED_BATCH = 100
+RETRIES = 3
+
+
+def _post(http: httpx.Client, path: str, body: dict) -> dict:
+    """POST with retries: the proxy occasionally drops a connection or is briefly busy."""
+    for attempt in range(RETRIES):
+        try:
+            response = http.post(path, json=body)
+            if response.status_code in (429, 502, 503, 504) and attempt < RETRIES - 1:
+                time.sleep(2 ** attempt)
+                continue
+            response.raise_for_status()
+            return response.json()
+        except (httpx.TransportError, httpx.RemoteProtocolError):
+            if attempt == RETRIES - 1:
+                raise
+            time.sleep(2 ** attempt)
+    raise RuntimeError("unreachable")
 
 
 def _client(settings: Settings) -> httpx.Client:
@@ -23,18 +45,14 @@ class LiteLLMChat:
         self._http = _client(settings)
 
     def complete(self, system: str, prompt: str) -> str:
-        response = self._http.post(
-            "/chat/completions",
-            json={
-                "model": self.name,
-                "messages": [
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": prompt},
-                ],
-            },
-        )
-        response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"]
+        body = {
+            "model": self.name,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": prompt},
+            ],
+        }
+        return _post(self._http, "/chat/completions", body)["choices"][0]["message"]["content"]
 
 
 class LiteLLMEmbedder:
@@ -46,10 +64,13 @@ class LiteLLMEmbedder:
         self._http = _client(settings)
 
     def embed(self, texts: list[str]) -> list[list[float]]:
-        response = self._http.post("/embeddings", json={"model": self.name, "input": texts})
-        response.raise_for_status()
-        data = sorted(response.json()["data"], key=lambda item: item["index"])
-        vectors = [item["embedding"] for item in data]
+        vectors = []
+        for start in range(0, len(texts), EMBED_BATCH):
+            # Ask for our dimension explicitly: models with flexible output sizes
+            # (e.g. gemini-embedding-001: 768 / 1536 / 3072) default to the largest.
+            body = {"model": self.name, "input": texts[start:start + EMBED_BATCH], "dimensions": self.dim}
+            data = sorted(_post(self._http, "/embeddings", body)["data"], key=lambda item: item["index"])
+            vectors += [item["embedding"] for item in data]
         for vector in vectors:
             if len(vector) != self.dim:
                 raise ValueError(

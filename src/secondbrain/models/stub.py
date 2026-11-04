@@ -62,4 +62,4 @@ class StubLLM:
         match = re.search(
             r"^\[1\] (.*?)\n*(?=^\[2\] |^Recent context:|^Question:)", prompt, re.MULTILINE | re.DOTALL
         )
-        return match.group(1).strip() if match else "I don't have that information."
+        return match.group(1).strip() if match else "NOT_FOUND"

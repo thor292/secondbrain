@@ -1,6 +1,7 @@
 """The brain's operations: remember, consolidate, ask."""
 
 import json
+import re
 from dataclasses import dataclass, field
 
 from secondbrain import tree
@@ -20,10 +21,13 @@ CLASSIFY_SYSTEM = (
     'Reply with JSON only, like {"memory_type": "semantic"}.'
 )
 
+NOT_FOUND = "NOT_FOUND"
+NO_ANSWER = "I don't have that information."
+
 ANSWER_SYSTEM = (
     "You are a company's Second Brain. Answer the question using only the numbered "
     "memories and recent context provided. Cite memory numbers like [1]. If they don't "
-    "contain the answer, say you don't have that information."
+    f"contain the answer, reply with exactly {NOT_FOUND} and nothing else."
 )
 
 
@@ -57,8 +61,10 @@ class SecondBrain:
 
     def classify(self, content: str) -> str:
         reply = self.llm.complete(CLASSIFY_SYSTEM, content)
+        # Models sometimes wrap JSON in prose or a code fence; take the object itself.
+        match = re.search(r"\{.*\}", reply, re.DOTALL)
         try:
-            memory_type = json.loads(reply).get("memory_type")
+            memory_type = json.loads(match.group(0)).get("memory_type") if match else None
         except (json.JSONDecodeError, AttributeError):
             memory_type = None
         return memory_type if memory_type in MEMORY_TYPES else "semantic"
@@ -101,38 +107,45 @@ class SecondBrain:
         self.short_term.drop_oldest(user_id, len(items))
         return len(items)
 
-    def ask(self, user_id: str, question: str) -> Answer:
-        """Search the user's own brain, then fall back to the company brain. Never the root."""
-        user = self._user(user_id)
-        company = tree.company_of(user.home_brain)
-        [embedding] = self.embedder.embed([question])
-        limit = self.settings.search_limit
-        cutoff = self.settings.fallback_max_distance
-
-        with self.store.as_user(user_id) as conn:
-            hits = self.store.search(
-                conn, embedding, brain_path=user.home_brain, include_children=False, limit=limit
-            )
-            hits = [h for h in hits if h.distance <= cutoff]
-            answered_from = "company" if tree.level(user.home_brain) == tree.COMPANY_LEVEL else "department"
-            if not hits and user.home_brain != company:
-                hits = self.store.search(
-                    conn, embedding, brain_path=company, include_children=True, limit=limit
-                )
-                hits = [h for h in hits if h.distance <= cutoff]
-                answered_from = "company"
-
-        recent = self.short_term.recent(user_id)
+    def _answer(self, question: str, hits: list[Hit], recent: list[dict]) -> str | None:
+        """The model's answer from these memories, or None if they don't contain it."""
         if not hits and not recent:
-            return Answer("I don't have that information.", "none")
-
+            return None
         lines = ["Memories:"]
         lines += [f"[{i}] {hit.content}" for i, hit in enumerate(hits, start=1)]
         if recent:
             lines += ["", "Recent context:"] + [f"- {item['content']}" for item in recent]
         lines += ["", f"Question: {question}"]
-        answer = self.llm.complete(ANSWER_SYSTEM, "\n".join(lines))
-        return Answer(answer, answered_from if hits else "none", hits)
+        reply = self.llm.complete(ANSWER_SYSTEM, "\n".join(lines)).strip()
+        return None if reply.startswith(NOT_FOUND) else reply
+
+    def ask(self, user_id: str, question: str) -> Answer:
+        """Answer from the user's own brain, else from their company brain. Never the root.
+
+        Falling back is decided by whether the model finds the answer in the
+        memories, not by a distance threshold alone: loosely related memories
+        are often close in embedding space without answering the question.
+        """
+        user = self._user(user_id)
+        company = tree.company_of(user.home_brain)
+        [embedding] = self.embedder.embed([question])
+        recent = self.short_term.recent(user_id)
+        levels = [(user.home_brain, False, "company" if user.home_brain == company else "department")]
+        if user.home_brain != company:
+            levels.append((company, True, "company"))
+
+        for path, include_children, answered_from in levels:
+            # Search inside a short transaction; the model call happens outside it.
+            with self.store.as_user(user_id) as conn:
+                hits = self.store.search(
+                    conn, embedding, brain_path=path, include_children=include_children,
+                    limit=self.settings.search_limit,
+                )
+            hits = [h for h in hits if h.distance <= self.settings.fallback_max_distance]
+            answer = self._answer(question, hits, recent)
+            if answer is not None:
+                return Answer(answer, answered_from, hits)
+        return Answer(NO_ANSWER, "none")
 
     def graph(self, user_id: str) -> dict:
         """Everything this person can see in their company, as nodes and edges."""

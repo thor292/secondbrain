@@ -1,7 +1,7 @@
 # SecondBrain — Architecture
 
 > Status: **Draft, under discussion.** Nothing here is built yet.
-> Last updated: 2026-11-03
+> Last updated: 2026-11-04
 >
 > Principle: the demo is the first slice of the real product. Every demo
 > choice must carry over to production; anything demo-only is marked.
@@ -280,3 +280,126 @@ To keep the best version, "best" is defined before building:
 - Confirm backend language (Python + FastAPI proposed).
 - Confirm identity approach (SSO / Keycloak proposed).
 - Define the test set and scoring for comparing versions.
+- Agentic commerce: the open questions in 8.8.
+
+## 8. Use case: Agentic commerce (proposed)
+
+> Status: **Concept under discussion.** Nothing here is built yet.
+
+SecondBrain connected to merchants on an agentic commerce platform, with
+two capabilities: **forecasting** (time series predictions) and **real-time
+offers at checkout**, each decision carrying a reason.
+
+### 8.1 Mapping onto SecondBrain
+
+| SecondBrain concept | In agentic commerce |
+|---|---|
+| Company brain | A merchant |
+| Department brains | The merchant's stores, channels or regions |
+| Episodic memory | Events: product views, add-to-cart, checkout started, abandoned, purchased |
+| Semantic memory | Catalog, prices, margins, discount rules |
+| User memory | Customer profiles: history, preferences, price sensitivity |
+| Root brain | Anonymized patterns across merchants (e.g. "for carts under $50, free shipping converts better than 10% off") |
+
+Cross-merchant patterns at the root give a new merchant useful behaviour on
+day one (cold start), without any merchant's raw data being shared.
+
+### 8.2 Forecasting
+
+Examples: sales per product next week, demand spikes, stock running out,
+traffic by hour.
+
+| Piece | Choice | Why |
+|---|---|---|
+| Storage | **TimescaleDB** | PostgreSQL extension: same database, permissions and merchant isolation; hypertables, continuous aggregates (per minute/hour/day), compression |
+| Baseline models | Statistical (ETS, ARIMA via `statsforecast`) | Fast, reliable, explainable |
+| Stronger models | LightGBM with features (promotions, holidays, price changes) | Usually most accurate in retail |
+| Cold start | Time series foundation models (Chronos, TimesFM) | Forecast with little history |
+
+All three run as variants and are **backtested** on past data; the best one is
+kept per merchant.
+
+### 8.3 Real-time offer at checkout
+
+The decision must take **under ~100–200 ms**. An LLM call takes 1–3 s, so the
+live decision is made by a fast decision engine; the LLM works around it
+(explanations, insights, memory), never on the checkout's critical path.
+
+```
+Customer at checkout
+  → live signals (ms): time on checkout, hesitation, shipping cost reveal,
+                       cart value, customer history, merchant margins
+  → decision engine (< 50 ms):
+       1. abandonment risk
+       2. best offer: none / free shipping / 5% / 10% / ...
+       3. merchant guardrails: max discount, margin floor, budget  (hard rules, never AI)
+  → offer + reason codes
+       ├─ shown to the customer
+       └─ decision log (inputs, model version, offer, reasons) → outcome later
+```
+
+**Reasoning on every decision, right or wrong:**
+- **Reason codes** come from the decision model: which signals drove it and how
+  much. Fast and exact.
+- **A readable explanation** is built from the codes, by template instantly,
+  or richer by the LLM afterwards for the merchant's dashboard.
+- **Every decision is logged with its reason and later its outcome**,
+  including wrong ones, which are what the system learns from.
+
+**Learning while running:** a **contextual bandit** tries offers, observes
+outcomes and shifts toward what works per customer and merchant type, while
+still exploring. It updates on every outcome, with no retraining job. Later,
+**uplift models** estimate whether a discount *changed* the outcome, so
+discounts don't go to people who would have bought anyway.
+
+### 8.4 "Evolving every second": what is realistic
+
+| What | Update frequency |
+|---|---|
+| Live signals (behaviour, cart, stock) | Every second or faster |
+| Decision engine (bandit) | On every outcome, seconds to minutes after checkout |
+| Memory (events, customer profiles) | Continuously |
+| Forecasts | Retrained hourly or daily, with real-time adjustments in between |
+| The LLM itself | Doesn't learn by the second; the memory and data it reads do |
+
+The brain's knowledge and decisions update continuously; its models retrain
+on a schedule.
+
+### 8.5 Stack additions
+
+| Need | Choice | Notes |
+|---|---|---|
+| Time series | TimescaleDB | Inside our PostgreSQL |
+| Event stream | Redpanda or Kafka | Redis Streams is fine for a pilot; merchant event volume needs a real event platform |
+| Live features | Redis (already in stack) | Customer and cart signals in milliseconds |
+| Decision engine | Python service: bandit + guardrails | Vowpal Wabbit or own implementation |
+| Forecasting | `statsforecast`, LightGBM, Chronos / TimesFM | Built and compared as variants |
+| Very large analytics (later) | ClickHouse | Only if a merchant outgrows TimescaleDB |
+
+### 8.6 Risks to design for from day one
+
+1. **Gaming**: if abandoning a cart reliably earns a discount, customers learn
+   it. Guardrails need per-customer limits and some randomness.
+2. **Legal and fairness**: personalized pricing is regulated in some regions
+   (e.g. the EU). Decisions must never use protected attributes (gender, age,
+   ethnicity, ...). The decision log makes every decision auditable.
+3. **Merchant control**: merchants set the guardrails; the AI only chooses
+   inside them.
+4. **Proving value**: always keep a control group with no offer, to measure
+   real uplift.
+
+### 8.7 Suggested order
+
+1. **Forecasting first**: needs only historical data and shows value fast.
+2. **Offline simulation** of the discount engine on historical checkouts.
+3. **Live offers**, once real-time event integration is in place.
+
+### 8.8 Open questions
+
+- Is the platform our own, or do we connect to merchants on Shopify,
+  WooCommerce, etc.?
+- What data do merchants provide: order history only, or live browsing and
+  checkout events? (Live offers need live events.)
+- Who shows the offer: our checkout, or the merchant's checkout calling our API?
+- Which regions? This sets the legal constraints on personalized discounts.
+- What is the latency budget at checkout?
