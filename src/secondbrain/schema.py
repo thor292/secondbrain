@@ -13,6 +13,7 @@ import psycopg
 
 from secondbrain.config import Settings, get_settings
 from secondbrain.forecasting import store as forecasting_store
+from secondbrain import signals as signals_schema
 
 # pgvector's HNSW index supports up to 2,000 dimensions for `vector` and
 # 4,000 for `halfvec` (half precision).
@@ -199,10 +200,13 @@ def create_schema(settings: Settings | None = None, reset: bool = False) -> None
     settings = settings or get_settings()
     with psycopg.connect(settings.admin_database_url) as conn:
         if reset:
+            conn.execute(signals_schema.DROP_SQL)
             conn.execute(forecasting_store.DROP_SQL)
             conn.execute(DROP_SQL)
         conn.execute(schema_sql(settings.embedding_dim))
         forecasting_store.create_schema(conn)
+        # Signals cite memories and products, so they come last.
+        conn.execute(signals_schema.SCHEMA_SQL)
 
 
 def ensure_relationship_schema(settings: Settings | None = None) -> bool:

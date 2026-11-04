@@ -132,14 +132,37 @@ Admin API: `POST /admin/maintain` and `POST /admin/learn`.
 
 ## Explore page
 
-`http://localhost:8765/explore` shows the two newest features to anyone, with
-"Looking as" choosing whose permissions apply:
+`http://localhost:8765/explore`, with "Looking as" choosing whose view it is:
 
-- **Sales forecast**: a chart of past sales and the forecast with 80% and 95%
-  ranges, the chosen model and why, and every model's backtest scores.
+- **Decision signals**: what the brain recommends doing next, each with the
+  reason, the evidence, the impact, a confidence and a deadline. Stock signals
+  are calculated from the forecast, stock on hand and on order, and supplier
+  lead times (run-outs, backorders, excess stock). Business signals come from
+  the model reading the company's recent notes and the lessons learned at the
+  root; every one must cite its evidence. People mark signals as acted on or
+  dismissed, and those aren't raised again for two weeks. A signal is only
+  visible to someone who can see all of its evidence.
+
+- **Sales forecast**: what is forecast (units sold per day), the stock outlook
+  and the decision it leads to, how the forecast is made in four steps, what
+  drives it (recent level, growth, weekday rhythm, last year's same weeks,
+  promotions, Black Friday, measured from the product's own sales), the chart
+  with 80% and 95% ranges, and every model's backtest scores. Any horizon from
+  7 to 120 days.
 - **Who knows what**: a search drawn as a graph in the style of FalkorDB's own
   browser (labelled nodes, typed relationship arrows, properties on click,
   double-click to expand), built only from what the selected person may see.
+
+## Decision signals
+
+Recalculated by `load_examples.sh`, or on demand:
+
+```bash
+uv run python -m secondbrain.signals
+```
+
+Admin API: `POST /admin/signals/generate`. Stock data is sample data from
+`scripts/generate_lumen_inventory.py`, set against the forecasts.
 
 ## Relationships (FalkorDB)
 

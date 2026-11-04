@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from psycopg.rows import dict_row
 from pydantic import BaseModel
 
-from secondbrain import admin, learning, maintenance, relationships, tree
+from secondbrain import admin, learning, maintenance, relationships, signals, tree
 from secondbrain.documents import UnsupportedDocument, extract_text
 from secondbrain.forecasting.api import build_router as forecast_router
 from secondbrain.graph import build_full_graph
@@ -128,6 +128,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         except psycopg.errors.InsufficientPrivilege:
             raise HTTPException(403, "You can't store memories at that sensitivity in your brain")
 
+    class SignalFeedback(BaseModel):
+        status: Literal["acted", "dismissed", "open"]
+        note: str | None = None
+
+    @app.get("/signals")
+    def list_signals(user_id: UserId, brain: Brain, include_closed: bool = False):
+        """Decision signals this person may see: only those whose evidence they can all read."""
+        brain._user(user_id)
+        with brain.store.as_user(user_id) as conn:
+            return [{**s, "evidence": signals.evidence_details(conn, s)}
+                    for s in signals.visible(conn, include_closed)]
+
+    @app.post("/signals/{signal_id}/feedback")
+    def signal_feedback(signal_id: str, body: SignalFeedback, user_id: UserId, brain: Brain):
+        """Mark a signal as acted on or dismissed; the brain uses this to learn what's useful."""
+        brain._user(user_id)
+        with brain.store.as_user(user_id) as conn:
+            if not signals.feedback(conn, signal_id, user_id, body.status, body.note):
+                raise HTTPException(404, "No such signal that you can see")
+        return {"ok": True}
+
     @app.post("/conversation/reset")
     def reset_conversation(user_id: UserId, brain: Brain):
         brain.new_conversation(user_id)
@@ -174,6 +195,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"changes": [
             {"relation": c.relation, "old": c.old, "new": c.new, "reason": c.reason} for c in changes
         ]}
+
+    @app.post("/admin/signals/generate", dependencies=[Depends(require_admin)])
+    def generate_signals(brain: Brain):
+        """Recalculate every company's decision signals."""
+        result = signals.run(settings, brain.llm)
+        return {company: len(items) for company, items in result.items()}
 
     @app.post("/admin/learn", dependencies=[Depends(require_admin)])
     def learn(brain: Brain):

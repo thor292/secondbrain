@@ -6,7 +6,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 
-from secondbrain.forecasting import nowcast, store
+from secondbrain import signals
+from secondbrain.forecasting import explain, nowcast, store
 from secondbrain.service import SecondBrain, UnknownUser
 
 UserId = Annotated[str, Header(alias="X-User-Id")]
@@ -50,12 +51,22 @@ def build_router() -> APIRouter:
                 raise HTTPException(404, f"No forecast for {match['sku']} yet; run python -m secondbrain.forecasting")
             cutoff = stored["cutoff"]
             sales = store.recent_sales(conn, match["brain"], match["sku"], cutoff - timedelta(days=history - 1))
+            # A year and a half of history to measure what drives the forecast.
+            long_sales = store.recent_sales(conn, match["brain"], match["sku"], cutoff - timedelta(days=540))
+            promos = [p for p in store.load_promotions(conn, match["brain"]) if p["sku"] in (None, match["sku"])]
+            stock = store.inventory(conn, match["brain"], match["sku"])
+            related = [s_ for s_ in signals.visible(conn)
+                       if {"brain": match["brain"], "sku": match["sku"]} in s_["evidence"].get("products", [])]
 
         actuals = {s["day"]: s["units"] for s in sales if s["day"] > cutoff and s["in_stock"]}
         ahead, adjustment = nowcast.adjust(stored["points"], actuals)
         if horizon > len(ahead):
             raise HTTPException(400, f"Forecasts reach {len(ahead)} days ahead; ask for fewer")
         chosen = stored["backtest"][stored["model"]]
+        if stock:
+            projection = signals.project_stock(stock["on_hand"], stock["on_order"], stock["order_eta"], ahead)
+            stock = {**stock, "projection": [{"day": d, "stock": round(v, 1)} for d, v in projection],
+                     "runs_out": next((d for d, v in projection if v <= 0), None)}
         return {
             "product": match,
             "model": stored["model"],
@@ -68,6 +79,12 @@ def build_router() -> APIRouter:
             "forecast": ahead[:horizon],
             "history": [{"day": s["day"], "units": s["units"], "in_stock": s["in_stock"]}
                         for s in sales if history],
+            "horizon_available": len(ahead),
+            "drivers": explain.drivers(long_sales, [{**p, "name": p.get("name", "promotion")} for p in promos],
+                                       cutoff, ahead[:horizon]),
+            "stock": stock,
+            "signals": [{"id": s_["id"], "kind": s_["kind"], "title": s_["title"], "action": s_["action"],
+                         "urgency": s_["urgency"], "due": s_["due"]} for s_ in related],
         }
 
     return router

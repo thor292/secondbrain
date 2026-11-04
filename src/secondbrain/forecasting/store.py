@@ -69,6 +69,24 @@ CREATE TABLE forecasts (
     FOREIGN KEY (brain_path, sku) REFERENCES products
 );
 
+-- Stock position per product: what is on hand, what is on order and when it
+-- arrives, and how long the supplier takes. Decision signals compare it with
+-- the forecast to find run-outs and excess stock.
+CREATE TABLE inventory (
+    brain_path      ltree NOT NULL,
+    sku             text NOT NULL,
+    as_of           date NOT NULL,
+    on_hand         integer NOT NULL CHECK (on_hand >= 0),
+    on_order        integer NOT NULL DEFAULT 0 CHECK (on_order >= 0),
+    order_eta       date,
+    supplier        text NOT NULL,
+    lead_time_days  integer NOT NULL CHECK (lead_time_days > 0),
+    unit_cost       numeric(10, 2) NOT NULL,
+    sensitivity     smallint NOT NULL CHECK (sensitivity BETWEEN 0 AND 2),
+    PRIMARY KEY (brain_path, sku),
+    FOREIGN KEY (brain_path, sku) REFERENCES products
+);
+
 CREATE INDEX promotions_brain_idx ON promotions USING gist (brain_path);
 CREATE INDEX forecasts_latest_idx ON forecasts (brain_path, sku, created_at DESC);
 
@@ -78,6 +96,8 @@ ALTER TABLE sales_daily ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sales_daily FORCE ROW LEVEL SECURITY;
 ALTER TABLE promotions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE promotions FORCE ROW LEVEL SECURITY;
+ALTER TABLE inventory ENABLE ROW LEVEL SECURITY;
+ALTER TABLE inventory FORCE ROW LEVEL SECURITY;
 ALTER TABLE forecasts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE forecasts FORCE ROW LEVEL SECURITY;
 
@@ -85,11 +105,12 @@ CREATE POLICY products_read ON products FOR SELECT USING (sb_can_see(brain_path,
 CREATE POLICY sales_read ON sales_daily FOR SELECT USING (sb_can_see(brain_path, sensitivity));
 CREATE POLICY promotions_read ON promotions FOR SELECT USING (sb_can_see(brain_path, sensitivity));
 CREATE POLICY forecasts_read ON forecasts FOR SELECT USING (sb_can_see(brain_path, sensitivity));
+CREATE POLICY inventory_read ON inventory FOR SELECT USING (sb_can_see(brain_path, sensitivity));
 
-GRANT SELECT ON products, sales_daily, promotions, forecasts TO secondbrain_app;
+GRANT SELECT ON products, sales_daily, promotions, forecasts, inventory TO secondbrain_app;
 """
 
-DROP_SQL = "DROP TABLE IF EXISTS forecasts, promotions, sales_daily, products CASCADE;"
+DROP_SQL = "DROP TABLE IF EXISTS inventory, forecasts, promotions, sales_daily, products CASCADE;"
 
 
 def create_schema(conn: psycopg.Connection) -> bool:
@@ -118,7 +139,7 @@ def save_history(
     """Replace a brain's products, daily sales and promotions."""
     if conn.execute("SELECT 1 FROM brains WHERE path = %s::ltree", (brain_path,)).fetchone() is None:
         raise ValueError(f"No brain {brain_path!r}; onboard the company first")
-    for table in ("forecasts", "sales_daily", "promotions", "products"):
+    for table in ("inventory", "forecasts", "sales_daily", "promotions", "products"):
         conn.execute(f"DELETE FROM {table} WHERE brain_path = %s::ltree", (brain_path,))
     conn.cursor().executemany(
         """INSERT INTO products (brain_path, sku, name, category, base_price, sensitivity)
@@ -161,7 +182,7 @@ def load_sales(conn: psycopg.Connection, brain_path: str) -> list[dict]:
 def load_promotions(conn: psycopg.Connection, brain_path: str) -> list[dict]:
     with conn.cursor(row_factory=dict_row) as cur:
         return cur.execute(
-            "SELECT sku, starts, ends, discount FROM promotions WHERE brain_path = %s::ltree",
+            "SELECT sku, name, starts, ends, discount FROM promotions WHERE brain_path = %s::ltree",
             (brain_path,),
         ).fetchall()
 
@@ -217,3 +238,25 @@ def recent_sales(conn: psycopg.Connection, brain_path: str, sku: str, since: dat
                WHERE brain_path = %s::ltree AND sku = %s AND day >= %s ORDER BY day""",
             (brain_path, sku, since),
         ).fetchall()
+
+
+def save_inventory(conn: psycopg.Connection, brain_path: str, rows: list[dict]) -> None:
+    """Replace a brain's stock positions (system job, admin connection)."""
+    conn.execute("DELETE FROM inventory WHERE brain_path = %s::ltree", (brain_path,))
+    conn.cursor().executemany(
+        """INSERT INTO inventory (brain_path, sku, as_of, on_hand, on_order, order_eta, supplier,
+                                  lead_time_days, unit_cost, sensitivity)
+           SELECT %(brain)s::ltree, %(sku)s, %(as_of)s, %(on_hand)s, %(on_order)s, %(order_eta)s, %(supplier)s,
+                  %(lead_time_days)s, %(unit_cost)s, sensitivity
+           FROM products WHERE brain_path = %(brain)s::ltree AND sku = %(sku)s""",
+        [{**r, "brain": brain_path} for r in rows],
+    )
+
+
+def inventory(conn: psycopg.Connection, brain_path: str, sku: str) -> dict | None:
+    with conn.cursor(row_factory=dict_row) as cur:
+        return cur.execute(
+            """SELECT as_of, on_hand, on_order, order_eta, supplier, lead_time_days, unit_cost::float AS unit_cost
+               FROM inventory WHERE brain_path = %s::ltree AND sku = %s""",
+            (brain_path, sku),
+        ).fetchone()

@@ -99,6 +99,16 @@ class StubLLM:
             else:
                 memory_type = "semantic"
             return json.dumps({"memory_type": memory_type})
+        if "decision signals" in system.lower():
+            # Offline: one signal citing the first note and lesson, one citing nothing (must be dropped).
+            cites = [k for k in ("N1",) if "\nN1 " in prompt]
+            lessons = [k for k in ("L1",) if "\nL1:" in prompt]
+            return json.dumps({"signals": [
+                {"title": "Follow up on the latest note", "action": "Review it this week", "reason": "stub",
+                 "impact": "stub", "urgency": "medium", "confidence": 0.5, "notes": cites, "lessons": lessons},
+                {"title": "Unsupported idea", "action": "Do something", "reason": "no evidence", "impact": "?",
+                 "urgency": "high", "confidence": 0.9, "notes": [], "lessons": []},
+            ]})
         if "reusable business lessons" in system.lower():
             # Offline: one clean lesson, plus two the anonymity check must reject.
             # The company's name is the first word of its documents' titles.

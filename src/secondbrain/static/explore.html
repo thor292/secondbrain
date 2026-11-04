@@ -55,6 +55,36 @@
   .rel code { color: var(--accent); font-size: 13px; }
   .memory { font-size: 13px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; margin-top: 8px; white-space: pre-wrap; }
   .memory .meta { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+  /* Decision signals */
+  .signal { background: var(--panel); border: 1px solid var(--border); border-left: 5px solid var(--u); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
+  .signal.high { --u: #d92d20; } .signal.medium { --u: #f79009; } .signal.low { --u: #98a2b3; }
+  .signal.closed { opacity: .6; }
+  .signal .top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12px; }
+  .signal .tag { padding: 2px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .signal .urg { padding: 2px 9px; border-radius: 999px; color: #fff; background: var(--u); font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
+  .signal h3 { margin: 8px 0 6px; font-size: 17px; }
+  .signal .action { font-weight: 600; padding: 8px 10px; background: var(--accent-soft); border-radius: 8px; margin: 6px 0; }
+  .signal .why { font-size: 14px; margin: 6px 0; }
+  .signal .meta { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin: 6px 0; }
+  .signal .meta b { color: var(--text); }
+  .signal details { font-size: 13px; margin-top: 6px; }
+  .signal details li { margin: 4px 0; }
+  .signal .lesson { border-left: 3px solid #49C3B8; padding: 4px 8px; margin: 4px 0; }
+  .signal .buttons { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
+  .signal .buttons button { cursor: pointer; }
+  .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 10px 0; }
+  .step { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+  .step b { display: block; margin-bottom: 4px; }
+  .drivers { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+  .driver { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+  .driver .n { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .driver .v { font-size: 18px; font-weight: 700; margin: 2px 0; }
+  .driver .e { font-size: 13px; color: var(--muted); }
+  .callout { padding: 12px 14px; border-radius: 10px; border-left: 5px solid #d92d20; background: var(--accent-soft); margin: 10px 0; }
+  .callout.ok { border-left-color: var(--good); }
+  input[type=range] { padding: 0; width: 200px; vertical-align: middle; }
+
   /* FalkorDB-style graph */
   .fgraph { display: grid; grid-template-columns: 1fr 280px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--panel); }
   @media (max-width: 860px) { .fgraph { grid-template-columns: 1fr; } }
@@ -82,15 +112,26 @@
 </header>
 <main>
   <div class="tabs">
-    <button type="button" data-tab="forecast" class="active">Sales forecast</button>
+    <button type="button" data-tab="signals" class="active">Decision signals</button>
+    <button type="button" data-tab="forecast">Sales forecast</button>
     <button type="button" data-tab="experts">Who knows what</button>
   </div>
 
-  <section id="tab-forecast">
+  <section id="tab-signals">
+    <div class="panel">
+      <p style="margin:0">What the brain recommends doing next, with the reason, the evidence and the deadline. It combines forecasts, stock,
+      the company's notes and lessons learned across businesses. Mark each one as acted on or dismissed: that is how the brain learns
+      what is useful.</p>
+      <label class="muted" style="display:block;margin-top:8px"><input type="checkbox" id="show-closed"> Show signals already acted on or dismissed</label>
+    </div>
+    <div id="signals-out"></div>
+  </section>
+
+  <section id="tab-forecast" class="hidden">
     <div class="panel">
       <div class="row">
         <label>Product <select id="product"></select></label>
-        <label>Days ahead <select id="horizon"><option>14</option><option selected>45</option><option>90</option></select></label>
+        <label>Days ahead <input type="range" id="horizon" min="7" max="120" step="1" value="60"> <b id="horizon-label">60</b></label>
       </div>
       <p class="muted">Sales history is generated sample data for Lumen Home. Forecasts follow the same permissions as everything else: they live in Merchandising.</p>
     </div>
@@ -131,6 +172,73 @@ function denied(who, what) {
   return el("div", { class: "denied" }, el("b", {}, "Not found. "), `${who} isn't allowed to see ${what}, so SecondBrain answers as if it doesn't exist.`);
 }
 
+// ---------- decision signals ----------
+const KIND = { stockout: "Stock: runs out", backorder: "Stock: out of stock", excess_stock: "Stock: too much", business: "Business" };
+
+async function loadSignals() {
+  const out = $("signals-out");
+  out.textContent = "Loading…";
+  const { status, body } = await api(`/signals?include_closed=${$("show-closed").checked}`);
+  out.textContent = "";
+  if (status !== 200) { out.append(el("div", { class: "denied" }, "Couldn't load signals.")); return; }
+  const open = body.filter((s) => s.status === "open");
+  const atStake = open.reduce((t, s) => t + (s.impact_value || 0), 0);
+  out.append(el("div", { class: "summary" },
+    stat("Open signals", String(open.length)),
+    stat("Urgent", String(open.filter((s) => s.urgency === "high").length)),
+    stat("Money at stake", "$" + Math.round(atStake).toLocaleString()),
+    stat("Acted on / dismissed", String(body.length - open.length) + ($("show-closed").checked ? "" : " (hidden)"))));
+  if (!body.length) { out.append(el("div", { class: "denied" }, `No signals ${$("user").selectedOptions[0].textContent} is allowed to see.`)); return; }
+  for (const s of body) out.append(signalCard(s));
+}
+
+function signalCard(s) {
+  const card = el("div", { class: `signal ${s.urgency}${s.status !== "open" ? " closed" : ""}` });
+  card.append(el("div", { class: "top" }, el("span", { class: "urg" }, s.urgency), el("span", { class: "tag" }, KIND[s.kind] || s.kind),
+    s.evidence.lessons && s.evidence.lessons.length ? el("span", { class: "tag" }, "Learned across businesses") : "",
+    el("span", { class: "muted" }, s.company)));
+  card.append(el("h3", {}, s.title), el("div", { class: "action" }, "→ " + s.action), el("div", { class: "why" }, s.reason));
+  card.append(el("div", { class: "meta" },
+    el("span", {}, "Impact: ", el("b", {}, s.impact || "—")),
+    el("span", {}, "Confidence: ", el("b", {}, Math.round(s.confidence * 100) + "%")),
+    s.due ? el("span", {}, "Act by: ", el("b", {}, fmtDay(s.due))) : ""));
+  const ev = el("details", {}, el("summary", {}, "Evidence"));
+  const list = el("ul");
+  for (const f of s.evidence.facts || []) list.append(el("li", {}, f));
+  for (const p of s.evidence.products || []) {
+    const link = el("a", { href: "#" }, "See the forecast");
+    link.onclick = (e) => { e.preventDefault(); showTab("forecast"); $("product").value = p.sku; loadForecast(); };
+    list.append(el("li", {}, "Product forecast: ", link));
+  }
+  for (const n of s.evidence.notes || []) list.append(el("li", {}, `Note in ${n.brain.split(".").pop()}${n.created_by ? " by " + n.created_by : ""} (${n.created_at.slice(0, 10)}): ${n.content}`));
+  for (const l of s.evidence.lessons || []) list.append(el("li", { class: "lesson" }, "Lesson from other businesses: " + l));
+  ev.append(list);
+  card.append(ev);
+  const buttons = el("div", { class: "buttons" });
+  if (s.status === "open") {
+    for (const [status, text] of [["acted", "✓ We acted on this"], ["dismissed", "Dismiss"]]) {
+      const b = el("button", { type: "button", class: status === "acted" ? "primary" : "" }, text);
+      b.onclick = async () => {
+        const note = status === "dismissed" ? prompt("Why dismiss it? (optional, helps the brain learn)") : null;
+        await fetch(`/signals/${s.id}/feedback`, { method: "POST", headers: { "Content-Type": "application/json", "X-User-Id": state.user },
+          body: JSON.stringify({ status, note }) });
+        loadSignals();
+      };
+      buttons.append(b);
+    }
+  } else {
+    buttons.append(el("span", { class: "muted" }, `${s.status === "acted" ? "Acted on" : "Dismissed"} by ${s.feedback_by} on ${s.feedback_at.slice(0, 10)}${s.feedback_note ? ": " + s.feedback_note : ""}`));
+    const reopen = el("button", { type: "button" }, "Reopen");
+    reopen.onclick = async () => {
+      await fetch(`/signals/${s.id}/feedback`, { method: "POST", headers: { "Content-Type": "application/json", "X-User-Id": state.user }, body: JSON.stringify({ status: "open" }) });
+      loadSignals();
+    };
+    buttons.append(reopen);
+  }
+  card.append(buttons);
+  return card;
+}
+
 // ---------- forecast ----------
 async function loadProducts() {
   const { status, body } = await api("/forecast/products");
@@ -146,31 +254,91 @@ async function loadProducts() {
   loadForecast();
 }
 
+let forecastTimer = null;
 async function loadForecast() {
   const out = $("forecast-out");
   out.textContent = "Loading…";
   const { status, body } = await api(`/forecast?product=${encodeURIComponent($("product").value)}&horizon=${$("horizon").value}&history=120`);
   out.textContent = "";
   const name = $("user").selectedOptions[0].textContent;
+  if (status === 400 && body.detail) { out.append(el("div", { class: "denied" }, body.detail)); return; }
   if (status !== 200) { out.append(denied(name, "Merchandising's sales data")); return; }
+  $("horizon").max = body.horizon_available;
 
-  const days = body.forecast, hist = body.history;
+  const days = body.forecast, hist = body.history, product = body.product.name;
   const total = days.reduce((s, d) => s + d.forecast, 0);
   const peak = days.reduce((a, d) => (d.forecast > a.forecast ? d : a), days[0]);
   const bt = body.backtest[body.model];
-  const stats = el("div", { class: "stats" },
-    stat("Forecast units, next " + days.length + " days", Math.round(total).toLocaleString()),
-    stat("Busiest day", `${fmtDay(peak.day)}: ${Math.round(peak.forecast)} units`),
-    stat("Model chosen", label(body.model)),
-    stat("Typical error (WAPE)", (bt.wape * 100).toFixed(1) + "%"));
-  const panel = el("div", { class: "panel" },
-    el("h3", { style: "margin:0" }, body.product.name), stats,
-    el("div", { class: "reason" }, "Why this model: " + body.reason),
+  const ranked = Object.entries(body.backtest).sort((a, b) => a[1].wape - b[1].wape);
+
+  // 1. The question and the answer in one line.
+  const head = el("div", { class: "panel" },
+    el("h3", { style: "margin:0 0 4px" }, `How many ${product} units will Lumen sell each day?`),
+    el("p", { class: "muted", style: "margin:0" }, `Units sold per day for the next ${days.length} days, from ${fmtDay(days[0].day)} to ${fmtDay(days[days.length - 1].day)}.`),
+    el("div", { class: "stats" },
+      stat(`Expected sales, next ${days.length} days`, Math.round(total).toLocaleString() + " units"),
+      stat("Busiest day", `${fmtDay(peak.day)}: ~${Math.round(peak.forecast)}`),
+      stat("Typical error", `±${(bt.wape * 100).toFixed(0)}% a day`)));
+  out.append(head);
+
+  // 2. What it means for the business: stock and the decision.
+  if (body.stock) out.append(stockPanel(body, product));
+
+  // 3. How the forecast is made, in plain steps.
+  out.append(el("div", { class: "panel" },
+    el("h3", { style: "margin-top:0" }, "How this forecast is made"),
+    el("div", { class: "steps" },
+      el("div", { class: "step" }, el("b", {}, "1. Learn from history"), `${product}'s daily sales since September 2024, with every past promotion and holiday.`),
+      el("div", { class: "step" }, el("b", {}, "2. Try 4 methods"), "Repeat last week · Last year × growth · ETS (statistical) · Gradient boosting (learns promotions and holidays)."),
+      el("div", { class: "step" }, el("b", {}, "3. Test on the past"), "Each method forecasts 4 past 8-week periods it never saw, including the same weeks last year, and is scored on its error."),
+      el("div", { class: "step" }, el("b", {}, "4. Use the best"), `${label(body.model)} had the smallest error (${(bt.wape * 100).toFixed(1)}% vs ${(ranked[1][1].wape * 100).toFixed(1)}% for the next best), so it makes this forecast. Ranges come from its past errors.`)),
+    el("p", { class: "muted", style: "margin-bottom:0" }, `Trained on sales up to ${fmtDay(body.trained_through)}. Sales history is generated sample data for Lumen Home.`)));
+
+  // 4. What drives it, measured from the product's own history.
+  const drivers = el("div", { class: "drivers" });
+  for (const d of body.drivers) drivers.append(el("div", { class: "driver" }, el("div", { class: "n" }, d.name), el("div", { class: "v" }, d.value), el("div", { class: "e" }, d.explanation)));
+  out.append(el("div", { class: "panel" }, el("h3", { style: "margin-top:0" }, "What drives this forecast"),
+    el("p", { class: "muted" }, "The patterns the models pick up, measured directly from this product's sales."), drivers));
+
+  // 5. The chart and the model comparison.
+  out.append(el("div", { class: "panel" }, el("h3", { style: "margin-top:0" }, "Past sales and forecast"),
     chart(hist, days),
     el("div", { class: "legend" },
       legendItem("Past sales", "var(--history)"), legendItem("Forecast", "var(--accent)"),
-      legendItem("80% range", "var(--band)"), legendItem("95% range", "var(--band2)")));
-  out.append(panel, backtestTable(body));
+      legendItem("80% likely range", "var(--band)"), legendItem("95% likely range", "var(--band2)"))), backtestTable(body));
+}
+
+function stockPanel(body, product) {
+  const st = body.stock, proj = st.projection.slice(0, body.forecast.length);
+  const signal = body.signals[0];
+  const facts = el("div", { class: "stats" },
+    stat("On hand today", st.on_hand.toLocaleString() + " units"),
+    stat("On order", st.on_order ? `${st.on_order.toLocaleString()}, arriving ${fmtDay(st.order_eta)}` : "Nothing"),
+    stat("Supplier lead time", `${st.lead_time_days} days (${st.supplier})`),
+    stat("Runs out", st.runs_out ? fmtDay(st.runs_out) : "Not within the forecast"));
+  const panel = el("div", { class: "panel" }, el("h3", { style: "margin-top:0" }, "Stock outlook: what this means for the business"), facts);
+  if (signal) panel.append(el("div", { class: "callout" }, el("b", {}, signal.title), el("div", {}, signal.action)));
+  else panel.append(el("div", { class: "callout ok" }, `Stock covers the forecast for the next ${body.forecast.length} days. No action needed.`));
+  panel.append(stockChart(proj));
+  return panel;
+}
+
+function stockChart(proj) {
+  const W = 1000, H = 160, P = { l: 52, r: 12, t: 10, b: 24 };
+  const vals = proj.map((p) => p.stock), max = Math.max(...vals, 1), min = Math.min(...vals, 0);
+  const x = (i) => P.l + (i / Math.max(proj.length - 1, 1)) * (W - P.l - P.r);
+  const y = (v) => H - P.b - ((v - min) / (max - min || 1)) * (H - P.t - P.b);
+  const ns = "http://www.w3.org/2000/svg", svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("width", "100%");
+  svg.setAttribute("role", "img"); svg.setAttribute("aria-label", "Projected stock");
+  const add = (tag, attrs) => { const e = document.createElementNS(ns, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); svg.append(e); return e; };
+  add("line", { x1: P.l, x2: W - P.r, y1: y(0), y2: y(0), stroke: "var(--bad)", "stroke-dasharray": "4 4" });
+  add("text", { x: P.l - 6, y: y(0) + 4, "text-anchor": "end" }).textContent = "0";
+  add("text", { x: P.l - 6, y: y(max) + 10, "text-anchor": "end" }).textContent = Math.round(max).toLocaleString();
+  add("polyline", { points: proj.map((p, i) => `${x(i)},${y(Math.max(p.stock, min))}`).join(" "), fill: "none", stroke: "var(--good)", "stroke-width": 2.4 });
+  proj.forEach((p, i) => { if (p.day.endsWith("-01")) add("text", { x: x(i), y: H - 6, "text-anchor": "middle" }).textContent = fmtDay(p.day); });
+  add("text", { x: P.l + 4, y: P.t + 10 }).textContent = "Projected stock left (units), if nothing is ordered";
+  return svg;
 }
 
 function stat(k, v) { return el("div", { class: "stat" }, el("div", { class: "muted" }, k), el("div", { class: "v" }, v)); }
@@ -482,24 +650,32 @@ async function init() {
   state.user = select.value;
   for (const q of EXAMPLES) { const b = el("button", { type: "button" }, q); b.onclick = () => search(q); $("examples").append(b); }
   const tab = new URLSearchParams(location.search).get("tab");
-  if (tab === "experts") showTab("experts");
+  if (tab === "experts" || tab === "forecast") showTab(tab);
+  loadSignals();
   loadProducts();
   graphLoop();
 }
 
 function showTab(name) {
   document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
+  $("tab-signals").classList.toggle("hidden", name !== "signals");
   $("tab-forecast").classList.toggle("hidden", name !== "forecast");
   $("tab-experts").classList.toggle("hidden", name !== "experts");
 }
 
 $("user").onchange = () => {
   state.user = $("user").value;
+  loadSignals();
   loadProducts();
   if ($("query").value) search($("query").value);
 };
 $("product").onchange = loadForecast;
-$("horizon").onchange = loadForecast;
+$("horizon").oninput = () => {
+  $("horizon-label").textContent = $("horizon").value;
+  clearTimeout(forecastTimer);
+  forecastTimer = setTimeout(loadForecast, 250);
+};
+$("show-closed").onchange = loadSignals;
 $("search").onsubmit = (e) => { e.preventDefault(); search($("query").value.trim()); };
 document.querySelectorAll(".tabs button").forEach((b) => b.onclick = () => showTab(b.dataset.tab));
 init();
