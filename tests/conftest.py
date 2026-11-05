@@ -3,6 +3,7 @@
 Start them first: ``docker compose up -d --wait``.
 """
 
+import os
 from pathlib import Path
 
 import psycopg
@@ -18,17 +19,35 @@ from secondbrain.sensitivity import Sensitivity
 
 EXAMPLES = Path(__file__).parent / "fixtures"
 ADMIN_TOKEN = "test-admin-token"
+# Several checkouts can run the suite at once, each on its own database,
+# Redis db and graph prefix: SB_TEST_SUFFIX=_ingest SB_TEST_REDIS_DB=14 uv run pytest
+SUFFIX = os.environ.get("SB_TEST_SUFFIX", "")
+TEST_DB = f"secondbrain_test{SUFFIX}"
+ADMIN_SERVER = "postgresql://secondbrain_admin:dev_admin_password@localhost:55432"
+
+
+def ensure_test_database() -> None:
+    with psycopg.connect(f"{ADMIN_SERVER}/secondbrain", autocommit=True) as conn:
+        if conn.execute("SELECT 1 FROM pg_database WHERE datname = %s", (TEST_DB,)).fetchone():
+            return
+        conn.execute(f'CREATE DATABASE "{TEST_DB}"')
+        conn.execute(f'GRANT CONNECT ON DATABASE "{TEST_DB}" TO secondbrain_app')
+    with psycopg.connect(f"{ADMIN_SERVER}/{TEST_DB}", autocommit=True) as conn:
+        conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
+        conn.execute("CREATE EXTENSION IF NOT EXISTS ltree")
+        conn.execute("GRANT USAGE ON SCHEMA public TO secondbrain_app")
 
 
 @pytest.fixture(scope="session")
 def settings() -> Settings:
+    ensure_test_database()
     return Settings(
         _env_file=None,
-        admin_database_url="postgresql://secondbrain_admin:dev_admin_password@localhost:55432/secondbrain_test",
-        app_database_url="postgresql://secondbrain_app:dev_app_password@localhost:55432/secondbrain_test",
-        redis_url="redis://localhost:56379/15",
+        admin_database_url=f"{ADMIN_SERVER}/{TEST_DB}",
+        app_database_url=f"postgresql://secondbrain_app:dev_app_password@localhost:55432/{TEST_DB}",
+        redis_url=f"redis://localhost:56379/{os.environ.get('SB_TEST_REDIS_DB', '15')}",
         # Test graphs get their own prefix, so they never touch the demo's "sb_" graphs.
-        graph_prefix="sbtest",
+        graph_prefix=f"sbtest{SUFFIX.replace('_', '')}",
         model_provider="stub",
         embedding_dim=256,
         admin_token=ADMIN_TOKEN,
