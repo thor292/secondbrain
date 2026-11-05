@@ -4,323 +4,451 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SecondBrain HQ</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='7' fill='%23f5c451'/></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='7' fill='%238b7bff'/></svg>">
+<link rel="stylesheet" href="/static/sb.css">
 <style>
-  :root { --bg: #f5f6f8; --panel: #fff; --text: #1d2330; --muted: #6b7385; --border: #e4e7ec; --accent: #4f46e5;
-          --accent-soft: #eef0ff; --gold: #b7791f; --good: #12805c; --good-soft: #e7f6ef; --bad: #c4320a;
-          --bad-soft: #fdeee8; --line: #4f46e5; --grid: #eef0f3; }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) { --bg: #11141a; --panel: #1a1e27; --text: #e8eaf0; --muted: #98a0b3; --border: #2a303c;
-          --accent: #8b85ff; --accent-soft: #25244a; --gold: #f5c451; --good: #4fd69c; --good-soft: #143326;
-          --bad: #ff8a6b; --bad-soft: #3a1d16; --line: #8b85ff; --grid: #232834; }
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; font: 15px/1.45 system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); }
-  header { display: flex; gap: 16px; align-items: center; padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-  header h1 { font-size: 18px; margin: 0; } header h1 span { color: var(--gold); }
-  header nav { margin-left: auto; display: flex; gap: 16px; }
-  header a { color: var(--accent); text-decoration: none; font-size: 14px; }
-  input, select, button { font: inherit; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: inherit; }
-  button { cursor: pointer; } button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
-  button:disabled { opacity: .55; cursor: wait; }
-  button.link { border: 0; background: none; color: var(--muted); padding: 4px 6px; text-decoration: underline; font-size: 13px; }
-  main { max-width: 1180px; margin: 0 auto; padding: 18px 16px 40px; }
-  h2 { font-size: 16px; margin: 0 0 12px; }
-  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 18px; margin-bottom: 16px; }
-  .muted { color: var(--muted); font-size: 13px; }
-  .hidden { display: none !important; }
-  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
-  .tile { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; background: var(--panel); }
-  .tile .k { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
-  .tile .v { font-size: 26px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
-  .tile .d { font-size: 13px; margin-top: 2px; color: var(--muted); font-variant-numeric: tabular-nums; }
-  .good { color: var(--good) !important; } .bad { color: var(--bad) !important; }
-  .tile.good-bg { background: var(--good-soft); border-color: transparent; } .tile.bad-bg { background: var(--bad-soft); border-color: transparent; }
+  /* Hero: the root brain and every business connected to it */
+  .hero { display: grid; grid-template-columns: 1.05fr 1fr; gap: 10px; align-items: center; overflow: hidden; padding: 30px 30px 26px; }
+  .hero h1 { font-size: 40px; line-height: 1.08; letter-spacing: -0.03em; margin: 10px 0 12px; font-weight: 800; }
+  .hero p.lead { color: var(--muted); font-size: 16px; max-width: 470px; margin: 0 0 22px; }
+  .hero canvas { width: 100%; height: 330px; display: block; }
+  .legend-line { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .legend-line i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  @media (max-width: 900px) { .hero { grid-template-columns: 1fr; } .hero h1 { font-size: 30px; } }
 
   /* Time machine */
-  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-  .seg button { border: 0; border-radius: 0; padding: 8px 14px; background: var(--panel); }
-  .seg button + button { border-left: 1px solid var(--border); }
-  .seg button.on { background: var(--accent); color: #fff; font-weight: 600; }
-  .controls { display: flex; gap: 14px; align-items: end; flex-wrap: wrap; }
-  .controls label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
-  .jump { display: flex; align-items: baseline; gap: 12px; margin: 18px 0 14px; flex-wrap: wrap; }
-  .jump .date { font-size: 30px; font-weight: 800; }
-  .jump .arrow { font-size: 24px; color: var(--muted); }
-  .badge { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
-  .badge.good { background: var(--good-soft); } .badge.bad { background: var(--bad-soft); }
-  .progress { height: 6px; background: var(--grid); border-radius: 99px; overflow: hidden; margin-top: 14px; }
-  .progress div { height: 100%; width: 30%; background: var(--accent); border-radius: 99px; animation: slide 1.4s ease-in-out infinite; }
-  @keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(350%); } }
-  .cols { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-top: 16px; }
-  @media (max-width: 860px) { .cols { grid-template-columns: 1fr; } }
-  .charts { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
-  .chart { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px 6px; }
-  .chart .t { display: flex; justify-content: space-between; gap: 6px; font-size: 13px; font-weight: 600; }
-  .chart .t span { font-weight: 500; font-size: 12px; white-space: nowrap; }
-  .chart svg { display: block; width: 100%; height: 64px; }
-  .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin: 8px 0 0; flex-wrap: wrap; }
-  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
-  ul.events { list-style: none; margin: 0; padding: 0; }
-  ul.events li { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
-  ul.events li:last-child { border-bottom: 0; }
-  .dot { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; }
-  .dot.good { background: var(--good-soft); } .dot.bad { background: var(--bad-soft); } .dot.info { background: var(--accent-soft); color: var(--accent); }
-  /* Companies */
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
-  .company .head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; }
-  .company h3 { margin: 0; font-size: 16px; }
-  .company .tiles { grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 10px; }
-  .company .tile .v { font-size: 20px; }
-  details summary { cursor: pointer; font-weight: 600; }
-  ul.lessons { margin: 10px 0 0; padding-left: 18px; } ul.lessons li { margin: 6px 0; font-size: 14px; }
+  .tm-controls { display: flex; gap: 14px; align-items: end; flex-wrap: wrap; }
+  .tm-controls label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; font-weight: 600; }
+  .thinking { display: grid; grid-template-columns: 120px 1fr; gap: 24px; align-items: center; padding: 26px 6px 6px; }
+  .orb { width: 110px; height: 110px; border-radius: 50%; position: relative; background: radial-gradient(circle at 35% 35%, #b3a8ff, #6a5cf0 45%, #172045 75%);
+         box-shadow: 0 0 60px rgba(139, 123, 255, .55); animation: breathe 1.8s ease-in-out infinite; }
+  .orb::after { content: ""; position: absolute; inset: -12px; border-radius: 50%; border: 2px solid rgba(51, 214, 242, .5);
+                border-top-color: transparent; border-left-color: transparent; animation: spin 1.6s linear infinite; }
+  @keyframes breathe { 50% { transform: scale(1.06); box-shadow: 0 0 90px rgba(51, 214, 242, .5); } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .steps li { display: flex; gap: 10px; align-items: center; color: var(--faint); transition: color .3s; }
+  .steps li .s { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--border-hi); display: grid; place-items: center; font-size: 11px; }
+  .steps li.on { color: var(--text); } .steps li.on .s { border-color: var(--cyan); border-top-color: transparent; animation: spin .9s linear infinite; }
+  .steps li.done { color: var(--muted); } .steps li.done .s { border-color: var(--good); background: var(--good); color: #062; }
+
+  .clock { display: flex; align-items: center; gap: 18px; margin: 22px 0 10px; flex-wrap: wrap; }
+  .clock .date { font-size: 46px; font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; min-width: 190px; }
+  .clock .from { color: var(--faint); font-size: 18px; font-weight: 600; }
+  .track { position: relative; height: 10px; background: var(--panel-hi); border-radius: 99px; margin: 6px 0 22px; }
+  .track .fill { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 99px; background: var(--grad); box-shadow: 0 0 18px rgba(51, 214, 242, .5); }
+  .track .mark { position: absolute; top: -5px; width: 4px; height: 20px; border-radius: 4px; transform: translateX(-2px); opacity: .9; }
+  .tm-body { display: grid; grid-template-columns: 1.7fr 1fr; gap: 18px; }
+  @media (max-width: 960px) { .tm-body { grid-template-columns: 1fr; } }
+  .charts { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+  .pchart { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px 8px; transition: border-color .3s, box-shadow .3s; }
+  .pchart.alarm { border-color: rgba(251, 113, 133, .55); box-shadow: 0 0 0 1px rgba(251, 113, 133, .25), 0 0 24px -6px rgba(251, 113, 133, .5); }
+  .pchart.saved { border-color: rgba(52, 211, 153, .5); box-shadow: 0 0 24px -8px rgba(52, 211, 153, .6); }
+  .pchart .t { display: flex; justify-content: space-between; gap: 6px; font-size: 13px; font-weight: 600; }
+  .pchart .t .chip { padding: 2px 8px; font-size: 11px; }
+  .pchart svg { display: block; width: 100%; height: 70px; margin-top: 6px; overflow: visible; }
+  .feed { list-style: none; margin: 0; padding: 0; max-height: 470px; overflow: auto; display: flex; flex-direction: column; gap: 8px; }
+  .feed li { display: grid; grid-template-columns: 30px 1fr auto; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 12px;
+             background: var(--panel); border: 1px solid var(--border); font-size: 13.5px; }
+  .feed li .ic { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; font-weight: 800; }
+  .feed li .when { font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; }
+  .ic.good { background: var(--good-soft); color: var(--good); } .ic.bad { background: var(--bad-soft); color: var(--bad); }
+  .ic.info { background: var(--accent-soft); color: var(--violet); } .ic.cyan { background: rgba(51, 214, 242, .14); color: var(--cyan); }
+  .next { display: grid; gap: 8px; margin-top: 10px; }
+  .next div { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--border); font-size: 14px; }
+
+  /* Businesses */
+  .biz { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 14px; }
+  .biz .card { padding: 18px 20px; }
+  .biz .head { display: flex; align-items: center; gap: 14px; }
+  .biz .avatar { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; font-weight: 800; font-size: 18px; color: #fff; background: var(--grad); }
+  .biz h3 { margin: 0; font-size: 17px; }
+  .biz .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 16px; }
+  .biz .stat .k { font-size: 11.5px; color: var(--muted); font-weight: 600; } .biz .stat .v { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .ring { width: 64px; height: 64px; margin-left: auto; position: relative; flex: none; }
+  .ring span { position: absolute; inset: 0; display: grid; place-items: center; font-weight: 800; font-size: 14px; }
+  .lessons { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+  .lessons li { display: grid; grid-template-columns: 18px 1fr; gap: 10px; font-size: 14.5px; }
+  .lessons li::before { content: ""; width: 10px; height: 10px; margin-top: 6px; border-radius: 50%; background: var(--grad); box-shadow: 0 0 12px rgba(51, 214, 242, .7); }
+  .gate { max-width: 420px; margin: 80px auto; text-align: center; }
+  .gate form { display: flex; gap: 8px; justify-content: center; margin-top: 16px; }
 </style>
 </head>
 <body>
-<header>
-  <h1>Second<span>Brain</span> HQ</h1>
-  <form id="token-form" class="row hidden">
-    <input id="token" type="password" placeholder="Admin token" autocomplete="off">
-    <button class="primary">Open</button>
-  </form>
-  <nav><a href="/explore">Explore</a><a href="/graph-view?user=__all__">Whole graph</a></nav>
-</header>
-<main>
-  <div id="out"><p class="muted">Loading…</p></div>
-</main>
+<main class="page" id="out"><div class="shimmer" style="height:320px"></div></main>
+<script src="/static/sb.js"></script>
 <script>
+const { el, svg, money, shortMoney, pct, fmtDay, countUp, kpi, store } = SB;
 const $ = (id) => document.getElementById(id);
-const money = (v) => (v < 0 ? "−$" : "$") + Math.abs(Math.round(v || 0)).toLocaleString();
-const pct = (v) => v == null ? "—" : Math.round(v * 100) + "%";
-const fmtDay = (iso) => iso ? new Date(iso + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "—";
-function el(tag, attrs = {}, ...children) {
-  const n = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs)) {
-    if (k === "class") n.className = v; else if (k.startsWith("on")) n[k] = v; else n.setAttribute(k, v);
-  }
-  for (const c of children) if (c != null) n.append(c instanceof Node ? c : document.createTextNode(c));
-  return n;
-}
-const store = { get(k) { try { return JSON.parse(sessionStorage.getItem(k)); } catch { return null; } },
-                set(k, v) { try { sessionStorage.setItem(k, JSON.stringify(v)); } catch {} } };
-const token = () => { try { return sessionStorage.getItem("sb-admin-token"); } catch { return null; } };
-function tile(k, v, opts = {}) {
-  return el("div", { class: "tile " + (opts.bg || ""), title: opts.tip || "" },
-    el("div", { class: "k" }, k), el("div", { class: "v " + (opts.cls || "") }, v), opts.d ? el("div", { class: "d" }, opts.d) : null);
-}
+SB.nav("hq", el("span", { class: "live" }, "Root brain online"));
 
+const token = () => { try { return sessionStorage.getItem("sb-admin-token"); } catch { return null; } };
 async function admin(path, options = {}) {
   const res = await fetch(path, { ...options, headers: { "Content-Type": "application/json", "X-Admin-Token": token() || "" } });
-  if (res.status === 401) { try { sessionStorage.removeItem("sb-admin-token"); } catch {} askToken(); return null; }
-  if (!res.ok) { const body = await res.json().catch(() => ({})); throw new Error(body.detail || res.statusText); }
+  if (res.status === 401) { try { sessionStorage.removeItem("sb-admin-token"); } catch {} gate(); return null; }
+  if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.detail || res.statusText); }
   return res.json();
 }
-function askToken() {
-  $("token-form").classList.remove("hidden");
-  $("out").replaceChildren(el("div", { class: "panel" }, "Enter the admin token at the top to open HQ."));
+function gate() {
+  const input = el("input", { type: "password", placeholder: "Admin token", autocomplete: "off" });
+  $("out").replaceChildren(el("div", { class: "card gate rise" }, el("div", { class: "eyebrow" }, "Root brain"),
+    el("h2", {}, "SecondBrain HQ"), el("p", { class: "muted" }, "For the team that runs the root brain."),
+    el("form", { onsubmit: (e) => { e.preventDefault(); try { sessionStorage.setItem("sb-admin-token", input.value.trim()); } catch {} load(); } },
+      input, el("button", { class: "btn primary" }, "Open"))));
 }
 
-// The brain's run-out advice is carried out as it appears; answers people
-// already gave (e.g. a dismissal) are kept.
-const state = { policy: "follow", days: 28, company: null, busy: false };
+const state = { days: 56, company: null };
 
 async function load() {
-  if (!token()) return askToken();
+  if (!token()) return gate();
   const data = await admin("/admin/hq");
   if (!data) return;
-  $("token-form").classList.add("hidden");
   const sum = (f) => data.companies.reduce((t, c) => t + f(c), 0);
   const oc = (c, k) => (c.outcomes[k] || { count: 0, value: 0 });
-  const saved = sum((c) => oc(c, "prevented").value);
-  const lost = -sum((c) => oc(c, "happened").value + oc(c, "happened_anyway").value);
-
-  const network = el("div", { class: "panel" }, el("h2", {}, "Network"),
-    el("div", { class: "tiles" },
-      tile("Businesses", String(data.companies.length)),
-      tile("Open signals", String(sum((c) => c.signals.open || 0))),
-      tile("At stake now", money(sum((c) => c.at_stake)), { tip: "Sales the open signals protect" }),
-      tile("Saved by acting", money(saved), { cls: "good", bg: saved ? "good-bg" : "" }),
-      tile("Lost when ignored", money(lost), { cls: lost ? "bad" : "", bg: lost ? "bad-bg" : "" })));
-
+  const graded = data.companies.filter((c) => c.accuracy && c.accuracy.wape != null);
+  const accuracy = graded.length ? 1 - graded.reduce((t, c) => t + c.accuracy.wape, 0) / graded.length : null;
   const companies = data.companies.filter((c) => c.today);
-  if (!state.company && companies.length) state.company = companies.find((c) => c.path === "root.lumen")?.path || companies[0].path;
+  if (!state.company && companies.length) state.company = (companies.find((c) => c.path === "root.lumen") || companies[0]).path;
 
-  const grid = el("div", { class: "grid" });
-  for (const c of data.companies) {
-    const judged = oc(c, "happened").count + oc(c, "false_alarm").count;
-    grid.append(el("div", { class: "panel company" },
-      el("div", { class: "head" }, el("h3", {}, c.name),
-        el("span", { class: "badge", title: c.sharing === "patterns" ? "Sends anonymous patterns to the root" : "Shares nothing with the root" },
-          c.sharing === "patterns" ? "Shares patterns" : "Private")),
-      el("div", { class: "muted" }, c.today ? `Brain's date ${fmtDay(c.today)} · ${c.people} people` : `${c.people} people · no sales data yet`),
-      el("div", { class: "tiles" },
-        tile("Open signals", String(c.signals.open || 0), { d: c.signals.expired ? `${c.signals.expired} expired unanswered` : "" }),
-        tile("At stake", money(c.at_stake)),
-        tile("Saved / lost", money(oc(c, "prevented").value), { cls: "good",
-          d: (oc(c, "happened").value + oc(c, "happened_anyway").value) ? "lost " + money(-(oc(c, "happened").value + oc(c, "happened_anyway").value)) : "" }),
-        tile("Forecast error", c.accuracy ? pct(c.accuracy.wape) : "—",
-          { tip: c.accuracy_text || "Graded once real sales arrive", d: judged ? `warnings right ${oc(c, "happened").count}/${judged}` : "" }))));
-  }
+  const canvas = el("canvas");
+  const hero = el("section", { class: "card hero rise" },
+    el("div", {},
+      el("div", { class: "eyebrow" }, "SecondBrain HQ · root brain"),
+      el("h1", {}, "Every business. ", el("span", { class: "grad-text" }, "One brain that learns.")),
+      el("p", { class: "lead" }, "Each business's brain forecasts, advises and checks itself. What works flows up here as anonymous patterns, and comes back down as better advice."),
+      el("div", { class: "kpis", style: { gridTemplateColumns: "repeat(2, 1fr)" } },
+        kpi("Businesses connected", data.companies.length, { glow: "glow" }),
+        kpi("Open decision signals", sum((c) => c.signals.open || 0), { delay: 80 }),
+        kpi("At stake right now", sum((c) => c.at_stake), { format: shortMoney, delay: 160 }),
+        kpi("Forecast accuracy", accuracy == null ? "—" : accuracy * 100, { format: (x) => Math.round(x) + "%", delay: 240,
+          glow: "glow-good", tip: "Average of 1 − error, checked against real sales" }))),
+    el("div", {}, canvas, el("div", { class: "legend-line" },
+      el("span", {}, el("i", { style: { background: "var(--cyan)" } }), "patterns flowing up"),
+      el("span", {}, el("i", { style: { background: "#f5c451" } }), "lessons flowing down"),
+      el("span", {}, el("i", { style: { background: "var(--faint)" } }), "private: nothing shared"))));
 
-  const lessons = el("ul", { class: "lessons" }, ...data.lessons.map((l) => el("li", {}, l)));
-  $("out").replaceChildren(network, timeMachine(companies), el("h2", {}, "Connected businesses"), grid,
-    el("div", { class: "panel" }, el("details", {}, el("summary", {}, `What the root has learned (${data.lessons.length})`),
-      el("div", { class: "muted", style: "margin-top:6px" }, "Anonymous lessons from businesses that share patterns."), lessons)));
+  const results = el("section", { class: "section" },
+    el("div", { class: "section-head" }, el("div", {}, el("h2", {}, "What the brain's advice has been worth"),
+      el("p", {}, "Every warning is checked against what really happened."))),
+    el("div", { class: "kpis" },
+      kpi("Sales saved by acting", sum((c) => oc(c, "prevented").value), { format: shortMoney, glow: "glow-good", cls: "good" }),
+      kpi("Run-outs prevented", sum((c) => oc(c, "prevented").count), { delay: 80 }),
+      kpi("Warnings that came true", sum((c) => oc(c, "happened").count + oc(c, "happened_anyway").count), { delay: 160 }),
+      kpi("Lessons at the root", data.lessons.length, { delay: 240, glow: "glow" })));
+
+  const biz = el("div", { class: "biz" }, data.companies.map((c, i) => bizCard(c, oc, i)));
+  const lessons = el("ul", { class: "lessons" }, data.lessons.slice(0, 5).map((l) => el("li", { class: "rise" }, l)));
+  $("out").replaceChildren(hero, results, timeMachine(companies),
+    el("section", { class: "section" }, el("div", { class: "section-head" }, el("div", {}, el("h2", {}, "Connected businesses"),
+      el("p", {}, "Aggregates only: HQ never sees a business's notes or documents."))), biz),
+    el("section", { class: "section" }, el("div", { class: "section-head" }, el("div", {}, el("h2", {}, "What the root has learned"),
+      el("p", {}, "Anonymous patterns from businesses that share them. They make every business's advice better."))),
+      el("div", { class: "card" }, data.lessons.length ? lessons : el("div", { class: "empty" }, "Nothing learned yet."))));
+  network(canvas, data.companies);
   const last = store.get("sb-hq-last");
-  if (last && last.company === state.company) showResult(last);
+  if (last && last.company === state.company) showSummary(last, false);
 }
 
+function bizCard(c, oc, i) {
+  const acc = c.accuracy && c.accuracy.wape != null ? Math.max(0, 1 - c.accuracy.wape) : null;
+  const r = 26, len = 2 * Math.PI * r;
+  const arc = svg("circle", { cx: 32, cy: 32, r, fill: "none", stroke: "url(#ringg)", "stroke-width": 6, "stroke-linecap": "round",
+    "stroke-dasharray": len, "stroke-dashoffset": len, transform: "rotate(-90 32 32)", style: "transition: stroke-dashoffset 1.4s cubic-bezier(.2,.8,.2,1)" });
+  const ring = el("div", { class: "ring", title: c.accuracy_text || "Forecast accuracy, graded once real sales arrive" },
+    svg("svg", { viewBox: "0 0 64 64" },
+      svg("defs", {}, svg("linearGradient", { id: "ringg", x1: 0, y1: 0, x2: 1, y2: 1 },
+        svg("stop", { offset: 0, "stop-color": "#8b7bff" }), svg("stop", { offset: 1, "stop-color": "#33d6f2" }))),
+      svg("circle", { cx: 32, cy: 32, r, fill: "none", stroke: "var(--panel-hi)", "stroke-width": 6 }), arc),
+    el("span", {}, acc == null ? "—" : pct(acc)));
+  if (acc != null) requestAnimationFrame(() => setTimeout(() => arc.setAttribute("stroke-dashoffset", len * (1 - acc)), 200));
+  const lost = -(oc(c, "happened").value + oc(c, "happened_anyway").value);
+  const stat = (k, v, cls = "") => el("div", { class: "stat" }, el("div", { class: "k" }, k), el("div", { class: "v " + cls }, v));
+  return el("div", { class: "card rise", style: { animationDelay: i * 90 + "ms" } },
+    el("div", { class: "head" }, el("div", { class: "avatar" }, c.name[0]),
+      el("div", {}, el("h3", {}, c.name), el("div", { class: "row", style: { marginTop: "4px" } },
+        el("span", { class: "chip " + (c.sharing === "patterns" ? "accent" : "") }, c.sharing === "patterns" ? "↑ Shares patterns" : "🔒 Private"),
+        el("span", { class: "muted", style: { fontSize: "13px" } }, c.today ? `Brain's date ${fmtDay(c.today)}` : "No sales data yet"))),
+      ring),
+    el("div", { class: "stats" },
+      stat("Open signals", String(c.signals.open || 0)),
+      stat("At stake", shortMoney(c.at_stake)),
+      stat("Saved", shortMoney(oc(c, "prevented").value), "good"),
+      stat("People", String(c.people)),
+      stat("Departments", String(c.departments)),
+      stat("Lost", lost ? shortMoney(lost) : "$0", lost ? "bad" : "")));
+}
+
+// ---------- the living network: departments → company → root, lessons back down ----------
+function network(canvas, companies) {
+  const ctx = canvas.getContext("2d"), dpr = devicePixelRatio || 1;
+  let W, H, nodes, links, particles = [];
+  const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  function layout() {
+    W = canvas.clientWidth; H = canvas.clientHeight; canvas.width = W * dpr; canvas.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const cx = W / 2, cy = H / 2, root = { x: cx, y: cy, r: 26, label: "Root brain", kind: "root" };
+    nodes = [root]; links = [];
+    const n = Math.max(companies.length, 1);
+    companies.forEach((c, i) => {
+      const a = (n === 2 ? Math.PI : -Math.PI / 2) + (i / n) * Math.PI * 2;
+      const co = { x: cx + Math.cos(a) * W * 0.27, y: cy + Math.sin(a) * H * 0.3, r: 16, label: c.name, kind: "company", sharing: c.sharing };
+      nodes.push(co); links.push({ a: co, b: root, shared: c.sharing === "patterns" });
+      const d = Math.max(c.departments, 1);
+      for (let j = 0; j < d; j++) {
+        // Departments fan out away from the root.
+        const b = a + (d === 1 ? 0 : (j / (d - 1) - 0.5) * 2.4), rr = Math.min(W * 0.17, 95);
+        const dep = { x: co.x + Math.cos(b) * rr, y: co.y + Math.sin(b) * rr * 1.15, r: 6, kind: "dept" };
+        nodes.push(dep); links.push({ a: dep, b: co, shared: true, dept: true });
+      }
+    });
+  }
+  layout(); addEventListener("resize", layout);
+  const spawn = () => {
+    for (const l of links) {
+      if (!l.shared) continue;
+      if (Math.random() < (l.dept ? 0.025 : 0.05)) particles.push({ l, t: 0, up: true, s: 0.006 + Math.random() * 0.006 });
+      if (!l.dept && Math.random() < 0.02) particles.push({ l, t: 0, up: false, s: 0.005 + Math.random() * 0.004 });
+    }
+  };
+  const t0 = performance.now();
+  function frame(now) {
+    if (!canvas.isConnected) return;
+    const time = (now - t0) / 1000;
+    ctx.clearRect(0, 0, W, H);
+    // Slowly turning orbits around the root.
+    const root = nodes[0];
+    for (const [k, rad] of [[1, 52], [-0.6, 84]]) {
+      ctx.save(); ctx.translate(root.x, root.y); ctx.rotate(time * 0.25 * k);
+      ctx.setLineDash([2, 9]); ctx.strokeStyle = "rgba(139,123,255,0.35)"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(0, 0, rad, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+    }
+    ctx.setLineDash([]);
+    const cyan = css("--cyan") || "#33d6f2", violet = css("--violet") || "#8b7bff", text = css("--text"), faint = css("--faint");
+    for (const l of links) {
+      ctx.beginPath(); ctx.moveTo(l.a.x, l.a.y); ctx.lineTo(l.b.x, l.b.y);
+      ctx.setLineDash(l.shared ? [] : [4, 5]); ctx.strokeStyle = l.shared ? "rgba(139,123,255,0.28)" : faint; ctx.lineWidth = l.dept ? 1 : 1.6; ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    spawn();
+    particles = particles.filter((p) => (p.t += p.s) < 1);
+    for (const p of particles) {
+      const [from, to] = p.up ? [p.l.a, p.l.b] : [p.l.b, p.l.a];
+      const x = from.x + (to.x - from.x) * p.t, y = from.y + (to.y - from.y) * p.t;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, 7);
+      g.addColorStop(0, p.up ? cyan : "#f5c451"); g.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI * 2); ctx.fill();
+    }
+    for (const nd of nodes) {
+      const pulse = nd.kind === "root" ? 1 + Math.sin(time * 2) * 0.08 : 1;
+      if (nd.kind !== "dept") {
+        const g = ctx.createRadialGradient(nd.x, nd.y, 0, nd.x, nd.y, nd.r * 3.2 * pulse);
+        g.addColorStop(0, nd.kind === "root" ? "rgba(139,123,255,0.55)" : "rgba(51,214,242,0.35)"); g.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(nd.x, nd.y, nd.r * 3.2 * pulse, 0, Math.PI * 2); ctx.fill();
+      }
+      const g2 = ctx.createLinearGradient(nd.x - nd.r, nd.y - nd.r, nd.x + nd.r, nd.y + nd.r);
+      g2.addColorStop(0, violet); g2.addColorStop(1, cyan);
+      ctx.fillStyle = nd.kind === "company" && nd.sharing !== "patterns" ? faint : g2;
+      ctx.beginPath(); ctx.arc(nd.x, nd.y, nd.r * pulse, 0, Math.PI * 2); ctx.fill();
+      if (nd.label) {
+        ctx.fillStyle = text; ctx.font = `${nd.kind === "root" ? 700 : 600} 12.5px Inter, system-ui`; ctx.textAlign = "center";
+        ctx.fillText(nd.label, nd.x, nd.y + nd.r + 18);
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
+// ---------- time machine ----------
 function timeMachine(companies) {
-  const seg = (options, key) => el("div", { class: "seg" }, ...options.map(([value, label, tip]) => {
-    const b = el("button", { type: "button", class: state[key] === value ? "on" : "", title: tip || "" }, label);
-    b.onclick = () => { state[key] = value; b.parentNode.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b)); };
-    return b;
-  }));
-  const company = el("select", {}, ...companies.map((c) => el("option", { value: c.path }, c.name)));
+  const company = el("select", { onchange: (e) => { state.company = e.target.value; $("tm").replaceChildren(); } },
+    companies.map((c) => el("option", { value: c.path }, c.name)));
   company.value = state.company;
-  company.onchange = () => { state.company = company.value; $("tm-result").replaceChildren(); };
-  const go = el("button", { class: "primary", type: "button", id: "tm-go" }, "Move forward ▶");
-  go.onclick = () => move();
-  const reset = el("button", { class: "link", type: "button", title: "Back to the saved starting point" }, "Reset demo");
-  reset.onclick = () => resetDemo();
-  return el("div", { class: "panel" },
-    el("div", { class: "row", style: "justify-content:space-between" }, el("h2", { style: "margin:0" }, "Time machine"), reset),
-    el("div", { class: "muted", style: "margin:2px 0 14px" }, "Let the brain run a business for a few weeks: it predicts, decides, checks itself and learns."),
-    el("div", { class: "controls" },
-      el("div", {}, el("label", {}, "Business"), company),
-      el("div", {}, el("label", {}, "For"), seg([[14, "2 weeks"], [28, "4 weeks"], [56, "8 weeks"]], "days")),
-      go),
-    el("div", { id: "tm-result" }));
+  const seg = el("div", { class: "seg" }, [[14, "2 weeks"], [28, "4 weeks"], [56, "8 weeks"]].map(([d, label]) =>
+    el("button", { type: "button", class: state.days === d ? "on" : "",
+      onclick: (e) => { state.days = d; seg.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b === e.target)); } }, label)));
+  return el("section", { class: "section" },
+    el("div", { class: "section-head" },
+      el("div", {}, el("div", { class: "eyebrow" }, "Time machine"), el("h2", {}, "Watch the brain run a business"),
+        el("p", {}, "Weeks of sales play out. The brain predicts run-outs, places orders, checks itself and learns.")),
+      el("button", { class: "btn ghost sm", onclick: resetDemo, title: "Back to the saved starting point" }, "↺ Reset demo")),
+    el("div", { class: "card" },
+      el("div", { class: "tm-controls" },
+        el("div", {}, el("label", {}, "Business"), company),
+        el("div", {}, el("label", {}, "Run for"), seg),
+        el("button", { class: "btn primary", id: "tm-go", onclick: run }, "▶  Run the brain")),
+      el("div", { id: "tm" })));
 }
 
-async function move() {
-  const box = $("tm-result");
-  document.querySelectorAll("button").forEach((x) => (x.disabled = true));
-  const steps = ["Customers are buying…", "Stock is running down…", "Orders are arriving…", "Judging the brain's warnings…", "Re-forecasting…", "Raising new signals…"];
-  const label = el("div", { class: "muted", style: "margin-top:16px" }, steps[0]);
-  box.replaceChildren(label, el("div", { class: "progress" }, el("div")));
-  let i = 0; const timer = setInterval(() => { i = (i + 1) % steps.length; label.textContent = steps[i]; }, 3500);
+const STEPS = ["Customers buy, day by day", "Stock runs down", "The brain spots run-outs coming", "Orders go out, deliveries arrive",
+               "Each prediction is checked against reality", "Outcomes become memories", "Forecasts and advice are recalculated"];
+
+async function run() {
+  const box = $("tm"), go = $("tm-go");
+  go.disabled = true;
+  const items = STEPS.map((s) => el("li", {}, el("span", { class: "s" }), s));
+  box.replaceChildren(el("div", { class: "thinking rise" }, el("div", { class: "orb" }),
+    el("div", {}, el("div", { class: "eyebrow" }, "The brain is working"), el("ul", { class: "steps", style: { marginTop: "10px" } }, items))));
+  let i = 0; items[0].classList.add("on");
+  const timer = setInterval(() => {
+    if (i < items.length - 1) { items[i].classList.replace("on", "done"); items[i].querySelector(".s").textContent = "✓"; items[++i].classList.add("on"); }
+  }, 6500);
   try {
-    const r = await admin("/admin/simulate", { method: "POST", body: JSON.stringify({ company: state.company, days: state.days, policy: state.policy }) });
+    const r = await admin("/admin/simulate", { method: "POST", body: JSON.stringify({ company: state.company, days: state.days, policy: "follow" }) });
     if (!r) return;
     store.set("sb-hq-last", r);
-    await load();
+    playback(r);
   } catch (e) {
-    box.replaceChildren(el("p", { class: "bad" }, "Couldn't move forward: " + e.message));
-  } finally {
-    clearInterval(timer);
-    document.querySelectorAll("button").forEach((x) => (x.disabled = false));
-  }
+    box.replaceChildren(el("p", { class: "bad" }, "Couldn't run: " + e.message));
+  } finally { clearInterval(timer); go.disabled = false; }
 }
 
 async function resetDemo() {
-  if (!confirm("Put sales, stock, forecasts and signals back to the demo's starting point?")) return;
-  try {
-    await admin("/admin/demo/reset", { method: "POST" });
-    store.set("sb-hq-last", null);
-    await load();
-  } catch (e) { alert("Couldn't reset: " + e.message); }
+  if (!confirm("Go back to the demo's starting point?")) return;
+  try { await admin("/admin/demo/reset", { method: "POST" }); store.set("sb-hq-last", null); load(); }
+  catch (e) { alert("Couldn't reset: " + e.message); }
 }
 
-const RESULT = {
-  prevented: ["✓", "good", "ordered in time, never ran out"], happened: ["✕", "bad", "nobody acted, it ran out as predicted"],
-  happened_anyway: ["!", "bad", "ordered, but it still ran out"], false_alarm: ["~", "info", "didn't run out: the brain was wrong"],
-};
-
-function showResult(r) {
-  const box = $("tm-result");
-  if (!box || !r.before || !r.after) return;
-  const b = r.before, a = r.after;
-  const delta = (x, y) => y - x;
-  const savedNow = delta(b.saved, a.saved);
-  const products = Object.values(r.products || {});
-  const lostSales = products.reduce((t, p) => t + (p.lost_value || 0), 0);
-  const outDays = products.reduce((t, p) => t + p.out_of_stock_days, 0);
-
-  const jump = el("div", { class: "jump" },
-    el("span", { class: "date" }, fmtDay(b.today)), el("span", { class: "arrow" }, "→"), el("span", { class: "date" }, fmtDay(a.today)),
-    r.acted ? el("span", { class: "badge" }, `${r.acted} decision${r.acted > 1 ? "s" : ""} by the brain`) : null);
-
-  const prevented = a.prevented - b.prevented, cameTrue = a.came_true - b.came_true, wrong = a.false_alarms - b.false_alarms;
-  const checked = prevented + cameTrue + wrong;
-  const tiles = el("div", { class: "tiles" },
-    tile("Predictions checked", String(checked), { d: checked ? `${prevented + cameTrue} right, ${wrong} wrong` : "none came due yet",
-      tip: "Each run-out the brain predicted, checked against what really happened" }),
-    tile("Run-outs prevented", String(prevented), { cls: prevented ? "good" : "", bg: prevented ? "good-bg" : "",
-      d: `${money(a.saved - b.saved)} of sales saved` }),
-    tile("Forecast error", pct(a.forecast_error), { d: b.forecast_error != null ? `was ${pct(b.forecast_error)}` : "graded on real sales",
-      tip: r.accuracy_text || "" }),
-    tile("New memories", "+" + (a.memories - b.memories), { d: `+${a.forecasts_graded - b.forecasts_graded} forecasts graded`,
-      tip: "Every outcome is remembered and changes how sure the brain is next time" }),
-    tile("Sales missed", money(lostSales), { cls: lostSales ? "bad" : "good",
-      d: outDays ? `${outDays} product-days out of stock` : "never out of stock" }));
-
-  const charts = el("div", { class: "charts" }, ...products
-    .sort((x, y) => y.lost - x.lost || x.name.localeCompare(y.name))
-    .map((p) => el("div", { class: "chart" },
-      el("div", { class: "t" }, el("div", {}, p.name),
-        el("span", { class: p.out_of_stock_days ? "bad" : "good" }, p.out_of_stock_days ? `out ${p.out_of_stock_days}d` : "in stock")),
-      sparkline(p))));
-  const legend = el("div", { class: "legend" },
-    el("span", {}, el("i", { style: "background:var(--line)" }), "stock"),
-    el("span", {}, el("i", { style: "background:var(--bad);opacity:.35" }), "out of stock"),
-    el("span", {}, el("i", { style: "background:var(--good)" }), "order arrived"));
-
-  // One line per product and result: a product reordered three times shows "×3".
-  const grouped = new Map();
-  for (const o of r.outcomes || []) {
-    const key = o.title.split(" runs out")[0] + "|" + o.result;
-    const g = grouped.get(key) || { name: key.split("|")[0], result: o.result, n: 0, details: [],
-      predicted: (o.title.match(/runs out on (\w+ \d+)/) || [])[1] };
-    g.n += 1; g.details.push(o.detail); grouped.set(key, g);
+// Events on the business's calendar, so playback can reveal them day by day.
+function timeline(r) {
+  const events = [];
+  for (const p of Object.values(r.products)) {
+    p.arrived_on.forEach((d) => events.push({ day: d, ic: "cyan", icon: "▼", text: `${p.name}: order arrived`, name: p.name }));
+    p.stock.forEach((s, i) => { if (s === 0 && p.demand[i] > 0 && (i === 0 || p.stock[i - 1] > 0)) events.push({ day: p.days[i], ic: "bad", icon: "!", text: `${p.name} ran out`, name: p.name }); });
   }
-  const events = el("ul", { class: "events" });
-  for (const g of grouped.values()) {
-    const [icon, cls, label] = RESULT[g.result] || ["•", "info", g.result];
-    events.append(el("li", { title: g.details.join("\n") }, el("span", { class: "dot " + cls }, icon),
-      el("div", {}, el("div", {}, el("b", {}, g.name), g.n > 1 ? el("span", { class: "muted" }, `  ×${g.n}`) : null),
-        el("div", { class: "muted" }, (g.predicted ? `Predicted to run out ${g.predicted}: ` : "") + label))));
+  for (const o of r.outcomes) {
+    const m = o.title.match(/runs out on (\w+ \d+)/), name = o.title.split(" runs out")[0];
+    const day = m ? isoOf(m[1], r.from) : r.to;
+    const good = o.result === "prevented";
+    events.push({ day: day < r.from ? r.from : day > r.to ? r.to : day, ic: good ? "good" : o.result === "false_alarm" ? "info" : "bad",
+      icon: good ? "✓" : o.result === "false_alarm" ? "~" : "✕", outcome: o.result, name,
+      text: good ? `${name}: predicted run-out avoided` : o.result === "false_alarm" ? `${name}: predicted run-out didn't come` : `${name}: ran out as predicted` });
   }
-  if (!events.children.length) events.append(el("li", {}, el("span", { class: "dot info" }, "…"),
-    el("div", { class: "muted" }, "None of the brain's predictions came due yet. Try a longer period.")));
-  const next = el("ul", { class: "events" }, ...(r.top_signals || []).slice(0, 4).map((s) =>
-    el("li", { title: s.action }, el("span", { class: "dot " + (s.urgency === "high" ? "bad" : "info") }, s.urgency === "high" ? "!" : "→"),
-      el("div", {}, s.title))));
-
-  box.replaceChildren(jump, tiles,
-    el("div", { class: "cols" },
-      el("div", {}, el("h2", {}, "Stock, day by day"), charts, legend),
-      el("div", {}, el("h2", {}, "Predicted → what happened"), events, el("h2", { style: "margin-top:18px" }, "What the brain will do next"), next)));
+  return events.sort((a, b) => a.day.localeCompare(b.day));
+}
+function isoOf(monthDay, near) {
+  const year = +near.slice(0, 4);
+  for (const y of [year, year + 1, year - 1]) {
+    const d = new Date(`${monthDay}, ${y}`);
+    if (isNaN(d)) continue;
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    if (Math.abs(new Date(iso) - new Date(near)) < 200 * 864e5) return iso;
+  }
+  return near;
 }
 
-function sparkline(p) {
-  const W = 220, H = 64, n = p.stock.length, max = Math.max(1, ...p.stock);
-  const x = (i) => (n <= 1 ? 0 : (i / (n - 1)) * W), y = (v) => H - 4 - (v / max) * (H - 10);
-  const ns = "http://www.w3.org/2000/svg", svg = document.createElementNS(ns, "svg");
-  svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("preserveAspectRatio", "none");
-  const add = (tag, attrs) => { const e = document.createElementNS(ns, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); svg.append(e); return e; };
+function playback(r) {
+  const box = $("tm"), products = Object.values(r.products), days = products[0]?.days || [];
+  if (!days.length) return showSummary(r, true);
+  const events = timeline(r), n = days.length;
+  const dateEl = el("div", { class: "date" }, fmtDay(days[0]));
+  const fill = el("div", { class: "fill" });
+  const color = { bad: "bad", good: "good", cyan: "cyan", info: "violet" };
+  const track = el("div", { class: "track" }, fill, events.map((e) => el("div", { class: "mark", title: e.text,
+    style: { left: (Math.max(0, days.indexOf(e.day)) / Math.max(1, n - 1)) * 100 + "%", background: `var(--${color[e.ic]})` } })));
+  const live = { sold: el("div", { class: "v" }, "0"), orders: el("div", { class: "v" }, "0"), prevented: el("div", { class: "v good" }, "0"), out: el("div", { class: "v" }, "0") };
+  const liveKpi = (k, v) => el("div", { class: "kpi" }, el("div", { class: "k" }, k), v);
+  const charts = products.map((p) => chart(p));
+  const feed = el("ul", { class: "feed" });
+  const name = document.querySelector("#out select")?.selectedOptions[0]?.textContent || "the business";
+  box.replaceChildren(
+    el("div", { class: "clock" }, el("span", { class: "from" }, fmtDay(r.from) + "  →"), dateEl, el("span", { class: "chip accent" }, "The brain is running " + name)),
+    track,
+    el("div", { class: "kpis", style: { marginBottom: "18px" } }, liveKpi("Units sold", live.sold), liveKpi("Orders delivered", live.orders),
+      liveKpi("Run-outs prevented", live.prevented), liveKpi("Days a product was out", live.out)),
+    el("div", { class: "tm-body" }, el("div", { class: "charts" }, charts.map((c) => c.node)),
+      el("div", {}, el("div", { class: "eyebrow", style: { marginBottom: "10px" } }, "Live feed"), feed)),
+    el("div", { id: "tm-summary" }));
+  const total = Math.min(9000, 2600 + n * 110), start = performance.now();
+  let shown = 0;
+  function frame(now) {
+    const t = Math.min(1, (now - start) / total), idx = Math.min(n - 1, Math.floor(t * (n - 1) + 1e-6));
+    dateEl.textContent = fmtDay(days[idx]);
+    fill.style.width = t * 100 + "%";
+    let sold = 0, out = 0, orders = 0;
+    for (const c of charts) { c.reveal(t, idx); sold += c.soldUntil(idx); out += c.outUntil(idx); orders += c.arrivalsUntil(days[idx]); }
+    live.sold.textContent = sold.toLocaleString(); live.out.textContent = String(out); live.orders.textContent = String(orders);
+    while (shown < events.length && events[shown].day <= days[idx]) {
+      const e = events[shown++];
+      feed.prepend(el("li", { class: "pop" }, el("span", { class: "ic " + e.ic }, e.icon), el("span", {}, e.text), el("span", { class: "when" }, fmtDay(e.day))));
+      if (e.outcome === "prevented") live.prevented.textContent = String(+live.prevented.textContent + 1);
+      const target = charts.find((c) => c.name === e.name);
+      if (target) target.flash(e.outcome === "prevented" ? "saved" : e.ic === "bad" ? "alarm" : null);
+    }
+    if (t < 1) requestAnimationFrame(frame); else showSummary(r, true);
+  }
+  requestAnimationFrame(frame);
+}
+
+function chart(p) {
+  const W = 240, H = 70, n = p.stock.length, max = Math.max(1, ...p.stock);
+  const x = (i) => (n <= 1 ? 0 : (i / (n - 1)) * W), y = (v) => H - 3 - (v / max) * (H - 8);
+  const id = "c" + Math.random().toString(36).slice(2, 8);
+  const clip = svg("rect", { x: 0, y: -10, width: 0, height: H + 20 });
   const step = n > 1 ? W / (n - 1) : W;
-  p.stock.forEach((s, i) => { if (s === 0 && p.demand[i] > 0) add("rect", { x: x(i) - step / 2, y: 0, width: step, height: H, fill: "var(--bad)", opacity: ".22" }); });
-  add("line", { x1: 0, x2: W, y1: H - 4, y2: H - 4, stroke: "var(--grid)", "stroke-width": 1 });
-  add("polyline", { points: p.stock.map((s, i) => `${x(i)},${y(s)}`).join(" "), fill: "none", stroke: "var(--line)",
-    "stroke-width": 2, "vector-effect": "non-scaling-stroke", "stroke-linejoin": "round" });
-  for (const d of p.arrived_on || []) {
-    const i = p.days.indexOf(d);
-    if (i >= 0) add("circle", { cx: x(i), cy: y(p.stock[i]), r: 3.5, fill: "var(--good)" });
-  }
-  const title = document.createElementNS(ns, "title");
-  title.textContent = `${p.name}: ${p.sold.toLocaleString()} sold, ${p.lost.toLocaleString()} missed${p.arrivals.length ? "; " + p.arrivals.join("; ") : ""}`;
-  svg.append(title);
-  return svg;
+  const pts = p.stock.map((s, i) => `${x(i)},${y(s)}`).join(" ");
+  const outRects = p.stock.map((s, i) => (s === 0 && p.demand[i] > 0 ? svg("rect", { x: x(i) - step / 2, y: 0, width: step, height: H, fill: "var(--bad)", opacity: 0.22 }) : null));
+  const dots = p.arrived_on.map((d) => { const i = p.days.indexOf(d); return i < 0 ? null : svg("circle", { cx: x(i), cy: y(p.stock[i]), r: 4, fill: "var(--good)", stroke: "var(--bg)", "stroke-width": 2 }); });
+  const head = svg("circle", { r: 4, fill: "var(--cyan)", cx: 0, cy: y(p.stock[0]) });
+  const node = el("div", { class: "pchart" },
+    el("div", { class: "t" }, el("span", {}, p.name), el("span", { class: "chip" }, "watching")),
+    svg("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none" },
+      svg("defs", {}, svg("clipPath", { id }, clip),
+        svg("linearGradient", { id: id + "g", x1: 0, y1: 0, x2: 0, y2: 1 }, svg("stop", { offset: 0, "stop-color": "#33d6f2", "stop-opacity": 0.35 }), svg("stop", { offset: 1, "stop-color": "#33d6f2", "stop-opacity": 0 }))),
+      svg("line", { x1: 0, x2: W, y1: H - 3, y2: H - 3, stroke: "var(--border)" }),
+      svg("g", { "clip-path": `url(#${id})` }, outRects,
+        svg("polygon", { points: `0,${H} ${pts} ${W},${H}`, fill: `url(#${id}g)` }),
+        svg("polyline", { points: pts, fill: "none", stroke: "var(--cyan)", "stroke-width": 2.2, "vector-effect": "non-scaling-stroke", "stroke-linejoin": "round" }),
+        dots),
+      head));
+  const status = node.querySelector(".chip");
+  const soldCum = [], outCum = []; let s = 0, o = 0;
+  p.stock.forEach((st, i) => { const before = i ? p.stock[i - 1] : st + p.demand[i]; s += Math.min(p.demand[i], Math.max(before, 0)); o += st === 0 && p.demand[i] > 0 ? 1 : 0; soldCum.push(s); outCum.push(o); });
+  return {
+    node, name: p.name,
+    reveal(frac, idx) {
+      clip.setAttribute("width", frac * W + 2); head.setAttribute("cx", x(idx)); head.setAttribute("cy", y(p.stock[idx]));
+      const isOut = p.stock[idx] === 0 && p.demand[idx] > 0;
+      status.textContent = isOut ? "out of stock" : "in stock"; status.className = "chip " + (isOut ? "bad" : "good");
+    },
+    soldUntil: (idx) => soldCum[idx] || 0, outUntil: (idx) => outCum[idx] || 0,
+    arrivalsUntil: (day) => p.arrived_on.filter((d) => d <= day).length,
+    flash(kind) { if (!kind) return; node.classList.add(kind); setTimeout(() => node.classList.remove(kind), 1600); },
+  };
 }
 
-$("token-form").onsubmit = (e) => {
-  e.preventDefault();
-  try { sessionStorage.setItem("sb-admin-token", $("token").value.trim()); } catch {}
-  $("token").value = "";
-  load();
-};
+function showSummary(r, animate) {
+  const b = r.before, a = r.after;
+  if (!b || !a) return;
+  if (!animate) playbackStatic(r);
+  const box = $("tm-summary"); if (!box) return;
+  const prevented = a.prevented - b.prevented, cameTrue = a.came_true - b.came_true, wrong = a.false_alarms - b.false_alarms;
+  const products = Object.values(r.products || {});
+  const missed = products.reduce((t, p) => t + (p.lost_value || 0), 0);
+  box.replaceChildren(el("div", { class: "section rise" },
+    el("div", { class: "section-head" }, el("div", {}, el("h2", {}, `${fmtDay(b.today)} → ${fmtDay(a.today)}: what the brain did`))),
+    el("div", { class: "kpis" },
+      kpi("Predictions checked", prevented + cameTrue + wrong, { d: `${prevented + cameTrue} right · ${wrong} wrong`, glow: "glow" }),
+      kpi("Run-outs prevented", prevented, { glow: "glow-good", cls: "good", d: shortMoney(a.saved - b.saved) + " of sales saved", delay: 80 }),
+      kpi("Forecast accuracy", a.forecast_error == null ? "—" : (1 - a.forecast_error) * 100, { format: (x) => Math.round(x) + "%",
+        d: b.forecast_error == null ? "checked on real sales" : `was ${Math.round((1 - b.forecast_error) * 100)}%`, delay: 160, tip: r.accuracy_text }),
+      kpi("New memories", a.memories - b.memories, { format: (x) => "+" + Math.round(x), d: `+${a.forecasts_graded - b.forecasts_graded} forecasts graded`, delay: 240 }),
+      kpi("Sales missed", missed, { format: shortMoney, cls: missed ? "bad" : "good", glow: missed ? "glow-bad" : "", delay: 320,
+        d: missed ? "mostly products already out at the start" : "never out of stock" })),
+    el("div", { class: "section" }, el("div", { class: "eyebrow" }, "What the brain will do next"),
+      el("div", { class: "next" }, (r.top_signals || []).slice(0, 4).map((s, i) =>
+        el("div", { class: "rise", style: { animationDelay: i * 80 + "ms" } }, el("span", { class: "chip " + (s.urgency === "high" ? "bad" : "accent") }, s.urgency),
+          el("span", {}, s.title), s.impact_value ? el("span", { class: "muted", style: { marginLeft: "auto" } }, shortMoney(s.impact_value) + " at stake") : null))))));
+}
+
+// A saved result shown again after a reload: the final frame, no animation.
+function playbackStatic(r) {
+  const box = $("tm"); if (!box || box.children.length) return;
+  const products = Object.values(r.products || {});
+  const charts = products.map((p) => { const c = chart(p); c.reveal(1, p.days.length - 1); return c.node; });
+  box.replaceChildren(el("div", { class: "clock" }, el("span", { class: "from" }, fmtDay(r.from) + "  →"), el("div", { class: "date" }, fmtDay(r.to))),
+    el("div", { class: "charts" }, charts), el("div", { id: "tm-summary" }));
+}
+
 load();
 </script>
 </body>

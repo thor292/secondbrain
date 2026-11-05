@@ -84,6 +84,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Pages are revalidated on every load, so browsers never show a stale copy after an update.
     NO_CACHE = {"Cache-Control": "no-cache"}
 
+    @app.get("/static/{name}", include_in_schema=False)
+    def static_file(name: str):
+        """The shared stylesheet and script (only plain files in the static folder)."""
+        path = STATIC_DIR / name
+        if "/" in name or name.startswith(".") or path.suffix not in (".css", ".js") or not path.is_file():
+            raise HTTPException(404)
+        return FileResponse(path, headers=NO_CACHE)
+
     @app.get("/", include_in_schema=False)
     def chat_screen():
         return FileResponse(STATIC_DIR / "index.html", headers=NO_CACHE)
