@@ -220,6 +220,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(400, "days must be between 1 and 90")
         return evolution.advance(settings, brain.llm, brain.embedder, body.company, body.days)
 
+    class Refresh(BaseModel):
+        company: str
+
+    @app.post("/admin/refresh", dependencies=[Depends(require_admin)])
+    def refresh(body: Refresh, brain: Brain):
+        """After new real sales arrive: grade forecasts, judge outcomes, recalculate (idempotent)."""
+        return evolution.refresh(settings, brain.llm, brain.embedder, body.company)
+
     @app.get("/admin/hq", dependencies=[Depends(require_admin)])
     def hq():
         with psycopg.connect(settings.admin_database_url, row_factory=dict_row) as conn:

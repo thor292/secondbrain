@@ -275,6 +275,7 @@ async function loadEvolution() {
     stat("Lost when ignored", "$" + Math.round(body.lost || 0).toLocaleString()),
     stat("Warnings that came true", body.warning_accuracy == null ? "Not judged yet" : Math.round(body.warning_accuracy * 100) + "%"),
     stat("Acted / dismissed / expired", `${f.acted || 0} / ${f.dismissed || 0} / ${f.expired || 0}`)));
+  if (body.accuracy) out.append(accuracyPanel(body.accuracy));
   const list = el("ul", { class: "timeline" });
   const LABEL = { outcome: "Outcome", feedback: "Feedback", expired: "Expired", updated: "Fact updated" };
   for (const e of body.events) list.append(el("li", {}, el("span", { class: "muted" }, e.at ? e.at.slice(0, 10) : ""),
@@ -282,6 +283,34 @@ async function loadEvolution() {
     el("span", {}, e.text + (e.who ? ` — ${e.who}` : ""))));
   out.append(el("div", { class: "panel" }, el("h3", { style: "margin-top:0" }, "What the brain learned, most recent first"),
     body.events.length ? list : el("p", { class: "muted" }, "Nothing yet. Act on or dismiss signals; outcomes appear when time passes (HQ can simulate weeks).")));
+}
+
+// The brain grading itself: forecasts against real sales, warnings against what happened.
+function accuracyPanel(a) {
+  const pct = (v) => (v == null ? "—" : Math.round(v * 100) + "%");
+  const panel = el("div", { class: "panel" }, el("h3", { style: "margin-top:0" }, "How good are the brain's forecasts?"),
+    el("div", { class: "reason" }, a.summary || "Not graded yet: each forecast is graded once real sales for its days arrive."));
+  if (!a.weeks.length) return panel;
+  const table = el("table", {}, el("thead", {}, el("tr", {}, ...["Week of", "Forecasts made", "Off by (WAPE)", "Ran", "Days inside 80% range",
+    "Inside 95% range", "Warnings judged", "Right"].map((h) => el("th", {}, h)))));
+  const tbody = el("tbody");
+  for (const w of a.weeks.slice().reverse()) {
+    const fc = w.forecasts, n = w.warnings, judged = Object.values(n).reduce((t, x) => t + x, 0);
+    tbody.append(el("tr", {},
+      el("td", {}, fmtDay(w.week)),
+      el("td", {}, fc ? String(fc.forecasts) : "—"),
+      el("td", {}, fc ? pct(fc.wape) : "—"),
+      el("td", {}, fc && fc.bias != null ? `${pct(Math.abs(fc.bias))} ${fc.bias > 0 ? "high" : "low"}` : "—"),
+      el("td", {}, fc ? pct(fc.coverage80) : "—"),
+      el("td", {}, fc ? pct(fc.coverage95) : "—"),
+      el("td", {}, judged ? `${judged}: ${(n.happened || 0) + (n.happened_anyway || 0)} came true, ${n.prevented || 0} prevented, ${n.false_alarm || 0} false alarm${n.false_alarm === 1 ? "" : "s"}` : "—"),
+      el("td", {}, pct(w.warning_precision))));
+  }
+  table.append(tbody);
+  panel.append(el("div", { style: "overflow-x:auto" }, table), el("p", { class: "muted", style: "margin-bottom:0" },
+    "Each forecast is graded on its first 4 weeks against what really sold; days out of stock are left out, since sales there show the empty shelf, not demand. " +
+    "A well-calibrated brain has about 80% of days inside its 80% range. Warnings are \"right\" when the run-out came or acting on them prevented it."));
+  return panel;
 }
 
 // ---------- forecast ----------

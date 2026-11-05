@@ -155,16 +155,29 @@ Admin API: `POST /admin/maintain` and `POST /admin/learn`.
 
 ## The evolving brain and SecondBrain HQ
 
-- **Outcomes**: every run-out warning is judged once its date comes: prevented
-  (acted on, didn't run out), happened (ignored, ran out), happened anyway, or
-  false alarm. Each outcome is saved as a memory in the product's brain, so the
-  brain remembers it. Signals nobody answered before their deadline expire.
+- **Outcomes**: every run-out warning is judged from the recorded sales
+  (`in_stock = false` days) once the data covers a week past its predicted
+  date: prevented (acted on, didn't run out), happened (ignored, ran out),
+  happened anyway, or false alarm, with lost sales estimated from the forecast
+  on out-of-stock days. Each outcome is saved as a memory in the product's
+  brain, so the brain remembers it. Signals nobody answered before their
+  deadline expire; a warning re-raised for the same run-out counts once.
+- **Self-grading**: every forecast is graded on its first 4 weeks against what
+  really sold (`forecast_accuracy`: WAPE, bias, 80%/95% range coverage; out of
+  stock days left out as censored demand). `evolution.realized_accuracy(conn,
+  brain, sku)` gives a product's recent grade.
+- **Refresh**: `evolution.refresh` (or `POST /admin/refresh`, or
+  `python -m secondbrain.evolution --refresh-only`) is what runs when real
+  sales arrive: grade, judge, re-forecast, recalculate signals. Running it
+  twice on the same data changes nothing. `scripts/evolution_reliability.py`
+  checks the whole loop over many simulated weeks.
 - **Learning**: stock-signal confidence follows the company's track record
   ("4 of 4 ignored warnings came true"), and business signals see what people
   acted on and dismissed (with their reasons) and stop repeating dismissed
   advice.
 - **Brain evolution** tab on Explore: sales saved, sales lost when ignored,
-  how often warnings came true, and a timeline of outcomes, feedback and facts
+  how often warnings came true, forecast grades per week in plain language,
+  and a timeline of outcomes, feedback and facts
   the brain updated.
 - **SecondBrain HQ** at `http://localhost:8765/hq` (admin token): the root
   brain's view of every connected business — signals, money at stake, outcomes,
@@ -172,8 +185,8 @@ Admin API: `POST /admin/maintain` and `POST /admin/learn`.
 - **Moving time forward (demo only)**: HQ's "Simulate 14/28 days" or
   `uv run python -m secondbrain.evolution --days 28` draws sales from the
   forecast with randomness, runs stock down, delivers orders placed by acting
-  on signals after the lead time, judges outcomes, and recalculates forecasts
-  and signals. With real businesses the same judging runs on real sales.
+  on signals after the lead time, then runs the same refresh real sales go
+  through.
   Reset to Nov 4 with `schema --reset` and `load_examples.sh`.
 
 ## Decision signals

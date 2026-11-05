@@ -38,8 +38,8 @@ def ensure_test_database() -> None:
         conn.execute("GRANT USAGE ON SCHEMA public TO secondbrain_app")
 
 
-@pytest.fixture(scope="session")
-def settings() -> Settings:
+def make_test_settings() -> Settings:
+    """Settings for this checkout's test database (also used by scripts/evolution_reliability.py)."""
     ensure_test_database()
     return Settings(
         _env_file=None,
@@ -53,6 +53,11 @@ def settings() -> Settings:
         admin_token=ADMIN_TOKEN,
         demo_mode=True,
     )
+
+
+@pytest.fixture(scope="session")
+def settings() -> Settings:
+    return make_test_settings()
 
 
 def load_examples(settings: Settings) -> None:
