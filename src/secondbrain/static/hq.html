@@ -62,6 +62,13 @@ function el(tag, attrs = {}, ...children) {
   return n;
 }
 const token = () => { try { return sessionStorage.getItem("sb-admin-token"); } catch { return null; } };
+const pct = (v) => (v == null ? "—" : Math.round(v * 100) + "%");
+// Run-out warnings that came true or were prevented by acting, out of all judged.
+function warningsRight(c) {
+  const n = (k) => (c.outcomes[k] || { count: 0 }).count;
+  const judged = n("happened") + n("happened_anyway") + n("prevented") + n("false_alarm");
+  return judged ? `${judged - n("false_alarm")} of ${judged}` : "—";
+}
 const kpi = (k, v, cls = "") => el("div", { class: "kpi" }, el("div", { class: "k" }, k), el("div", { class: "v " + cls }, v));
 
 async function admin(path, options = {}) {
@@ -111,7 +118,12 @@ async function load() {
         kpi("Warnings came true", judged ? `${oc(c, "happened").count} of ${judged}` : "—"),
         kpi("Facts updated", String(c.facts_updated)),
         kpi("Run-outs prevented", String(oc(c, "prevented").count), "good"),
-        kpi("Run-outs missed", String(oc(c, "happened").count + oc(c, "happened_anyway").count), "bad"))));
+        kpi("Run-outs missed", String(oc(c, "happened").count + oc(c, "happened_anyway").count), "bad"),
+        kpi("Forecast off by (4 wks)", c.accuracy ? pct(c.accuracy.wape) : "—"),
+        kpi("Days in 80% range", c.accuracy ? pct(c.accuracy.coverage80) : "—",
+            c.accuracy && Math.abs(c.accuracy.coverage80 - 0.8) > 0.1 ? "bad" : ""),
+        kpi("Warnings right", warningsRight(c))),
+      el("p", { class: "muted", style: "margin-bottom:0" }, c.accuracy_text || "Forecasts not graded yet: that needs real sales for the forecast days.")));
   }
   out.append(grid);
 
@@ -133,7 +145,7 @@ async function load() {
   };
   out.append(el("div", { class: "panel" },
     el("h2", { style: "margin-top:0" }, "Move time forward (demo)"),
-    el("p", { class: "muted" }, "Sales happen from the forecast with realistic randomness, stock runs down, orders from acted-on signals arrive after the supplier's lead time, every warning whose date has come is judged, and forecasts and signals are recalculated. With real businesses this happens as real sales arrive."),
+    el("p", { class: "muted" }, "Sales happen from the forecast with realistic randomness, stock runs down, orders from acted-on signals arrive after the supplier's lead time, every warning whose window the sales now cover is judged, past forecasts are graded against what sold, and forecasts and signals are recalculated. With real businesses the same refresh runs as real sales arrive."),
     el("div", { class: "row" }, companySelect, simButton(14), simButton(28)), result));
 
   const lessons = el("ul", { class: "lessons" });
@@ -151,6 +163,7 @@ function showResult(r) {
   for (const o of r.outcomes) list.append(el("li", {}, `${o.result.replace("_", " ").toUpperCase()}: ${o.detail}`));
   for (const [sku, p] of Object.entries(r.products)) if (p.out_of_stock_days) list.append(el("li", {}, `${sku}: out of stock on ${p.out_of_stock_days} day(s), ${p.lost.toLocaleString()} sales lost`));
   if (!list.children.length) list.append(el("li", {}, "No warnings came due in this period."));
+  if (r.accuracy_text) box.append(el("p", {}, r.accuracy_text));
   box.append(list, el("p", { class: "muted" }, `${r.signals ?? 0} open signals after recalculating.`));
 }
 

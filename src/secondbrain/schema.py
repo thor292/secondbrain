@@ -198,10 +198,14 @@ DROP FUNCTION IF EXISTS sb_my_grants();
 
 
 def create_schema(settings: Settings | None = None, reset: bool = False) -> None:
+    # Imported here: evolution imports modules that import this one.
+    from secondbrain import evolution as evolution_schema
+
     settings = settings or get_settings()
     with psycopg.connect(settings.admin_database_url) as conn:
         if reset:
             conn.execute(ingest_store.DROP_SQL)
+            conn.execute(evolution_schema.DROP_SQL)
             conn.execute(signals_schema.DROP_SQL)
             conn.execute(forecasting_store.DROP_SQL)
             conn.execute(DROP_SQL)
@@ -209,6 +213,8 @@ def create_schema(settings: Settings | None = None, reset: bool = False) -> None
         forecasting_store.create_schema(conn)
         # Signals cite memories and products, so they come last.
         conn.execute(signals_schema.SCHEMA_SQL)
+        # Forecast grades cite forecasts and products.
+        conn.execute(evolution_schema.SCHEMA_SQL)
         ingest_store.ensure_schema(conn)
 
 
