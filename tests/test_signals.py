@@ -123,7 +123,7 @@ def test_time_passing_judges_outcomes_and_the_brain_remembers(client, settings, 
     client.post(f"/signals/{by_sku['cloud-throw']['id']}/feedback", json={"status": "dismissed", "note": "not a priority"},
                 headers={"X-User-Id": "ravi"})
 
-    result = evolution.advance(settings, llm, embedder, "root.acme", days=45)
+    result = evolution.advance(settings, llm, embedder, "root.acme", days=56)
     outcomes = {o["title"].split(" runs out")[0]: o["result"] for o in result["outcomes"]}
     assert outcomes == {"Halo brass floor lamp": "prevented", "Cloud waffle throw": "happened"}
     assert any("on order arrived" in a for a in result["products"]["halo-lamp"]["arrivals"])
@@ -139,7 +139,7 @@ def test_time_passing_judges_outcomes_and_the_brain_remembers(client, settings, 
             "SELECT content FROM memories WHERE source = 'signal outcome' AND brain_path = 'root.acme.sales'")]
         as_of = conn.execute("SELECT max(as_of) FROM inventory WHERE brain_path = 'root.acme.sales'").fetchone()[0]
     assert len(remembered) == 2 and all(m.startswith("Outcome: ") for m in remembered)
-    assert as_of == date(2026, 11, 4) + timedelta(days=45)
+    assert as_of == date(2026, 11, 4) + timedelta(days=56)
     # The order Ravi's action placed arrived once and isn't counted again.
     with psycopg.connect(settings.admin_database_url) as conn:
         on_order = conn.execute("SELECT on_order FROM inventory WHERE sku = 'halo-lamp' AND brain_path = 'root.acme.sales'").fetchone()[0]
@@ -149,6 +149,12 @@ def test_time_passing_judges_outcomes_and_the_brain_remembers(client, settings, 
     fresh = [s for s in get_signals(client, "ravi") if s["kind"] == "stockout"]
     for s in fresh:
         assert "Track record here: 1 of 1 ignored run-out warnings came true" in s["evidence"]["facts"]
+    # Four more weeks: the brain grades the forecasts it just made against
+    # the sales that happened, and its warnings say so.
+    evolution.advance(settings, llm, embedder, "root.acme", days=28)
+    graded = [f for s in get_signals(client, "ravi") if s["kind"] in ("stockout", "excess_stock")
+              for f in s["evidence"]["facts"] if f.startswith("Checked against real sales")]
+    assert graded, "signals should cite the forecasts' real-sales grade"
     # Outcomes stay hidden from people who can't see the product.
     assert all(s["company"] != "root.acme" or s["kind"] == "business" for s in get_signals(client, "meera", include_closed=True))
 

@@ -135,6 +135,8 @@ ESTIMATED_WAPE = 0.6
 NO_SALES_DAILY = 0.05  # below this many a day, the forecast expects no sales
 # Feedback: a signal someone acted on or dismissed isn't raised again for a while.
 QUIET_DAYS = 14
+# Real-sales grades need this many graded days before they override the backtest.
+MIN_GRADED_DAYS = 14
 MAX_BUSINESS_SIGNALS = 5
 
 # Learning from feedback and outcomes
@@ -399,6 +401,7 @@ def learn(signal: Signal, records: dict[str, Record], probability: float | None 
 
 def stock_signals(conn: psycopg.Connection, company: str, records: dict[str, Record] | None = None) -> list[Signal]:
     """Run-out, backorder and excess-stock signals for every product with stock data."""
+    from secondbrain.evolution import realized_accuracy  # evolution imports this module
     record = track_record(conn, company)
     records = learned_records(conn, company) if records is None else records
     rows = conn.execute(
@@ -419,6 +422,12 @@ def stock_signals(conn: psycopg.Connection, company: str, records: dict[str, Rec
         quality = r["quality"] or {}
         # Products without a backtest get an estimated error.
         wape = quality.get("wape") or (r["backtest"] or {}).get(r["model"], {}).get("wape", ESTIMATED_WAPE)
+        # Once real sales have graded this product's forecasts, a worse real
+        # error than the backtest's wins: the brain trusts what it has seen.
+        realized = realized_accuracy(conn, r["brain"], r["sku"])
+        graded = bool(realized and realized["days"] >= MIN_GRADED_DAYS and realized["wape"] is not None)
+        if graded:
+            wape = max(wape, realized["wape"])
         # A forecast graded weak (few or irregular sales) is trusted less.
         trust = WEAK_FORECAST_TRUST if quality.get("grade") == "weak" else 1.0
         # Backorders and excess stock rest on the forecast alone; run-out
@@ -429,7 +438,8 @@ def stock_signals(conn: psycopg.Connection, company: str, records: dict[str, Rec
             f"{r['supplier']} lead time: {r['lead_time_days']} days",
             f"Forecast model: {r['model']} (typical error {wape:.0%})",
         ] + ([f"Forecast quality is weak ({quality.get('pattern') or 'irregular'} sales), so confidence is lowered."]
-             if trust < 1 else [])}
+             if trust < 1 else []) + ([f"Checked against real sales: forecasts were off by {realized['wape']:.0%} "
+                                       f"over the last {realized['days']} days"] if graded else [])}
         base = {"brain": r["brain"], "sku": r["sku"], "name": r["name"], "as_of": today.isoformat()}
         daily = sum(p["forecast"] for p in points) / len(points)
         projection = project_stock(r["on_hand"], r["on_order"], r["order_eta"], points)
