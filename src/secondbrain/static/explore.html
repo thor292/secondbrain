@@ -207,6 +207,8 @@ async function loadSignals() {
     stat("Urgent", String(open.filter((s) => s.urgency === "high").length)),
     stat("Money at stake", "$" + Math.round(atStake).toLocaleString()),
     stat("Acted on / dismissed", String(body.length - open.length) + ($("show-closed").checked ? "" : " (hidden)"))));
+  const quality = await api("/signals/quality");
+  if (quality.status === 200) out.append(el("p", { class: "muted" }, quality.body.summary));
   if (!body.length) { out.append(el("div", { class: "denied" }, `No signals ${$("user").selectedOptions[0].textContent} is allowed to see.`)); return; }
   for (const s of body) out.append(signalCard(s));
 }

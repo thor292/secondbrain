@@ -159,10 +159,27 @@ Admin API: `POST /admin/maintain` and `POST /admin/learn`.
   (acted on, didn't run out), happened (ignored, ran out), happened anyway, or
   false alarm. Each outcome is saved as a memory in the product's brain, so the
   brain remembers it. Signals nobody answered before their deadline expire.
-- **Learning**: stock-signal confidence follows the company's track record
-  ("4 of 4 ignored warnings came true"), and business signals see what people
-  acted on and dismissed (with their reasons) and stop repeating dismissed
-  advice.
+- **Learning**: a run-out warning's confidence is the forecast's chance it
+  comes true if ignored, blended with how earlier warnings for that product
+  (and, less, other products) turned out; each signal says why in its evidence
+  ("Why 84% confidence: ..."). A product that ran out although someone acted
+  is raised more urgently; one dismissed repeatedly for the same reason ("we
+  have a second warehouse") gets lower priority and is raised only close to
+  its deadline, unless those warnings came true anyway. Business signals see
+  feedback with reasons, keep the same fingerprint when the model rewords
+  advice (so dismissed advice stays dismissed), must cite a note of the
+  business, and are dropped if their title or action uses a number that isn't
+  in the cited evidence (flagged if only the reason or impact does).
+  `GET /signals/quality` gives the measured track record for what the viewer
+  may see, shown in one line on the Decision signals tab. Root learning adds
+  outcome lessons from sharing companies, in rough proportions only ("Run-out
+  warnings nobody acted on came true about nine times in ten").
+- **Measuring signals**: `uv run python scripts/eval_signals.py` runs 18
+  simulated futures (seeds, lead times, demand shocks) under three policies
+  (ignore, act when due, a naive reorder-point rule) on its own databases and
+  reports precision/recall, lead-time and quantity adequacy, calibration and
+  money. `scripts/check_business_signals.py --env <.env>` checks the real
+  model's business signals on its own database.
 - **Brain evolution** tab on Explore: sales saved, sales lost when ignored,
   how often warnings came true, and a timeline of outcomes, feedback and facts
   the brain updated.
