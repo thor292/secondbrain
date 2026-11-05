@@ -39,7 +39,7 @@ def test_grading_math_on_a_hand_made_example():
     assert g["bias"] == pytest.approx(metrics.bias(actual, forecast))
 
     text = evolution.describe_accuracy(g)
-    assert text.startswith("Forecasts were within 17% of real sales over the last 4 weeks (running 10% low)")
+    assert text.startswith("Forecasts were off by 17% from real sales over 3 graded product-days (running 10% low)")
     assert "67% of days fell inside the 80% range and 100% inside the 95% range" in text
     assert "1 out-of-stock day(s) were left out" in text
     assert evolution.grade([])["wape"] is None and evolution.describe_accuracy(None) is None
@@ -145,7 +145,7 @@ def test_refresh_grades_forecasts_and_is_idempotent(client, settings, history): 
     first = evolution.refresh(settings, llm, embedder, "root.acme")
     assert first["data_through"] == "2026-11-13" and first["forecasted"] == [BRAIN]
     assert first["scored"] == 3 and first["signals_recalculated"]
-    assert first["accuracy_text"].startswith("Forecasts were within ")
+    assert first["accuracy_text"].startswith("Forecasts were off by ")
 
     with psycopg.connect(settings.admin_database_url, row_factory=dict_row) as conn:
         row = conn.execute("""SELECT a.* FROM forecast_accuracy a JOIN forecasts f ON f.id = a.forecast_id
@@ -185,7 +185,7 @@ def test_refresh_grades_forecasts_and_is_idempotent(client, settings, history): 
 
     # The Explore page's evolution tab shows the grade to people who can see the product, not to others.
     body = client.get("/brain/evolution", headers={"X-User-Id": "asha"}).json()
-    assert body["accuracy"]["summary"].startswith("Forecasts were within ")
+    assert body["accuracy"]["summary"].startswith("Forecasts were off by ")
     assert body["accuracy"]["weeks"][0]["forecasts"]["days"] >= 8
     hidden = client.get("/brain/evolution", headers={"X-User-Id": "meera"}).json()
     assert hidden["accuracy"]["recent"] is None and hidden["accuracy"]["weeks"] == []

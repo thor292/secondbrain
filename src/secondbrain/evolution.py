@@ -342,10 +342,10 @@ def realized_accuracy(conn: psycopg.Connection, brain: str, sku: str, days: int 
 
 
 def describe_accuracy(a: dict | None, days: int = 28) -> str | None:
-    """Plain-language grade, e.g. "Forecasts were within 12% of real sales over the last 4 weeks; ..."."""
+    """Plain-language grade, e.g. "Forecasts were off by 12% from real sales over 28 graded days; ..."."""
     if not a or a["wape"] is None:
         return None
-    text = f"Forecasts were within {a['wape']:.0%} of real sales over the last {days // 7} weeks"
+    text = f"Forecasts were off by {a['wape']:.0%} from real sales over {a['days']:,} graded product-days"
     if abs(a["bias"]) >= 0.03:
         text += f" (running {abs(a['bias']):.0%} {'high' if a['bias'] > 0 else 'low'})"
     text += (f"; {a['coverage80']:.0%} of days fell inside the 80% range"

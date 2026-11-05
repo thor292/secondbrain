@@ -60,9 +60,26 @@ def current_state(brain: str) -> tuple[dict, dict, date | None]:
     return products, stock, last
 
 
+def expected_units(brain: str, day: date) -> dict[str, float]:
+    """What each product's latest forecast expects to sell on ``day`` (empty without forecasts)."""
+    try:
+        with psycopg.connect(get_settings().admin_database_url, connect_timeout=3) as conn:
+            return {r[0]: float(r[1]) for r in conn.execute(
+                """SELECT DISTINCT ON (f.sku) f.sku, p.forecast
+                   FROM forecasts f CROSS JOIN LATERAL jsonb_to_recordset(f.points) AS p(day date, forecast float8)
+                   WHERE f.brain_path = %s::ltree AND p.day = %s ORDER BY f.sku, f.created_at DESC""",
+                (brain, day))}
+    except psycopg.OperationalError:
+        return {}
+
+
 def events(company: str, day: date, orders: int, run: str, tz: ZoneInfo, products: dict, stock: dict,
-           seed: int) -> list[tuple[str, dict]]:
-    """(kind, message) pairs in the order they happen."""
+           seed: int, expected: dict[str, float] | None = None) -> list[tuple[str, dict]]:
+    """(kind, message) pairs in the order they happen.
+
+    With ``expected`` (units per product from the forecast), each product
+    sells about that many units, so the live day continues the history at its
+    real scale; otherwise ``orders`` orders of one to three lines."""
     rng = np.random.default_rng(seed)
     n = 0
 
@@ -87,19 +104,31 @@ def events(company: str, day: date, orders: int, run: str, tz: ZoneInfo, product
     # Busier in the evening, like the shop's real traffic.
     slots = np.arange(7, 23.5, 0.25)
     busy = np.where(slots >= 18, 2.0, 1.0)
-    hours = np.sort(rng.choice(slots, size=orders, p=busy / busy.sum()))
-    for i, hour in enumerate(hours):
-        for line in range(int(rng.integers(1, 4))):
-            sku = str(rng.choice(skus, p=weights / weights.sum()))
-            if on_hand[sku] <= 0:
-                continue
-            qty = int(min(on_hand[sku], 1 + rng.poisson(0.3)))
-            on_hand[sku] -= qty
-            out.append(message("sale", {"order_id": f"LH-{run}-{i + 1:04d}", "line_id": str(line + 1), "sku": sku,
-                                        "quantity": qty, "unit_price": products[sku][1], "ts": at(hour)}))
-            if on_hand[sku] == 0 and sku in stock:
-                sold_out.add(sku)
-                out.append(message("stockout", {"sku": sku, "state": "out", "at": at(hour)}))
+    if expected:
+        lines = []
+        for sku in skus:
+            units = int(rng.poisson(max(expected.get(sku, 0.0), 0.0)))
+            while units > 0:
+                qty = min(units, 1 + int(rng.poisson(0.3)))
+                lines.append((sku, qty))
+                units -= qty
+        rng.shuffle(lines)
+        hours = np.sort(rng.choice(slots, size=len(lines), p=busy / busy.sum()))
+        plan = [(i, 0, hour, sku, qty) for i, (hour, (sku, qty)) in enumerate(zip(hours, lines))]
+    else:
+        hours = np.sort(rng.choice(slots, size=orders, p=busy / busy.sum()))
+        plan = [(i, line, hour, str(rng.choice(skus, p=weights / weights.sum())), 1 + int(rng.poisson(0.3)))
+                for i, hour in enumerate(hours) for line in range(int(rng.integers(1, 4)))]
+    for i, line, hour, sku, wanted in plan:
+        if on_hand[sku] <= 0:
+            continue
+        qty = int(min(on_hand[sku], wanted))
+        on_hand[sku] -= qty
+        out.append(message("sale", {"order_id": f"LH-{run}-{i + 1:04d}", "line_id": str(line + 1), "sku": sku,
+                                    "quantity": qty, "unit_price": products[sku][1], "ts": at(hour)}))
+        if on_hand[sku] == 0 and sku in stock:
+            sold_out.add(sku)
+            out.append(message("stockout", {"sku": sku, "state": "out", "at": at(hour)}))
     first_sale = next(m for k, m in out if k == "sale")["data"]
     out.append(message("sale", {**first_sale, "quantity": 1, "kind": "return", "ts": at(21)}))
     if "halo-lamp" in stock:
@@ -153,8 +182,9 @@ def send_http(args, items: list[tuple[str, dict]]) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--day", type=date.fromisoformat, help="business day (default: after the last sales day)")
-    parser.add_argument("--orders", type=int, default=40)
-    parser.add_argument("--delay", type=float, default=0.1, help="seconds between messages")
+    parser.add_argument("--orders", type=int, default=40, help="orders when there are no forecasts")
+    parser.add_argument("--orders-only", action="store_true", help="send --orders orders, ignoring the forecast")
+    parser.add_argument("--delay", type=float, default=0.01, help="seconds between messages")
     parser.add_argument("--run", help="event id prefix (default: the day); reuse it to replay")
     parser.add_argument("--tz", default="America/New_York", help="the business's time zone")
     parser.add_argument("--seed", type=int, default=11)
@@ -172,8 +202,9 @@ def main() -> None:
     company, brain = lumen()
     products, stock, last = current_state(brain)
     day = args.day or (last + timedelta(days=1) if last else date.today())
+    expected = {} if args.orders_only else expected_units(brain, day)
     items = events(company, day, args.orders, args.run or day.isoformat(), ZoneInfo(args.tz), products, stock,
-                   args.seed)
+                   args.seed, expected)
     if args.dry_run:
         for kind, m in items:
             print(kind, json.dumps(m))
