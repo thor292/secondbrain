@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from psycopg.rows import dict_row
 from pydantic import BaseModel
 
-from secondbrain import admin, evolution, learning, maintenance, relationships, signals, tree
+from secondbrain import admin, demo, evolution, learning, maintenance, relationships, signals, tree
 from secondbrain.documents import UnsupportedDocument, extract_text
 from secondbrain.forecasting.api import build_router as forecast_router
 from secondbrain.graph import build_full_graph
@@ -222,13 +222,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     class Simulation(BaseModel):
         company: str = "root.lumen"
         days: int = 14
+        policy: Literal["as_is", "follow", "ignore"] = "as_is"
 
     @app.post("/admin/simulate", dependencies=[Depends(require_admin)])
     def simulate(body: Simulation, brain: Brain):
         """Demo only: move a company's clock forward, judge outcomes, recalculate."""
         if not 1 <= body.days <= 90:
             raise HTTPException(400, "days must be between 1 and 90")
-        return evolution.advance(settings, brain.llm, brain.embedder, body.company, body.days)
+        return evolution.advance(settings, brain.llm, brain.embedder, body.company, body.days, policy=body.policy)
+
+    @app.post("/admin/demo/reset", dependencies=[Depends(require_admin)])
+    def reset_demo():
+        """Demo only: put sales, stock, forecasts and signals back to the saved starting point."""
+        if not settings.demo_mode:
+            raise HTTPException(404, "Not available outside demo mode")
+        with psycopg.connect(settings.admin_database_url, row_factory=dict_row) as conn:
+            try:
+                return demo.restore(conn)
+            except demo.NoSnapshot as exc:
+                raise HTTPException(409, str(exc))
 
     class Refresh(BaseModel):
         company: str

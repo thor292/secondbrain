@@ -199,7 +199,14 @@ Admin API: `POST /admin/maintain` and `POST /admin/learn`.
 - **SecondBrain HQ** at `http://localhost:8765/hq` (admin token): the root
   brain's view of every connected business — signals, money at stake, outcomes,
   track record, lessons at the root. Aggregates only, never a business's notes.
-- **Moving time forward (demo only)**: HQ's "Simulate 14/28 days" or
+- **Time machine (demo only)**: in HQ, pick a business, whether it *follows*
+  or *ignores* the brain (or keeps people's own answers), and 2/4/8 weeks. It
+  shows the date jump, sales missed to empty shelves, money saved by acting,
+  each product's stock day by day, and the brain's next moves. **Reset demo**
+  (`POST /admin/demo/reset`, `python -m secondbrain.demo restore`) puts sales,
+  stock, forecasts and signals back to the starting point saved by
+  `scripts/load_examples.sh`, so both choices can be shown from the same start.
+- **Moving time forward (demo only)**: the time machine or
   `uv run python -m secondbrain.evolution --days 28` draws sales from the
   forecast with randomness, runs stock down, delivers orders placed by acting
   on signals after the lead time, then runs the same refresh real sales go

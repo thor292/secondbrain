@@ -204,6 +204,7 @@ def create_schema(settings: Settings | None = None, reset: bool = False) -> None
     settings = settings or get_settings()
     with psycopg.connect(settings.admin_database_url) as conn:
         if reset:
+            conn.execute("DROP SCHEMA IF EXISTS demo_snapshot CASCADE")  # a saved demo state belongs to the old data
             conn.execute(ingest_store.DROP_SQL)
             conn.execute(evolution_schema.DROP_SQL)
             conn.execute(signals_schema.DROP_SQL)

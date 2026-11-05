@@ -189,3 +189,50 @@ def test_refresh_grades_forecasts_and_is_idempotent(client, settings, history): 
     assert body["accuracy"]["weeks"][0]["forecasts"]["days"] >= 8
     hidden = client.get("/brain/evolution", headers={"X-User-Id": "meera"}).json()
     assert hidden["accuracy"]["recent"] is None and hidden["accuracy"]["weeks"] == []
+
+
+def _acme_with_stock(settings, history):  # noqa: F811
+    load_acme_sales(settings, history)
+    run_forecasts(settings.admin_database_url, under="root.acme", horizon=56)
+    with psycopg.connect(settings.admin_database_url) as conn:
+        daily = {sku: sum(p["forecast"] for p in store.latest_forecast(conn, "root.acme.sales", sku)["points"]) / 56
+                 for sku in ("halo-lamp", "cloud-throw")}
+        store.save_inventory(conn, "root.acme.sales", [
+            {"sku": "halo-lamp", "as_of": date(2026, 11, 4), "on_hand": int(daily["halo-lamp"] * 30), "on_order": 0,
+             "order_eta": None, "supplier": "Lampworks", "lead_time_days": 14, "unit_cost": 150},
+            {"sku": "cloud-throw", "as_of": date(2026, 11, 4), "on_hand": int(daily["cloud-throw"] * 25), "on_order": 0,
+             "order_eta": None, "supplier": "Weavers", "lead_time_days": 14, "unit_cost": 46},
+        ])
+
+
+def test_following_the_brain_beats_ignoring_it_from_the_same_start(client, settings, history):  # noqa: F811
+    from secondbrain import demo, signals
+
+    _acme_with_stock(settings, history)
+    llm, embedder = build_models(settings)
+    signals.run(settings, llm, "root.acme")
+    with psycopg.connect(settings.admin_database_url, row_factory=dict_row) as conn:
+        demo.save(conn)
+
+    ignored = evolution.advance(settings, llm, embedder, "root.acme", days=56, policy="ignore")
+    with psycopg.connect(settings.admin_database_url, row_factory=dict_row) as conn:
+        restored = demo.restore(conn)
+        assert restored["today"] == "2026-11-04" and restored["outcome_memories_removed"] > 0
+        assert conn.execute("SELECT count(*) AS n FROM signal_outcomes").fetchone()["n"] == 0
+    followed = evolution.advance(settings, llm, embedder, "root.acme", days=56, policy="follow")
+
+    assert ignored["before"] == followed["before"]
+    assert ignored["after"]["came_true"] >= 1 and ignored["after"]["lost"] > 0 and ignored["acted"] == 0
+    assert followed["acted"] >= 2 and followed["after"]["prevented"] >= 1
+    assert followed["after"]["lost"] < ignored["after"]["lost"]
+    lamp = followed["products"]["halo-lamp"]
+    assert len(lamp["days"]) == len(lamp["stock"]) == len(lamp["demand"]) == 56 and lamp["arrived_on"]
+    assert ignored["products"]["halo-lamp"]["out_of_stock_days"] > lamp["out_of_stock_days"]
+
+
+def test_simulate_endpoint_takes_a_policy_and_reset_needs_a_snapshot(client):
+    from tests.conftest import ADMIN_TOKEN
+
+    headers = {"X-Admin-Token": ADMIN_TOKEN}
+    assert client.post("/admin/simulate", json={"days": 7, "policy": "maybe"}, headers=headers).status_code == 422
+    assert client.post("/admin/demo/reset", headers=headers).status_code == 409

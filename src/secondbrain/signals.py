@@ -774,9 +774,10 @@ def business_signals(conn: psycopg.Connection, llm: LLM, company: str,
     return out
 
 
-def generate(conn: psycopg.Connection, llm: LLM, company: str) -> list[Signal]:
+def generate(conn: psycopg.Connection, llm: LLM, company: str, business: bool = True) -> list[Signal]:
     """Replace a company's open signals with fresh ones. Signals someone acted on
-    or dismissed recently are not raised again.
+    or dismissed recently are not raised again. ``business=False`` recalculates
+    only the stock signals and keeps the open advice from notes (no AI call).
 
     "Recently" is measured on the business's own clock for stock signals (the
     date of its stock data, which runs ahead of the wall clock in a simulation)
@@ -792,9 +793,10 @@ def generate(conn: psycopg.Connection, llm: LLM, company: str) -> list[Signal]:
         (company, QUIET_DAYS, today, QUIET_DAYS),
     ).fetchall()}
     records = learned_records(conn, company)
-    fresh = [s for s in stock_signals(conn, company, records) + business_signals(conn, llm, company, records)
-             if s.fingerprint not in quiet]
-    conn.execute("DELETE FROM signals WHERE company = %s::ltree AND status = 'open'", (company,))
+    advice = business_signals(conn, llm, company, records) if business else []
+    fresh = [s for s in stock_signals(conn, company, records) + advice if s.fingerprint not in quiet]
+    conn.execute("DELETE FROM signals WHERE company = %s::ltree AND status = 'open'"
+                 + ("" if business else " AND kind <> 'business'"), (company,))
     for s in fresh:
         conn.execute(
             """INSERT INTO signals (company, kind, fingerprint, title, action, reason, impact, impact_value,

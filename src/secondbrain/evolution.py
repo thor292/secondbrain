@@ -121,6 +121,12 @@ class ProductDays:
     lost: int = 0
     out_of_stock_days: list[date] = field(default_factory=list)
     arrivals: list[str] = field(default_factory=list)
+    price: float = 0.0
+    # Day by day, for the demo's charts: stock at the end of the day and demand.
+    days: list[date] = field(default_factory=list)
+    stock: list[int] = field(default_factory=list)
+    demand: list[int] = field(default_factory=list)
+    arrived_on: list[date] = field(default_factory=list)
 
 
 def _fmt(d: date) -> str:
@@ -189,12 +195,13 @@ def simulate(conn: psycopg.Connection, brain: str, days: int, rng: np.random.Gen
         tail = forecast["points"][-1]["forecast"]
         stock = r["on_hand"] if r["tracked"] else 10**9
         on_order, eta = r["on_order"] or 0, r["order_eta"]
-        days_out = ProductDays(r["sku"], r["name"])
+        days_out = ProductDays(r["sku"], r["name"], price=r["price"])
         for i in range(days):
             day = first + timedelta(days=i)
             if on_order and eta and day >= eta:
                 stock += on_order
                 days_out.arrivals.append(f"{on_order:,} units on order arrived {_fmt(day)}")
+                days_out.arrived_on.append(day)
                 on_order, eta = 0, None
             demand = int(rng.poisson(max(points.get(day, {"forecast": tail})["forecast"], 0.1)))
             sold = min(demand, stock)
@@ -203,6 +210,9 @@ def simulate(conn: psycopg.Connection, brain: str, days: int, rng: np.random.Gen
                 days_out.out_of_stock_days.append(day)
             days_out.sold += sold
             days_out.lost += demand - sold
+            days_out.days.append(day)
+            days_out.stock.append(stock)
+            days_out.demand.append(demand)
             discount = max((p["discount"] for p in promos
                             if p["starts"] <= day <= p["ends"] and p["sku"] in (None, r["sku"])), default=0.0)
             price = round(r["price"] * (1 - discount), 2)
@@ -509,8 +519,11 @@ def _stale_brains(conn: psycopg.Connection, company: str) -> list[str]:
     ).fetchall()]
 
 
-def company_accuracy(conn: psycopg.Connection, company: str, days: int = 28) -> dict | None:
-    """``realized_accuracy`` summed over every product under a brain (admin connection)."""
+def company_accuracy(conn: psycopg.Connection, company: str, days: int = 90) -> dict | None:
+    """``realized_accuracy`` summed over every product under a brain (admin connection).
+
+    Forecasts are graded on their first 4 weeks, so a quarter-long window
+    still has grades after a long jump forward in the demo."""
     with conn.cursor(row_factory=dict_row) as cur:
         return _summary(cur.execute(
             f"""SELECT {_SUMS} FROM forecast_accuracy
@@ -564,24 +577,118 @@ def refresh(settings: Settings, llm: LLM, embedder: Embedder, company: str) -> d
     return summary
 
 
-def advance(settings: Settings, llm: LLM, embedder: Embedder, company: str, days: int, seed: int = 7) -> dict:
-    """Demo: move a company forward by ``days`` of simulated sales, then refresh."""
+POLICIES = ("as_is", "follow", "ignore")
+
+
+def follow_advice(conn: psycopg.Connection, company: str) -> int:
+    """Demo: act on every open run-out warning, as a business following the brain would."""
+    return conn.execute(
+        """UPDATE signals SET status = 'acted', feedback_by = NULL, feedback_at = now(),
+                              feedback_note = 'Followed the brain''s advice (simulation)'
+           WHERE company = %s::ltree AND kind = 'stockout' AND status = 'open'""",
+        (company,),
+    ).rowcount
+
+
+def snapshot(conn: psycopg.Connection, company: str) -> dict:
+    """The few numbers that show a company's brain moving: its date, what is
+    at stake now, what acting saved and ignoring lost, and forecast error."""
+    row = conn.execute(
+        """SELECT (SELECT max(as_of) FROM inventory WHERE brain_path <@ %(c)s::ltree) AS today,
+                  (SELECT count(*) FROM signals WHERE company = %(c)s::ltree AND status = 'open') AS open_signals,
+                  (SELECT coalesce(sum(impact_value), 0)::float FROM signals
+                    WHERE company = %(c)s::ltree AND status = 'open') AS at_stake""",
+        {"c": company},
+    ).fetchone()
+    results = {r["result"]: r for r in conn.execute(
+        """SELECT o.result, count(*) AS n, coalesce(sum(o.value), 0)::float AS value FROM signal_outcomes o
+           JOIN signals s ON s.id = o.signal_id WHERE s.company = %s::ltree GROUP BY o.result""", (company,))}
+    get = lambda k, f: results[k][f] if k in results else 0
+    accuracy = company_accuracy(conn, company)
+    return {
+        "today": row["today"].isoformat() if row["today"] else None,
+        "open_signals": row["open_signals"],
+        "at_stake": row["at_stake"],
+        "saved": get("prevented", "value"),
+        "lost": -(get("happened", "value") + get("happened_anyway", "value")),
+        "prevented": get("prevented", "n"),
+        "came_true": get("happened", "n") + get("happened_anyway", "n"),
+        "false_alarms": get("false_alarm", "n"),
+        "forecast_error": accuracy["wape"] if accuracy else None,
+    }
+
+
+def advance(settings: Settings, llm: LLM, embedder: Embedder, company: str, days: int, seed: int = 7,
+            policy: str = "as_is", step: int = 7) -> dict:
+    """Demo: move a company forward by ``days`` of simulated sales, then refresh.
+
+    ``policy`` decides what the business does with run-out warnings: "as_is"
+    keeps what people chose, "follow" acts on every warning as it appears
+    (checked every ``step`` days, so warnings raised along the way are acted on
+    too), "ignore" leaves them unanswered. Returns before/after numbers and
+    each product's day-by-day stock for the charts.
+    """
+    from secondbrain import signals as signals_module
+
+    if policy not in POLICIES:
+        raise ValueError(f"policy must be one of {POLICIES}")
     rng = np.random.default_rng(seed)
-    summary = {"company": company, "days": days, "products": {}, "outcomes": []}
+    summary = {"company": company, "days": days, "policy": policy, "products": {}, "outcomes": [], "acted": 0}
+    series: dict[str, ProductDays] = {}
     with psycopg.connect(settings.admin_database_url, row_factory=dict_row) as conn:
+        ensure_schema(conn)
+        summary["before"] = snapshot(conn, company)
         brains = [r["brain"] for r in conn.execute(
             "SELECT DISTINCT brain_path::text AS brain FROM inventory WHERE brain_path <@ %s::ltree ORDER BY 1", (company,))]
-        for brain in brains:
-            first, last, simulated = simulate(conn, brain, days, rng)
-            summary["from"], summary["to"] = first.isoformat(), last.isoformat()
-            summary["products"].update({k: {"sold": v.sold, "lost": v.lost, "out_of_stock_days": len(v.out_of_stock_days),
-                                            "arrivals": v.arrivals} for k, v in simulated.items()})
-        conn.commit()
     if not brains:
         return summary
+    remaining = days
+    while remaining > 0:
+        chunk = min(step, remaining) if policy == "follow" else remaining
+        with psycopg.connect(settings.admin_database_url, row_factory=dict_row) as conn:
+            if policy == "follow":
+                summary["acted"] += follow_advice(conn, company)
+            for brain in brains:
+                first, last, simulated = simulate(conn, brain, chunk, rng)
+                summary.setdefault("from", first.isoformat())
+                summary["to"] = last.isoformat()
+                for sku, part in simulated.items():
+                    _extend(series, sku, part)
+            conn.commit()
+            remaining -= chunk
+            if remaining > 0:
+                # Between steps: judge what came due and raise new run-out
+                # warnings from the current forecasts; no re-forecast or AI calls.
+                summary["outcomes"] += judge(conn, embedder, settings, company)["outcomes"]
+                conn.commit()
+                signals_module.generate(conn, llm, company, business=False)
     result = refresh(settings, llm, embedder, company)
-    summary.update({k: result[k] for k in ("outcomes", "expired", "waiting", "signals", "accuracy", "accuracy_text")})
+    summary.update({k: result[k] for k in ("expired", "waiting", "signals", "accuracy", "accuracy_text")})
+    summary["outcomes"] += result["outcomes"]
+    with psycopg.connect(settings.admin_database_url, row_factory=dict_row) as conn:
+        summary["after"] = snapshot(conn, company)
+        summary["top_signals"] = [dict(r) for r in conn.execute(
+            """SELECT kind, title, action, urgency, impact_value::float AS impact_value, due FROM signals
+               WHERE company = %s::ltree AND status = 'open'
+               ORDER BY CASE urgency WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END, impact_value DESC NULLS LAST
+               LIMIT 5""", (company,))]
+    summary["products"] = {sku: {"name": p.name, "sold": p.sold, "lost": p.lost, "lost_value": round(p.lost * p.price),
+                                 "out_of_stock_days": len(p.out_of_stock_days), "arrivals": p.arrivals,
+                                 "days": [d.isoformat() for d in p.days], "stock": p.stock, "demand": p.demand,
+                                 "arrived_on": [d.isoformat() for d in p.arrived_on]}
+                           for sku, p in series.items()}
     return summary
+
+
+def _extend(series: dict[str, ProductDays], sku: str, part: ProductDays) -> None:
+    if sku not in series:
+        series[sku] = part
+        return
+    whole = series[sku]
+    whole.sold += part.sold
+    whole.lost += part.lost
+    for name in ("out_of_stock_days", "arrivals", "days", "stock", "demand", "arrived_on"):
+        getattr(whole, name).extend(getattr(part, name))
 
 
 def main() -> None:
