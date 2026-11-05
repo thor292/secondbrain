@@ -62,7 +62,7 @@ def build_router() -> APIRouter:
         ahead, adjustment = nowcast.adjust(stored["points"], actuals)
         if horizon > len(ahead):
             raise HTTPException(400, f"Forecasts reach {len(ahead)} days ahead; ask for fewer")
-        chosen = stored["backtest"][stored["model"]]
+        chosen = stored["backtest"].get(stored["model"], {})
         if stock:
             projection = signals.project_stock(stock["on_hand"], stock["on_order"], stock["order_eta"], ahead)
             stock = {**stock, "projection": [{"day": d, "stock": round(v, 1)} for d, v in projection],
@@ -74,7 +74,9 @@ def build_router() -> APIRouter:
             "trained_through": cutoff,
             "created_at": stored["created_at"],
             "backtest": stored["backtest"],
-            "expected_error": {"wape": chosen["wape"], "mase": chosen["mase"]},
+            "expected_error": {"wape": chosen.get("wape"), "mase": chosen.get("mase")},
+            # How far to trust it (grade, coverage of the ranges, data warnings); None for old forecasts.
+            "quality": stored.get("quality"),
             "adjustment": vars(adjustment),
             "forecast": ahead[:horizon],
             "history": [{"day": s["day"], "units": s["units"], "in_stock": s["in_stock"]}

@@ -5,25 +5,48 @@ history up to then and forecast the next ``horizon`` days, which we already
 know. Windows are the most recent periods plus the same weeks last year, so a
 model that misses the holiday season can't win on quiet October weeks alone.
 
-Prediction intervals come from the chosen model's own backtest errors
-(empirical, like split conformal prediction), not from a model's assumptions.
+Real catalogues are uneven, so every product gets the test its history allows:
+
+- a full history gets full-length windows;
+- a shorter one (a product launched this spring) gets shorter windows, and
+  only the models that can work on it compete (no year-over-year without a
+  last year);
+- a product too new for any test gets a **cold start**: its recent average,
+  shaped by the rest of the shop's forecast (weekdays, promotions, Black
+  Friday), with wide ranges;
+- a product that stopped selling (or never sold) is forecast at zero rather
+  than at its old average forever.
+
+The model is chosen by WAPE, except for products that sell only now and then:
+WAPE rewards forecasting zero for those, so RMSSE (squared error, which is
+smallest at the average rate) chooses, among Croston-type models built for
+them. Days that say nothing about demand (out of stock, missing from the
+feed, one-off bulk orders) never count in a score.
+
+Prediction intervals come from the chosen model's own backtest errors,
+calibrated by cross-validation over the windows (see ``intervals``), and every
+forecast carries a ``quality`` grade (see ``quality``).
 """
 
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 import numpy as np
 import pandas as pd
 
-from secondbrain.forecasting import metrics
-from secondbrain.forecasting.models import YEAR, Model, NotEnoughHistory, default_models, demand
+from secondbrain.forecasting import intervals, metrics, prepare, quality
+from secondbrain.forecasting.models import YEAR, Model, default_models
 
 DEFAULT_HORIZON = 56  # eight weeks: from early November it reaches past Christmas
 RECENT_WINDOWS = 3
-LEVELS = (80, 95)
+LEVELS = intervals.LEVELS
+MIN_TRAIN = 28  # days of history a model needs at the start of a window
+SHORT_WINDOWS = (56, 28, 14, 7)  # window lengths to fall back to for short histories
+ASSUMED_WAPE = 0.6  # reported for a forecast that could not be tested: assume it is rough
 
 
-@dataclass
+@dataclass(frozen=True)
 class Window:
     origin: date  # last day the models see
     horizon: int
@@ -35,8 +58,11 @@ class ProductForecast:
     sku: str
     model: str
     reason: str
-    scores: dict  # model -> {wape, mase, smape, bias, windows: {label: wape}}
+    scores: dict  # model -> {wape, mase, smape, bias, rmsse, windows: {label: wape}}
     points: list[dict] = field(default_factory=list)
+    quality: dict = field(default_factory=dict)
+    # Only when asked for: every eligible model's points and held-out coverage.
+    candidates: dict = field(default_factory=dict)
 
 
 def windows(cutoff: date, start: date, horizon: int) -> list[Window]:
@@ -51,126 +77,248 @@ def windows(cutoff: date, start: date, horizon: int) -> list[Window]:
     return [w for w in found if (w.origin - start).days >= 3 * horizon]
 
 
+def plan_for(cutoff: date, start: date, horizon: int) -> list[Window]:
+    """Full-length windows when the history allows, else the longest shorter ones that fit."""
+    full = windows(cutoff, start, horizon)
+    if full:
+        return full
+    # Two or more windows if possible, so the ranges can be checked on a window they didn't see.
+    options = []
+    for length in SHORT_WINDOWS:
+        if length >= horizon:
+            continue
+        found = [Window(cutoff - timedelta(days=k * length), length, f"recent {k}")
+                 for k in range(1, RECENT_WINDOWS + 1)]
+        options.append([w for w in found if (w.origin - start).days + 1 >= max(MIN_TRAIN, 2 * length)])
+    return next((o for o in options if len(o) >= 2), next((o for o in options if o), []))
+
+
 def future_frame(skus: list[str], first: date, horizon: int, promotions: list[dict]) -> pd.DataFrame:
     """Days to forecast for each product, with the discount planned for each day."""
     days = pd.date_range(first, periods=horizon, freq="D")
-    rows = []
-    for sku in skus:
-        for day in days:
-            discount = max((p["discount"] for p in promotions
-                            if p["starts"] <= day.date() <= p["ends"] and p["sku"] in (None, sku)),
-                           default=0.0)
-            rows.append({"sku": sku, "day": day, "discount": discount})
-    return pd.DataFrame(rows)
+    dates = days.date
+    sitewide = np.zeros(horizon)
+    own: dict[str, np.ndarray] = defaultdict(lambda: np.zeros(horizon))
+    for p in promotions:
+        active = (dates >= p["starts"]) & (dates <= p["ends"])
+        if not active.any():
+            continue
+        target = sitewide if p["sku"] is None else own[p["sku"]]
+        np.maximum(target, np.where(active, float(p["discount"]), 0.0), out=target)
+    frames = [pd.DataFrame({"sku": sku, "day": days, "discount": np.maximum(sitewide, own[sku])}) for sku in skus]
+    if not frames:
+        return pd.DataFrame(columns=["sku", "day", "discount"])
+    return pd.concat(frames, ignore_index=True)
 
 
-def _frame(sales: list[dict]) -> pd.DataFrame:
-    df = pd.DataFrame(sales)
-    df["day"] = pd.to_datetime(df["day"])
-    df["discount"] = df["discount"].astype(float)
-    df["in_stock"] = df["in_stock"].astype(bool)
-    return df
+def _can(model: Model, profile: prepare.Profile, history_days: int, horizon: int) -> bool:
+    if model.intermittent_only and not profile.intermittent:
+        return False
+    return history_days >= model.min_history(horizon)
 
 
-def _score(model: Model, history: pd.DataFrame, test: pd.DataFrame) -> pd.DataFrame | None:
-    """Forecast a window and return rows (sku, actual, forecast, in_stock) with training scale."""
-    future = test[["sku", "day", "discount"]].reset_index(drop=True)
-    try:
-        forecast = model.forecast(history, future)
-    except NotEnoughHistory:
-        return None
-    if np.isnan(forecast).any():
-        return None
-    return test.reset_index(drop=True).assign(forecast=forecast)
+def _span(profile: prepare.Profile, origin: date) -> int:
+    return (origin - profile.start).days + 1
 
 
-def run(sales: list[dict], promotions: list[dict], horizon: int = DEFAULT_HORIZON,
-        models: list[Model] | None = None) -> list[ProductForecast]:
-    """Backtest, choose a model per product and forecast ``horizon`` days after the last sale."""
-    models = models or default_models()
-    df = _frame(sales)
-    cutoff, start = df["day"].max().date(), df["day"].min().date()
-    plan = windows(cutoff, start, horizon)
-    if not plan:
-        raise ValueError(f"Need at least {4 * horizon} days of history to backtest")
-
-    # errors[model][sku] -> [(window label, scored rows, training demand)]
-    errors: dict[str, dict[str, list[tuple[str, pd.DataFrame, np.ndarray]]]] = {}
-    skipped: set[str] = set()
-    for w in plan:
-        origin = pd.Timestamp(w.origin)
-        history = df[df["day"] <= origin]
-        test = df[(df["day"] > origin) & (df["day"] <= origin + pd.Timedelta(days=w.horizon))]
-        train_demand = demand(history)
-        for model in models:
-            scored = _score(model, history, test)
-            if scored is None:
-                skipped.add(model.name)
-                continue
-            for sku, rows in scored.groupby("sku"):
-                train = train_demand.loc[train_demand["sku"] == sku, "demand"].to_numpy()
-                errors.setdefault(model.name, {}).setdefault(sku, []).append((w.label, rows, train))
-
-    # A model only competes if it ran on every window.
-    eligible = [m for m in models if m.name not in skipped]
-    if not eligible:
-        raise ValueError("No model could run on every backtest window")
-
-    skus = sorted(df["sku"].unique())
-    future = future_frame(skus, cutoff + timedelta(days=1), horizon, promotions)
-    finals = {m.name: m.forecast(df, future) for m in eligible}
-
-    results = []
-    for sku in skus:
-        scores = {m.name: _summarize(errors[m.name][sku]) for m in eligible}
-        ranked = sorted(scores, key=lambda name: scores[name]["wape"])
-        best = ranked[0]
-        rows = future["sku"] == sku
-        points = _with_intervals(future.loc[rows, "day"], finals[best][rows.to_numpy()],
-                                 errors[best][sku])
-        results.append(ProductForecast(sku, best, _reason(best, ranked, scores, models, plan), scores, points))
-    return results
+def _backtest(data: pd.DataFrame, profiles: dict, plans: dict, models: list[Model]) -> dict:
+    """(model, sku) -> {window label: (scored rows, training demand)} for every window a model managed."""
+    groups: dict[tuple, list[str]] = defaultdict(list)
+    for sku, plan in plans.items():
+        if plan:
+            groups[tuple(plan)].append(sku)
+    out: dict[tuple[str, str], dict] = {}
+    for plan, group in groups.items():
+        for w in plan:
+            origin = pd.Timestamp(w.origin)
+            history = data[data["day"] <= origin]
+            test = data[(data["day"] > origin) & (data["day"] <= origin + pd.Timedelta(days=w.horizon))
+                        & data["sku"].isin(group)].reset_index(drop=True)
+            for model in models:
+                ok = [s for s in group if _can(model, profiles[s], _span(profiles[s], w.origin), w.horizon)]
+                if not ok:
+                    continue
+                rows = test[test["sku"].isin(ok)].reset_index(drop=True)
+                forecast = np.clip(model.forecast(history, rows[["sku", "day", "discount"]]), 0, None)
+                rows = rows.assign(forecast=forecast, step=(rows["day"] - origin).dt.days, window=w.label)
+                for sku, r in rows.groupby("sku"):
+                    if np.isfinite(r["forecast"]).all():
+                        train = history.loc[history["sku"] == sku, "demand"].to_numpy(float)
+                        out.setdefault((model.name, sku), {})[w.label] = (r, train)
+    return out
 
 
-def _summarize(per_window: list[tuple[str, pd.DataFrame, np.ndarray]]) -> dict:
+def _summarize(per_window: dict) -> dict:
     by_window = {}
-    for label, rows, train in per_window:
-        sold = rows[rows["in_stock"]]  # out-of-stock days say nothing about forecast quality
+    for label, (rows, train) in per_window.items():
+        sold = rows[rows["known"]]  # out-of-stock, missing and one-off days say nothing about quality
         a, f = sold["units"].to_numpy(float), sold["forecast"].to_numpy(float)
         by_window[label] = {
             "wape": metrics.wape(a, f), "mase": metrics.mase(a, f, train),
-            "smape": metrics.smape(a, f), "bias": metrics.bias(a, f),
+            "smape": metrics.smape(a, f) if len(a) else float("nan"), "bias": metrics.bias(a, f),
+            "rmsse": metrics.rmsse(a, f, train),
         }
-    mean = {k: float(np.nanmean([w[k] for w in by_window.values()])) for k in ("wape", "mase", "smape", "bias")}
-    return {**{k: round(v, 4) for k, v in mean.items()},
-            "windows": {label: round(w["wape"], 4) for label, w in by_window.items()}}
+    summary = {}
+    for k in ("wape", "mase", "smape", "bias", "rmsse"):
+        values = [w[k] for w in by_window.values() if np.isfinite(w[k])]
+        summary[k] = round(float(np.mean(values)), 4) if values else None
+    summary["windows"] = {label: (round(w["wape"], 4) if np.isfinite(w["wape"]) else None)
+                          for label, w in by_window.items()}
+    return summary
 
 
-def _with_intervals(days: pd.Series, forecast: np.ndarray,
-                    per_window: list[tuple[str, pd.DataFrame, np.ndarray]]) -> list[dict]:
-    """Intervals from the model's relative backtest errors, so they widen with the forecast."""
-    rows = pd.concat([r for _, r, _ in per_window])
-    rows = rows[rows["in_stock"] & (rows["forecast"] > 0.5)]
-    ratio = (rows["units"] - rows["forecast"]) / rows["forecast"]
-    points = []
-    for day, value in zip(days, forecast):
-        point = {"day": day.date().isoformat(), "forecast": round(float(value), 1)}
-        for level in LEVELS:
-            lo, hi = np.quantile(ratio, [(100 - level) / 200, 1 - (100 - level) / 200])
-            point[f"lo{level}"] = round(max(0.0, float(value * (1 + lo))), 1)
-            point[f"hi{level}"] = round(float(value * (1 + hi)), 1)
-        points.append(point)
-    return points
+def _rank_key(intermittent: bool):
+    big = float("inf")
+
+    def key(item):
+        name, s = item
+        wape = s["wape"] if s["wape"] is not None else big
+        rmsse = s["rmsse"] if s["rmsse"] is not None else big
+        return (rmsse, wape, name) if intermittent else (wape, rmsse, name)
+    return key
 
 
-def _reason(best: str, ranked: list[str], scores: dict, models: list[Model], plan: list[Window]) -> str:
+def _residuals(per_window: dict) -> pd.DataFrame:
+    rows = pd.concat([r for r, _ in per_window.values()], ignore_index=True)
+    return rows.loc[rows["known"], ["window", "step", "day", "units", "forecast"]]
+
+
+def run(sales: list[dict], promotions: list[dict], horizon: int = DEFAULT_HORIZON,
+        models: list[Model] | None = None, candidates: bool = False) -> list[ProductForecast]:
+    """Backtest, choose a model per product and forecast ``horizon`` days after the last sale."""
+    models = models or default_models()
+    data = prepare.panel(sales)
+    if data.empty:
+        return []
+    cutoff_ts = data["day"].max()
+    cutoff = cutoff_ts.date()
+    skus = sorted(data["sku"].unique())
+    profiles = {sku: prepare.profile(rows, cutoff_ts) for sku, rows in data.groupby("sku")}
+    active = [s for s in skus if profiles[s].status == "active"]
+    plans = {s: plan_for(cutoff, profiles[s].start, horizon) for s in active}
+    scored = _backtest(data, profiles, plans, models)
+
+    # Models that ran on every window of a product's plan compete for it.
+    eligible = {s: [m for m in models if plans[s] and len(scored.get((m.name, s), {})) == len(plans[s])
+                    and _can(m, profiles[s], profiles[s].history_days, horizon)] for s in active}
+    future = future_frame(active, cutoff + timedelta(days=1), horizon, promotions)
+    finals: dict[str, dict[str, np.ndarray]] = defaultdict(dict)
+    for model in models:
+        wanted = [s for s in active if model in eligible[s]]
+        if not wanted:
+            continue
+        rows = future[future["sku"].isin(wanted)].reset_index(drop=True)
+        values = np.clip(model.forecast(data, rows), 0, None)
+        for sku in wanted:
+            v = values[(rows["sku"] == sku).to_numpy()]
+            if len(v) == horizon and np.isfinite(v).all():
+                finals[sku][model.name] = v
+
+    results: dict[str, ProductForecast] = {}
     describe = {m.name: m.description for m in models}
+    days = pd.date_range(cutoff + timedelta(days=1), periods=horizon, freq="D")
+    for sku in active:
+        p = profiles[sku]
+        scores = {name: _summarize(scored[(name, sku)]) for name in finals[sku]}
+        if not scores:
+            continue
+        ranked = [name for name, _ in sorted(scores.items(), key=_rank_key(p.intermittent))]
+        best = ranked[0]
+        if scores[best]["wape"] is None:  # no sales in any test window: nothing to measure against
+            scores[best] = {**scores[best], "wape": ASSUMED_WAPE, "estimated": True}
+        cal = intervals.calibrate(_residuals(scored[(best, sku)]))
+        plan = plans[sku]
+        result = ProductForecast(
+            sku, best, _reason(best, ranked, scores, describe, plan, p.intermittent), scores,
+            intervals.points(days, finals[sku][best], cal))
+        result.quality = quality.assess(p, best, scores[best], len(plan), plan[0].horizon, horizon, cal.coverage)
+        if candidates:
+            for name in ranked:
+                c = intervals.calibrate(_residuals(scored[(name, sku)]))
+                result.candidates[name] = {"points": intervals.points(days, finals[sku][name], c),
+                                           "coverage": c.coverage}
+        results[sku] = result
+
+    shape = _shop_shape(results, profiles, plans, horizon)
+    for sku in skus:
+        if sku in results:
+            continue
+        p = profiles[sku]
+        if p.status == "active":
+            results[sku] = _cold_start(p, data[data["sku"] == sku], days, shape, horizon)
+        else:
+            results[sku] = _zero(p, days, horizon)
+    return [results[s] for s in skus]
+
+
+def _shop_shape(results: dict, profiles: dict, plans: dict, horizon: int) -> np.ndarray | None:
+    """The shop's forecast day by day, relative to its recent level, from fully tested products."""
+    mature = [s for s, r in results.items() if plans[s] and plans[s][0].horizon == horizon
+              and profiles[s].recent_level > 0 and not profiles[s].intermittent]
+    if not mature:
+        return None
+    total = np.sum([[p["forecast"] for p in results[s].points] for s in mature], axis=0)
+    base = sum(profiles[s].recent_level for s in mature)
+    return total / base if base > 0 else None
+
+
+def _cold_start(p: prepare.Profile, rows: pd.DataFrame, days: pd.DatetimeIndex, shape: np.ndarray | None,
+                horizon: int) -> ProductForecast:
+    """Recent average, shaped like the rest of the shop (or the product's own weekdays), with wide ranges."""
+    known = rows[rows["known"]]
+    level = p.recent_level or (float(known["units"].mean()) if len(known) else 0.0)
+    if shape is not None:
+        forecast = level * shape
+        how = "shaped by the forecast for the shop's other products (weekdays, promotions, holidays)"
+    else:
+        forecast = np.full(horizon, level)
+        how = "flat"
+        if len(known) >= 14 and known["units"].mean() > 0:
+            weekday = known.groupby(known["day"].dt.day_of_week)["units"].mean() / known["units"].mean()
+            forecast = level * days.day_of_week.map(weekday).fillna(1.0).to_numpy()
+            how = "with its own weekday pattern"
+    cal = intervals.default(p.known_days)
+    reason = (f"cold_start: only {p.history_days} days of history, too few to test models on, so the forecast "
+              f"is its recent average of {level:.1f} a day, {how}. Ranges are deliberately wide.")
+    scores = {"cold_start": {"wape": ASSUMED_WAPE, "mase": None, "smape": None, "bias": None, "rmsse": None,
+                             "windows": {}, "estimated": True}}
+    result = ProductForecast(p.sku, "cold_start", reason, scores, intervals.points(days, forecast, cal))
+    result.quality = quality.assess(p, "cold_start", scores["cold_start"], 0, 0, horizon, cal.coverage)
+    return result
+
+
+def _zero(p: prepare.Profile, days: pd.DatetimeIndex, horizon: int) -> ProductForecast:
+    """A product that stopped selling, or never sold: forecast zero, and say why."""
+    reason = (f"discontinued: no sales for the last {p.zero_tail} days although it used to sell, "
+              "so it is forecast at zero instead of at its old average." if p.status == "discontinued"
+              else "no_sales: nothing has sold yet, so the forecast is zero.")
+    scores = {p.status: {"wape": ASSUMED_WAPE, "mase": None, "smape": None, "bias": None, "rmsse": None,
+                         "windows": {}, "estimated": True}}
+    cal = intervals.Calibration(a=0.0, b=0.0)
+    cal.quantiles = {b: {level: (0.0, 0.0) for level in LEVELS} for b in range(len(intervals.BUCKETS) + 1)}
+    result = ProductForecast(p.sku, p.status, reason, scores, intervals.points(days, np.zeros(horizon), cal))
+    result.quality = quality.assess(p, p.status, scores[p.status], 0, 0, horizon, {80: None, 95: None})
+    return result
+
+
+def _reason(best: str, ranked: list[str], scores: dict, describe: dict, plan: list[Window],
+            intermittent: bool) -> str:
     s = scores[best]
-    text = (f"{best} ({describe[best]}) had the lowest average error: WAPE {s['wape']:.1%}, "
-            f"MASE {s['mase']:.2f} over {len(plan)} backtest windows of {plan[0].horizon} days")
+    metric = (f"RMSSE {s['rmsse']:.2f}, which suits products that sell now and then"
+              if intermittent and s["rmsse"] is not None else f"WAPE {_pct(s['wape'])}")
+    mase = f", MASE {s['mase']:.2f}" if s["mase"] is not None else ""
+    text = (f"{best} ({describe[best]}) had the lowest average error: {metric}{mase} "
+            f"over {len(plan)} backtest window{'s' if len(plan) != 1 else ''} of {plan[0].horizon} days")
     if any(w.label == "same weeks last year" for w in plan):
         text += ", including the same weeks last year"
     if len(ranked) > 1:
         runner = ranked[1]
-        text += f". Next best: {runner} at WAPE {scores[runner]['wape']:.1%}"
+        r = scores[runner]
+        runner_metric = (f"RMSSE {r['rmsse']:.2f}" if intermittent and r["rmsse"] is not None
+                         else f"WAPE {_pct(r['wape'])}")
+        text += f". Next best: {runner} at {runner_metric}"
     return text + "."
+
+
+def _pct(value: float | None) -> str:
+    return f"{value:.1%}" if value is not None else "n/a"
