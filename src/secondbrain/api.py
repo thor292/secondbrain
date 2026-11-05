@@ -143,6 +143,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return [{**s, "evidence": signals.evidence_details(conn, s)}
                     for s in signals.visible(conn, include_closed)]
 
+    @app.get("/signals/quality")
+    def signal_quality(user_id: UserId, brain: Brain):
+        """The brain's measured track record, over the signals this person may see."""
+        brain._user(user_id)
+        with brain.store.as_user(user_id) as conn:
+            return signals.quality(conn)
+
     @app.post("/signals/{signal_id}/feedback")
     def signal_feedback(signal_id: str, body: SignalFeedback, user_id: UserId, brain: Brain):
         """Mark a signal as acted on or dismissed; the brain uses this to learn what's useful."""
