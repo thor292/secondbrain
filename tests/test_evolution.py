@@ -236,3 +236,12 @@ def test_simulate_endpoint_takes_a_policy_and_reset_needs_a_snapshot(client):
     headers = {"X-Admin-Token": ADMIN_TOKEN}
     assert client.post("/admin/simulate", json={"days": 7, "policy": "maybe"}, headers=headers).status_code == 422
     assert client.post("/admin/demo/reset", headers=headers).status_code == 409
+
+
+def test_pages_share_the_design_system(client):
+    assert "--grad" in client.get("/static/sb.css").text
+    assert "const SB" in client.get("/static/sb.js").text
+    for path in ("/static/hq.html", "/static/../api.py", "/static/missing.css"):
+        assert client.get(path).status_code == 404
+    for page in ("/", "/explore", "/graph-view", "/hq"):
+        assert "/static/sb.css" in client.get(page).text

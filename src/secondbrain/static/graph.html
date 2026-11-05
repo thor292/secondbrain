@@ -5,30 +5,25 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SecondBrain Graph</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='7' fill='%238b85ff'/></svg>">
+<link rel="stylesheet" href="/static/sb.css">
 <style>
-  :root {
-    --bg: #0b0e14; --panel: #12161f; --panel-2: #1a1f2b; --text: #e8ebf2; --muted: #8790a6;
-    --border: #232a38; --accent: #8b85ff;
-  }
-  * { box-sizing: border-box; }
-  html, body { height: 100%; margin: 0; }
-  body { font: 14px/1.45 system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); display: flex; flex-direction: column; overflow: hidden; }
-  header { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-  header h1 { font-size: 16px; margin: 0 6px 0 0; letter-spacing: .01em; }
-  header h1 span { color: var(--accent); }
+  /* The graph is always drawn on a dark canvas, like FalkorDB's browser. */
+  :root { --panel-2: var(--panel-hi); --accent: var(--violet); }
+  html, body { height: 100%; }
+  body { font-size: 14px; display: flex; flex-direction: column; overflow: hidden; }
+  .toolbar { display: flex; align-items: center; gap: 10px; padding: 10px 20px; border-bottom: 1px solid var(--border); flex-wrap: wrap;
+             background: color-mix(in srgb, var(--bg) 80%, transparent); }
+  .toolbar .title { font-weight: 800; font-size: 15px; margin-right: 6px; }
   .hidden { display: none !important; }
   #token-form { display: flex; gap: 6px; }
   #token { width: 150px; }
-  select, #search, #token, .btn { font: inherit; background: var(--panel-2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; }
-  #search { width: 190px; }
-  .btn { cursor: pointer; }
-  .btn:hover { border-color: var(--accent); }
-  a { color: var(--accent); text-decoration: none; }
+  #search { width: 220px; }
+  .toolbar select, .toolbar input { padding: 7px 11px; }
   .stats { color: var(--muted); font-size: 12px; margin-left: auto; }
   .wrap { flex: 1; display: flex; min-height: 0; position: relative; }
   canvas { flex: 1; display: block; cursor: grab; min-width: 0; }
   canvas.dragging { cursor: grabbing; }
-  aside { width: 310px; background: var(--panel); border-left: 1px solid var(--border); padding: 16px; overflow-y: auto; }
+  aside { width: 320px; background: var(--panel-solid); border-left: 1px solid var(--border); padding: 18px; overflow-y: auto; }
   @media (max-width: 760px) { aside { position: absolute; right: 0; bottom: 0; width: 100%; height: 42%; border-left: none; border-top: 1px solid var(--border); } }
   aside h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
   .legend label { display: flex; align-items: center; gap: 9px; padding: 3px 0; cursor: pointer; user-select: none; font-size: 13px; }
@@ -53,22 +48,20 @@
 </style>
 </head>
 <body>
-<header>
-  <h1>Second<span>Brain</span> Graph</h1>
+<div class="toolbar">
+  <span class="title">Brain map</span>
   <select id="user">
     <option value="">Choose a view…</option>
     <option value="__all__">★ Whole SecondBrain (admin)</option>
   </select>
   <form id="token-form" class="hidden">
     <input id="token" type="password" placeholder="Admin token" autocomplete="off">
-    <button class="btn" type="submit">Open</button>
+    <button class="btn primary sm" type="submit">Open</button>
   </form>
   <input id="search" placeholder="Search…" autocomplete="off">
-  <button class="btn" id="fit" type="button">Fit</button>
-  <a href="/">← Chat</a>
-  <a href="/explore">Explore →</a>
+  <button class="btn sm" id="fit" type="button">⤢ Fit</button>
   <span class="stats" id="stats"></span>
-</header>
+</div>
 <div class="wrap">
   <canvas id="canvas"></canvas>
   <aside>
@@ -87,11 +80,13 @@
     </div>
   </aside>
 </div>
+<script src="/static/sb.js"></script>
 <script>
+SB.nav("graph");
 const NODE = {
   root:       { label: "Root brain (our organization)", color: "#f5c451", r: 38 },
-  company:    { label: "Company brain",    color: "#9d97ff", r: 30 },
-  department: { label: "Department brain", color: "#5aa7ff", r: 21 },
+  company:    { label: "Company brain",    color: "#8b7bff", r: 30 },
+  department: { label: "Department brain", color: "#33d6f2", r: 21 },
   user:       { label: "Person",           color: "#ffa45c", r: 13 },
   semantic:   { label: "Fact",             color: "#3fd6a0", r: 9 },
   episodic:   { label: "Event",            color: "#ff7ab8", r: 9 },
@@ -361,8 +356,11 @@ function draw() {
   const w = canvas.clientWidth, h = canvas.clientHeight;
   ctx.clearRect(0, 0, w, h);
   const bg = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.max(w, h) * 0.7);
-  bg.addColorStop(0, "#121826"); bg.addColorStop(1, "#0b0e14");
+  bg.addColorStop(0, "#141a33"); bg.addColorStop(1, "#070b16");
   ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
+  // A faint dot grid, so the canvas reads as space to explore.
+  ctx.fillStyle = "rgba(255,255,255,0.05)";
+  for (let gx = ((x % 26) + 26) % 26; gx < w; gx += 26) for (let gy = ((y % 26) + 26) % 26; gy < h; gy += 26) ctx.fillRect(gx, gy, 1.2, 1.2);
 
   ctx.save();
   ctx.translate(x, y); ctx.scale(k, k);
@@ -431,8 +429,12 @@ function draw() {
     if (!dim && (isBrain(n.k) || n === state.selected)) {
       ctx.shadowColor = spec.color; ctx.shadowBlur = n === state.selected ? 26 : 18;
     }
-    ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
-    ctx.fillStyle = spec.color; ctx.fill();
+    // Brains breathe; every node is shaded like a small sphere.
+    const pulse = isBrain(n.k) ? 1 + Math.sin(performance.now() / 600 + n.x) * 0.04 : 1;
+    const shade = ctx.createRadialGradient(n.x - r / 3, n.y - r / 3, 1, n.x, n.y, r * pulse);
+    shade.addColorStop(0, "#ffffffaa"); shade.addColorStop(0.3, spec.color); shade.addColorStop(1, spec.color);
+    ctx.beginPath(); ctx.arc(n.x, n.y, r * pulse, 0, Math.PI * 2);
+    ctx.fillStyle = shade; ctx.fill();
     ctx.shadowBlur = 0;
     if (n.props && n.props.sensitivity === "restricted") {
       ctx.lineWidth = 2.2; ctx.strokeStyle = "#ff5a5a"; ctx.stroke();
@@ -493,11 +495,11 @@ function fit(useTargets) {
     const nx = useTargets ? n.tx : n.x, ny = useTargets ? n.ty : n.y;
     xs.push(nx); ys.push(ny);
   }
-  for (const z of state.zones) { xs.push(z.x - z.r, z.x + z.r); ys.push(z.y - z.r, z.y + z.r); }
+  // Fit the nodes, not the faint department zones around them, so the map fills the screen.
   const [minX, maxX, minY, maxY] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
-  const w = canvas.clientWidth, h = canvas.clientHeight, pad = 60;
-  // Capped at 1, so a small company isn't blown up to fill a large screen.
-  const k = Math.min(1, (w - pad) / (maxX - minX || 1), (h - pad) / (maxY - minY || 1));
+  const w = canvas.clientWidth, h = canvas.clientHeight, pad = 140;
+  // Capped, so a tiny company isn't blown up absurdly.
+  const k = Math.min(1.8, (w - pad) / (maxX - minX || 1), (h - pad) / (maxY - minY || 1));
   state.view = { k, x: w / 2 - ((minX + maxX) / 2) * k, y: h / 2 - ((minY + maxY) / 2) * k };
 }
 

@@ -4,260 +4,255 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SecondBrain</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='7' fill='%234f46e5'/></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='7' fill='%238b7bff'/></svg>">
+<link rel="stylesheet" href="/static/sb.css">
 <style>
-  :root {
-    --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #667085;
-    --border: #e3e6eb; --accent: #4f46e5; --accent-soft: #eef0ff;
-    --dept: #0f766e; --dept-soft: #e6f6f3; --company: #b45309; --company-soft: #fdf3e4;
-    --none: #6b7280; --none-soft: #f1f2f4;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #12151c; --panel: #1a1e27; --text: #e6e8ee; --muted: #98a0b3;
-      --border: #2a303c; --accent: #8b85ff; --accent-soft: #24234a;
-      --dept: #5eead4; --dept-soft: #11302d; --company: #fbbf24; --company-soft: #3a2a10;
-      --none: #9ca3af; --none-soft: #262a33;
-    }
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; font: 15px/1.5 system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); }
-  header { padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--panel); display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-  header h1 { font-size: 18px; margin: 0; }
-  header .model { color: var(--muted); font-size: 13px; margin-left: auto; }
-  main { display: grid; grid-template-columns: 280px 1fr; gap: 16px; padding: 16px; max-width: 1200px; margin: 0 auto; }
-  @media (max-width: 760px) { main { grid-template-columns: 1fr; } }
-  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
-  .panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 10px; }
-  .user { display: block; width: 100%; text-align: left; padding: 8px 10px; border: 1px solid transparent; border-radius: 8px; background: none; color: inherit; cursor: pointer; font: inherit; }
-  .user:hover { background: var(--bg); }
-  .user.active { background: var(--accent-soft); border-color: var(--accent); }
-  .user small { display: block; color: var(--muted); font-family: ui-monospace, monospace; font-size: 12px; }
-  .company-label { font-weight: 600; margin: 12px 0 4px; font-size: 14px; }
-  .company-label:first-of-type { margin-top: 0; }
-  #chat { display: flex; flex-direction: column; min-height: 70vh; }
-  #messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-bottom: 12px; }
-  .msg { max-width: 85%; padding: 10px 14px; border-radius: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
-  .msg.q { align-self: flex-end; background: var(--accent); color: #fff; }
-  .msg.a { align-self: flex-start; background: var(--bg); border: 1px solid var(--border); }
-  .msg.note { align-self: center; color: var(--muted); font-size: 13px; background: none; }
-  .badge { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; margin-bottom: 6px; }
-  .badge.department { color: var(--dept); background: var(--dept-soft); }
-  .badge.company { color: var(--company); background: var(--company-soft); }
-  .badge.none { color: var(--none); background: var(--none-soft); }
-  .searched { margin-top: 6px; font-size: 12px; color: var(--muted); font-style: italic; }
-  #new-conversation { margin-left: auto; }
-  details { margin-top: 8px; font-size: 13px; color: var(--muted); }
-  details li { margin: 6px 0; white-space: pre-wrap; }
-  details code { font-size: 12px; }
-  form { display: flex; gap: 8px; flex-wrap: wrap; }
-  input, select, button.primary { font: inherit; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: inherit; }
-  input { flex: 1; min-width: 180px; }
-  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); cursor: pointer; }
-  button.secondary { font: inherit; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: none; color: inherit; cursor: pointer; }
-  .tabs { display: flex; gap: 6px; margin-bottom: 10px; }
-  .tabs button { font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); background: none; color: var(--muted); cursor: pointer; }
-  .tabs button.active { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
-  .hidden { display: none; }
-  .empty { color: var(--muted); }
+  body { height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+  .app { flex: 1; min-height: 0; display: grid; grid-template-columns: 300px 1fr; }
+  @media (max-width: 820px) { .app { grid-template-columns: 1fr; } .side { display: none; } }
+
+  /* People */
+  .side { border-right: 1px solid var(--border); overflow-y: auto; padding: 18px 14px; background: color-mix(in srgb, var(--bg) 60%, transparent); }
+  .side .co { margin: 16px 6px 8px; font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); }
+  .side .co:first-child { margin-top: 2px; }
+  .who { width: 100%; display: grid; grid-template-columns: 38px 1fr; gap: 10px; align-items: center; text-align: left; padding: 9px 10px; border-radius: 12px;
+         border: 1px solid transparent; background: transparent; cursor: pointer; transition: .2s; color: var(--text); }
+  .who:hover { background: var(--panel-hi); }
+  .who.on { background: var(--accent-soft); border-color: rgba(139,123,255,.4); }
+  .who .av { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; color: #fff; }
+  .who b { display: block; font-size: 14px; font-weight: 600; } .who small { color: var(--muted); font-size: 12px; }
+
+  /* Conversation */
+  .main { display: flex; flex-direction: column; min-height: 0; }
+  .stream { flex: 1; overflow-y: auto; padding: 28px 0 10px; }
+  .inner { max-width: 820px; margin: 0 auto; padding: 0 22px; }
+  .welcome { text-align: center; padding: 6vh 0 10px; }
+  .welcome .orb { width: 92px; height: 92px; margin: 0 auto 22px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #c1b8ff, #6a5cf0 45%, #11183a 78%);
+                  box-shadow: 0 0 70px rgba(139,123,255,.6); animation: breathe 3s ease-in-out infinite; }
+  @keyframes breathe { 50% { transform: scale(1.06); box-shadow: 0 0 100px rgba(51,214,242,.5); } }
+  .welcome h1 { font-size: 34px; letter-spacing: -0.03em; margin: 0 0 8px; }
+  .welcome p { color: var(--muted); margin: 0 auto 24px; max-width: 520px; }
+  .suggest { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; text-align: left; }
+  .suggest button { padding: 14px 16px; border-radius: 14px; background: var(--panel); border: 1px solid var(--border); cursor: pointer; color: var(--text); font-size: 14px; transition: .2s; }
+  .suggest button:hover { border-color: rgba(139,123,255,.5); transform: translateY(-2px); }
+  .suggest button small { display: block; color: var(--faint); font-size: 12px; margin-top: 4px; }
+
+  .msg { display: flex; gap: 12px; margin: 18px 0; animation: rise .4s cubic-bezier(.2,.8,.2,1) both; }
+  .msg .av { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; color: #fff; font-size: 14px; }
+  .msg.q { flex-direction: row-reverse; }
+  .msg.q .bubble { background: var(--grad); color: #fff; border-radius: 18px 18px 4px 18px; padding: 12px 16px; max-width: 75%; box-shadow: 0 10px 30px -14px rgba(139,123,255,.8); }
+  .msg.a .body { flex: 1; min-width: 0; }
+  .msg.a .bubble { background: var(--panel); border: 1px solid var(--border); border-radius: 4px 18px 18px 18px; padding: 14px 18px; line-height: 1.6; }
+  .msg.a .bubble b { color: var(--cyan); }
+  .msg.a .bubble { white-space: pre-line; }
+  .msg.note { justify-content: center; } .msg.note span { font-size: 12.5px; color: var(--muted); background: var(--panel); border: 1px solid var(--border); padding: 5px 12px; border-radius: 999px; }
+  .brain-av { background: radial-gradient(circle at 35% 35%, #c1b8ff, #6a5cf0 60%, #1b2350); box-shadow: 0 0 16px rgba(139,123,255,.6); }
+
+  /* Where the answer came from: the brains it searched, in order */
+  .path { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; font-size: 12px; flex-wrap: wrap; }
+  .hop { padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border); color: var(--faint); font-weight: 600; }
+  .hop.hit { color: var(--text); border-color: transparent; background: var(--grad); color: #fff; box-shadow: 0 0 14px rgba(51,214,242,.45); }
+  .hop.miss { text-decoration: line-through; }
+  .path .arrow { color: var(--faint); }
+  .understood { font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+  .sources { display: grid; gap: 8px; margin-top: 10px; }
+  .src { padding: 10px 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--border); font-size: 13px; color: var(--muted); }
+  .src .meta { display: flex; gap: 6px; margin-bottom: 4px; flex-wrap: wrap; }
+  .src .meta .chip { font-size: 11px; padding: 1px 8px; }
+  .srcs-toggle { margin-top: 8px; }
+
+  .thinking { display: flex; gap: 12px; align-items: center; margin: 18px 0; color: var(--muted); font-size: 13.5px; }
+  .dots { display: inline-flex; gap: 4px; } .dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--cyan); animation: bounce 1s infinite; }
+  .dots i:nth-child(2) { animation-delay: .15s; } .dots i:nth-child(3) { animation-delay: .3s; }
+  @keyframes bounce { 0%, 80%, 100% { transform: translateY(0); opacity: .4; } 40% { transform: translateY(-6px); opacity: 1; } }
+
+  /* Composer */
+  .composer { padding: 12px 0 20px; }
+  .box { background: var(--panel); border: 1px solid var(--border-hi); border-radius: 18px; padding: 10px; box-shadow: var(--shadow); }
+  .box:focus-within { border-color: rgba(139,123,255,.6); box-shadow: 0 0 0 4px var(--accent-soft), var(--shadow); }
+  .box textarea { width: 100%; border: 0; background: transparent; resize: none; padding: 8px 10px; font-size: 15.5px; outline: none; box-shadow: none; min-height: 48px; max-height: 160px; }
+  .box .bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .box .bar .right { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .box select { padding: 6px 10px; font-size: 13px; }
+  .hint { text-align: center; font-size: 12px; color: var(--faint); margin-top: 8px; }
+  .model { font-size: 12px; color: var(--faint); }
 </style>
 </head>
 <body>
-<header>
-  <h1>SecondBrain</h1>
-  <span id="who" class="empty">Pick a user</span>
-  <a id="graph-link" href="/graph-view" style="color: var(--accent); text-decoration: none;">Graph view →</a>
-  <a id="explore-link" href="/explore" style="color: var(--accent); text-decoration: none;">Forecasts & who knows what →</a>
-  <span id="model" class="model"></span>
-</header>
-<main>
-  <section class="panel">
-    <h2>Sign in as</h2>
-    <div id="users"><p class="empty">Loading…</p></div>
+<div class="app">
+  <aside class="side" id="people"><div class="shimmer" style="height:300px"></div></aside>
+  <section class="main">
+    <div class="stream" id="stream"><div class="inner" id="messages"></div></div>
+    <div class="composer"><div class="inner">
+      <form class="box" id="form">
+        <textarea id="input" rows="1" placeholder="Pick a person on the left, then ask the brain anything…"></textarea>
+        <div class="bar">
+          <div class="seg" id="mode"><button type="button" data-mode="ask" class="on">Ask</button><button type="button" data-mode="remember">Remember</button></div>
+          <select id="sensitivity" class="hidden" title="Who may read this note">
+            <option value="internal">Internal</option><option value="public">Public</option><option value="restricted">Restricted</option>
+          </select>
+          <button type="button" class="btn ghost sm hidden" id="consolidate" title="Move short-term notes into long-term memory">Save to long-term</button>
+          <div class="right">
+            <button type="button" class="btn ghost sm" id="new-conversation" title="Forget the questions asked so far">↺ New chat</button>
+            <button class="btn primary sm" id="send">Send ➤</button>
+          </div>
+        </div>
+      </form>
+      <div class="hint">Searches your department first, then your company. Never another company.</div>
+    </div></div>
   </section>
-  <section class="panel" id="chat">
-    <div id="messages"><p class="empty">Ask the brain anything. It searches your department first, then your company — never other companies.</p></div>
-    <div class="tabs">
-      <button type="button" data-mode="ask" class="active">Ask</button>
-      <button type="button" data-mode="remember">Remember</button>
-      <button type="button" id="new-conversation" title="Forget the questions asked so far">New conversation</button>
-    </div>
-    <form id="ask-form">
-      <input id="question" placeholder="e.g. How many days of annual leave do we get?" autocomplete="off" required>
-      <button class="primary">Ask</button>
-    </form>
-    <form id="remember-form" class="hidden">
-      <input id="note" placeholder="e.g. Met the vendor today, they agreed to 40 dollars per unit" autocomplete="off" required>
-      <select id="sensitivity">
-        <option value="internal">Internal</option>
-        <option value="public">Public</option>
-        <option value="restricted">Restricted</option>
-      </select>
-      <button class="primary">Remember</button>
-      <button type="button" class="secondary" id="consolidate">Save to long-term</button>
-    </form>
-  </section>
-</main>
+</div>
+<script src="/static/sb.js"></script>
 <script>
-  const state = { user: null };
-  const $ = (id) => document.getElementById(id);
+const { el } = SB;
+const $ = (id) => document.getElementById(id);
+const modelInfo = el("span", { class: "model" });
+SB.nav("chat", modelInfo);
+const state = { user: null, mode: "ask", users: [] };
+const COLORS = ["#8b7bff", "#33d6f2", "#f472b6", "#fb923c", "#34d399", "#fbbf24", "#60a5fa", "#a78bfa"];
+const colorFor = (id) => COLORS[[...id].reduce((t, c) => t + c.charCodeAt(0), 0) % COLORS.length];
+// Questions that show the brain at its best, per person in the example companies.
+const SUGGEST = {
+  nina: [["Can I give a customer a 50 dollar credit without asking anyone?", "Department policy"], ["How many vacation days do I get?", "Falls back to the company brain"], ["What's the free shipping threshold right now?", "The newest note wins"]],
+  sofia: [["What's the free shipping threshold right now?", "She can't see Operations' note"], ["What is the hotel cap for a manager?", "From a table in a Word handbook"]],
+  leo: [["When does loyalty early access for Black Friday start?", "The newer date wins"]],
+  tom: [["What was gross margin in Q3?", "Restricted: not visible"]],
+  rachel: [["What was gross margin in Q3?", "From the restricted PDF"]],
+  karim: [["How many days of annual leave do we get?", "Brightpath's own policy, never Lumen's"]],
+  maya: [["What are our biggest risks before Black Friday?", "Across the whole company"], ["What did we agree with Nordlys?", "Supplier history"], ["How is Priya Shah's case going?", "A VIP customer"]],
+};
+const GENERIC = [["What should I know about Black Friday?", "Plans and dates"], ["Who is our lamp supplier and how reliable are they?", "Supplier history"], ["What changed recently?", "Newest notes"]];
 
-  async function api(path, options = {}) {
-    const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
-    if (state.user) headers["X-User-Id"] = state.user.id;
-    const res = await fetch(path, { ...options, headers });
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(body.detail || res.statusText);
-    return body;
+async function api(path, options = {}) {
+  const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+  if (state.user) headers["X-User-Id"] = state.user.id;
+  const res = await fetch(path, { ...options, headers });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.detail || res.statusText);
+  return body;
+}
+const role = (u) => (u.name.match(/\((.*)\)/) || [])[1] || u.brain_name;
+const short = (u) => u.name.replace(/\s*\(.*\)/, "");
+const avatar = (u, cls = "av") => el("div", { class: cls, style: { background: colorFor(u.id) } }, short(u)[0]);
+function scroll() { const s = $("stream"); s.scrollTo({ top: s.scrollHeight, behavior: "smooth" }); }
+function add(node) { $("messages").append(node); scroll(); return node; }
+const note = (text) => add(el("div", { class: "msg note" }, el("span", {}, text)));
+
+function welcome() {
+  const u = state.user;
+  const items = u ? SUGGEST[u.id] || GENERIC : [];
+  $("messages").replaceChildren(el("div", { class: "welcome rise" }, el("div", { class: "orb" }),
+    el("h1", {}, u ? `Hi ${short(u).split(" ")[0]}, ask your ` : "Ask your ", el("span", { class: "grad-text" }, "second brain")),
+    el("p", {}, u ? `${role(u)} · ${u.brain_name}. Answers come from what your team knows, with sources, and only what you're allowed to see.`
+                  : "Pick a person on the left to see the company through their eyes."),
+    u ? el("div", { class: "suggest" }, items.map(([q, why]) => el("button", { type: "button", onclick: () => ask(q) }, q, el("small", {}, why)))) : null));
+}
+
+async function loadUsers() {
+  try {
+    state.users = await api("/demo/users");
+    const box = $("people"), groups = {};
+    for (const u of state.users) (groups[u.home_brain.split(".")[1]] ||= []).push(u);
+    box.replaceChildren(...Object.entries(groups).flatMap(([co, users]) => [
+      el("div", { class: "co" }, co === "lumen" ? "Lumen Home" : co === "brightpath" ? "Brightpath Logistics" : co),
+      ...users.map((u) => el("button", { class: "who", "data-id": u.id, onclick: () => pick(u) }, avatar(u), el("div", {}, el("b", {}, short(u)), el("small", {}, role(u))))),
+    ]));
+    const wanted = new URLSearchParams(location.search).get("user");
+    const first = state.users.find((u) => u.id === wanted);
+    if (first) pick(first); else welcome();
+  } catch (e) { $("people").replaceChildren(el("div", { class: "empty" }, "Couldn't load people: " + e.message)); }
+}
+
+function pick(u) {
+  state.user = u;
+  document.querySelectorAll(".who").forEach((b) => b.classList.toggle("on", b.dataset.id === u.id));
+  const url = new URL(location); url.searchParams.set("user", u.id); history.replaceState(null, "", url);
+  document.querySelectorAll(".sb-links a").forEach((a) => { if (a.pathname !== "/" && a.pathname !== "/hq") a.href = a.pathname + "?user=" + encodeURIComponent(u.id); });
+  $("input").placeholder = state.mode === "ask" ? `Ask as ${short(u)}…` : "Tell the brain something to remember…";
+  welcome();
+}
+
+function formatted(text) {
+  const p = el("div", { class: "bubble" });
+  text.split(/\*\*(.+?)\*\*/g).forEach((part, i) => p.append(i % 2 ? el("b", {}, part) : document.createTextNode(part)));
+  return p;
+}
+
+function answerNode(r, question) {
+  const u = state.user, dept = u.brain_name, isCompanyUser = u.home_brain.split(".").length === 2;
+  const hops = isCompanyUser ? [["company", "Company brain"]] : [["department", dept], ["company", "Company brain"]];
+  const path = el("div", { class: "path" }, el("span", { class: "muted" }, "Searched:"),
+    hops.flatMap(([k, label], i) => {
+      const hit = r.answered_from === k, missed = !hit && (r.answered_from === "none" || hops.findIndex(([x]) => x === r.answered_from) > i);
+      return [i ? el("span", { class: "arrow" }, "→") : null, el("span", { class: "hop " + (hit ? "hit" : missed ? "miss" : "") }, (hit ? "✓ " : "") + label)];
+    }),
+    r.answered_from === "none" ? el("span", { class: "chip bad" }, "Not found in what you may see") : null);
+  const body = el("div", { class: "body" }, path, formatted(r.answer));
+  if (r.searched_for && r.searched_for.trim().toLowerCase() !== question.trim().toLowerCase())
+    body.append(el("div", { class: "understood" }, "↳ Understood as: " + r.searched_for));
+  if (r.sources.length) {
+    const list = el("div", { class: "sources hidden" }, r.sources.map((s, i) => el("div", { class: "src" },
+      el("div", { class: "meta" }, el("span", { class: "chip accent" }, `[${i + 1}] ${s.brain.split(".").pop()}`), el("span", { class: "chip" }, s.type),
+        el("span", { class: "chip", title: "Closer is more relevant" }, `match ${Math.round((1 - s.distance) * 100)}%`)), s.content)));
+    const toggle = el("button", { type: "button", class: "btn ghost sm srcs-toggle", onclick: () => {
+      list.classList.toggle("hidden"); toggle.textContent = list.classList.contains("hidden") ? `📎 ${r.sources.length} source${r.sources.length > 1 ? "s" : ""}` : "Hide sources"; } },
+      `📎 ${r.sources.length} source${r.sources.length > 1 ? "s" : ""}`);
+    body.append(toggle, list);
   }
+  return el("div", { class: "msg a" }, el("div", { class: "av brain-av" }, "✦"), body);
+}
 
-  function add(cls, text) {
-    const empty = $("messages").querySelector(".empty");
-    if (empty) empty.remove();
-    const el = document.createElement("div");
-    el.className = "msg " + cls;
-    el.textContent = text;
-    $("messages").appendChild(el);
-    el.scrollIntoView({ block: "end" });
-    return el;
-  }
+async function ask(question) {
+  if (!state.user) return note("Pick a person on the left first.");
+  $("messages").querySelector(".welcome")?.remove();
+  add(el("div", { class: "msg q" }, avatar(state.user), el("div", { class: "bubble" }, question)));
+  const u = state.user, steps = u.home_brain.split(".").length === 2 ? ["Searching the company brain"] : [`Searching ${u.brain_name}`, "Checking the company brain", "Writing the answer"];
+  const label = el("span", {}, steps[0]);
+  const thinking = add(el("div", { class: "thinking" }, el("div", { class: "av brain-av", style: { width: "34px", height: "34px", borderRadius: "50%" } }),
+    el("span", { class: "dots" }, el("i"), el("i"), el("i")), label));
+  let i = 0; const timer = setInterval(() => { if (i < steps.length - 1) label.textContent = steps[++i]; }, 1800);
+  try { const r = await api("/ask", { method: "POST", body: JSON.stringify({ question }) }); thinking.replaceWith(answerNode(r, question)); scroll(); }
+  catch (e) { thinking.remove(); note("Error: " + e.message); }
+  finally { clearInterval(timer); }
+}
 
-  const LABELS = { department: "Answered from your department", company: "Answered from your company", none: "Not found in your brains" };
+async function remember(content) {
+  if (!state.user) return note("Pick a person on the left first.");
+  $("messages").querySelector(".welcome")?.remove();
+  add(el("div", { class: "msg q" }, avatar(state.user), el("div", { class: "bubble" }, "📝 " + content)));
+  try {
+    const item = await api("/remember", { method: "POST", body: JSON.stringify({ content, sensitivity: $("sensitivity").value }) });
+    note(`Remembered as ${item.memory_type} memory · ${$("sensitivity").value}. Save to long-term to make it searchable.`);
+  } catch (e) { note("Error: " + e.message); }
+}
 
-  // Renders **bold** from the model's answer as <b>, everything else as plain text
-  // (never as HTML, so an answer can't inject markup into the page).
-  function appendFormatted(el, text) {
-    text.split(/\*\*(.+?)\*\*/g).forEach((part, i) => {
-      if (i % 2) { const b = document.createElement("b"); b.textContent = part; el.appendChild(b); }
-      else el.appendChild(document.createTextNode(part));
-    });
-  }
-
-  function addAnswer(result, question) {
-    const el = add("a", "");
-    const badge = document.createElement("span");
-    badge.className = "badge " + result.answered_from;
-    badge.textContent = LABELS[result.answered_from];
-    el.appendChild(badge);
-    el.appendChild(document.createElement("br"));
-    appendFormatted(el, result.answer);
-    if (result.searched_for && result.searched_for.trim().toLowerCase() !== question.trim().toLowerCase()) {
-      const note = document.createElement("div");
-      note.className = "searched";
-      note.textContent = "Understood as: " + result.searched_for;
-      el.appendChild(note);
-    }
-    if (result.sources.length) {
-      const details = document.createElement("details");
-      const summary = document.createElement("summary");
-      summary.textContent = `${result.sources.length} source${result.sources.length > 1 ? "s" : ""}`;
-      details.appendChild(summary);
-      const list = document.createElement("ol");
-      for (const s of result.sources) {
-        const li = document.createElement("li");
-        const code = document.createElement("code");
-        code.textContent = `${s.brain} · ${s.type} · distance ${s.distance}`;
-        li.appendChild(code);
-        li.appendChild(document.createTextNode("\n" + s.content));
-        list.appendChild(li);
-      }
-      details.appendChild(list);
-      el.appendChild(details);
-    }
-  }
-
-  async function loadUsers() {
-    try {
-      const users = await api("/demo/users");
-      const box = $("users");
-      box.textContent = "";
-      let company = null;
-      for (const u of users) {
-        const c = u.home_brain.split(".").slice(0, 2).join(".");
-        if (c !== company) {
-          company = c;
-          const label = document.createElement("div");
-          label.className = "company-label";
-          label.textContent = c;
-          box.appendChild(label);
-        }
-        const btn = document.createElement("button");
-        btn.className = "user";
-        btn.textContent = u.name;
-        const small = document.createElement("small");
-        small.textContent = u.home_brain;
-        btn.appendChild(small);
-        btn.onclick = () => selectUser(u, btn);
-        box.appendChild(btn);
-      }
-      if (!users.length) box.innerHTML = '<p class="empty">No users yet. Onboard a company first.</p>';
-    } catch (e) {
-      $("users").innerHTML = '<p class="empty"></p>';
-      $("users").firstChild.textContent = "Couldn't load users: " + e.message;
-    }
-  }
-
-  function selectUser(u, btn) {
-    state.user = u;
-    document.querySelectorAll(".user").forEach((b) => b.classList.toggle("active", b === btn));
-    $("who").className = "";
-    $("who").textContent = `${u.name} — ${u.brain_name} (${u.home_brain})`;
-    $("graph-link").href = "/graph-view?user=" + encodeURIComponent(u.id);
-    $("explore-link").href = "/explore?user=" + encodeURIComponent(u.id);
-    add("note", `Now signed in as ${u.name}`);
-  }
-
-  function needUser() {
-    if (!state.user) { add("note", "Pick a user on the left first."); return true; }
-    return false;
-  }
-
-  $("ask-form").onsubmit = async (e) => {
-    e.preventDefault();
-    if (needUser()) return;
-    const question = $("question").value.trim();
-    $("question").value = "";
-    add("q", question);
-    try { addAnswer(await api("/ask", { method: "POST", body: JSON.stringify({ question }) }), question); }
-    catch (err) { add("note", "Error: " + err.message); }
-  };
-
-  $("remember-form").onsubmit = async (e) => {
-    e.preventDefault();
-    if (needUser()) return;
-    const content = $("note").value.trim();
-    $("note").value = "";
-    add("q", "Remember: " + content);
-    try {
-      const item = await api("/remember", { method: "POST", body: JSON.stringify({ content, sensitivity: $("sensitivity").value }) });
-      add("note", `Stored in short-term memory as ${item.memory_type}`);
-    } catch (err) { add("note", "Error: " + err.message); }
-  };
-
-  $("consolidate").onclick = async () => {
-    if (needUser()) return;
-    try {
-      const r = await api("/consolidate", { method: "POST" });
-      add("note", r.consolidated ? `Saved ${r.consolidated} item(s) to long-term memory` : "Nothing in short-term memory");
-    } catch (err) { add("note", "Error: " + err.message); }
-  };
-
-  $("new-conversation").onclick = async () => {
-    if (needUser()) return;
-    try { await api("/conversation/reset", { method: "POST" }); add("note", "Started a new conversation"); }
-    catch (err) { add("note", "Error: " + err.message); }
-  };
-
-  document.querySelectorAll(".tabs button[data-mode]").forEach((tab) => {
-    tab.onclick = () => {
-      document.querySelectorAll(".tabs button[data-mode]").forEach((t) => t.classList.toggle("active", t === tab));
-      $("ask-form").classList.toggle("hidden", tab.dataset.mode !== "ask");
-      $("remember-form").classList.toggle("hidden", tab.dataset.mode !== "remember");
-    };
-  });
-
-  api("/health").then((h) => { $("model").textContent = `LLM: ${h.llm} · Embeddings: ${h.embedding_model}`; }).catch(() => {});
-  loadUsers();
+$("form").onsubmit = (e) => {
+  e.preventDefault();
+  const text = $("input").value.trim();
+  if (!text) return;
+  $("input").value = ""; $("input").style.height = "";
+  state.mode === "ask" ? ask(text) : remember(text);
+};
+$("input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("form").requestSubmit(); } });
+$("input").addEventListener("input", (e) => { e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; });
+document.querySelectorAll("#mode button").forEach((b) => (b.onclick = () => {
+  state.mode = b.dataset.mode;
+  document.querySelectorAll("#mode button").forEach((x) => x.classList.toggle("on", x === b));
+  $("sensitivity").classList.toggle("hidden", state.mode !== "remember");
+  $("consolidate").classList.toggle("hidden", state.mode !== "remember");
+  $("input").placeholder = state.mode === "ask" ? "Ask the brain anything…" : "Tell the brain something to remember…";
+}));
+$("consolidate").onclick = async () => {
+  if (!state.user) return note("Pick a person on the left first.");
+  try { const r = await api("/consolidate", { method: "POST" }); note(r.consolidated ? `Saved ${r.consolidated} note(s) to long-term memory` : "Nothing waiting in short-term memory"); }
+  catch (e) { note("Error: " + e.message); }
+};
+$("new-conversation").onclick = async () => {
+  if (!state.user) return;
+  try { await api("/conversation/reset", { method: "POST" }); welcome(); } catch (e) { note("Error: " + e.message); }
+};
+api("/health").then((h) => (modelInfo.textContent = `${h.llm} · ${h.embedding_model}`)).catch(() => {});
+loadUsers();
 </script>
 </body>
 </html>
