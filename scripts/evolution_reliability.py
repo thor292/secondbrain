@@ -27,6 +27,7 @@ production.
 
 import argparse
 import json
+import sys
 from collections import Counter
 from datetime import date, timedelta
 
@@ -173,6 +174,7 @@ def main() -> None:
     parser.add_argument("--steps", type=int, nargs="+", default=[14, 28], help="days per advance")
     parser.add_argument("--days", type=int, default=112, help="simulated days per scenario")
     args = parser.parse_args()
+    sys.stdout.reconfigure(line_buffering=True)  # progress shows up when piped to a file
     settings = make_test_settings()
     assert settings.admin_database_url.endswith("/" + TEST_DB) and TEST_DB.startswith("secondbrain_test")
     llm, embedder = build_models(settings)
