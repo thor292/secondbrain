@@ -4,348 +4,261 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SecondBrain Explore</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='7' fill='%234f46e5'/></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='7' fill='%238b7bff'/></svg>">
+<link rel="stylesheet" href="/static/sb.css">
 <style>
-  :root {
-    --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #667085; --border: #e3e6eb;
-    --accent: #4f46e5; --accent-soft: #eef0ff; --band: rgba(79,70,229,0.12); --band2: rgba(79,70,229,0.06);
-    --history: #1d2330; --good: #0f7a3d; --bad: #b42318; --gbg: #fbfbfd; --gedge: #9aa1b2; --gtext: #1d2330;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --bg: #12151c; --panel: #1a1e27; --text: #e6e8ee; --muted: #98a0b3; --border: #2a303c;
-      --accent: #8b85ff; --accent-soft: #24234a; --band: rgba(139,133,255,0.2); --band2: rgba(139,133,255,0.09);
-      --history: #e6e8ee; --good: #5ee0a0; --bad: #ff8080; --gbg: #12151c; --gedge: #5c6478; --gtext: #e6e8ee;
-    }
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; font: 15px/1.5 system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); }
-  header { display: flex; gap: 14px; align-items: center; padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-  header h1 { font-size: 18px; margin: 0; }
-  header a { color: var(--accent); text-decoration: none; font-size: 14px; }
-  select, input, button { font: inherit; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel); color: inherit; }
-  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); cursor: pointer; }
-  main { max-width: 1100px; margin: 0 auto; padding: 16px; }
-  .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
-  .tabs button { cursor: pointer; border-radius: 999px; }
-  .tabs button.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
-  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
-  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  .muted { color: var(--muted); font-size: 13px; }
-  .hidden { display: none; }
-  .denied { padding: 18px; border-radius: 10px; background: var(--accent-soft); }
+  .head { display: flex; justify-content: space-between; align-items: end; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+  .head h1 { margin: 6px 0 0; font-size: 32px; letter-spacing: -0.03em; }
+  .persona { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+  .tabpane { animation: rise .45s cubic-bezier(.2,.8,.2,1) both; }
+  .denied { padding: 22px; border-radius: 14px; background: var(--bad-soft); border: 1px solid rgba(251,113,133,.3); }
   .denied b { color: var(--bad); }
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin: 12px 0; }
-  .stat { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
-  .stat .v { font-size: 22px; font-weight: 700; }
-  .reason { padding: 10px 12px; border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 6px; margin: 10px 0; font-size: 14px; }
-  table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
-  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-  tr.chosen td { font-weight: 700; color: var(--good); }
-  svg text { fill: var(--muted); font-size: 11px; }
-  .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin-top: 6px; }
-  .legend span::before { content: ""; display: inline-block; width: 14px; height: 3px; vertical-align: middle; margin-right: 6px; background: var(--c); }
-  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-  .chips button { font-size: 13px; padding: 4px 10px; border-radius: 999px; cursor: pointer; }
-  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  @media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
-  .person { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); }
-  .rel { padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
-  .rel code { color: var(--accent); font-size: 13px; }
-  .memory { font-size: 13px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; margin-top: 8px; white-space: pre-wrap; }
-  .memory .meta { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
-  /* Decision signals */
-  .signal { background: var(--panel); border: 1px solid var(--border); border-left: 5px solid var(--u); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
-  .signal.high { --u: #d92d20; } .signal.medium { --u: #f79009; } .signal.low { --u: #98a2b3; }
-  .signal.closed { opacity: .6; }
-  .signal .top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12px; }
-  .signal .tag { padding: 2px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
-  .signal .urg { padding: 2px 9px; border-radius: 999px; color: #fff; background: var(--u); font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
-  .signal h3 { margin: 8px 0 4px; font-size: 17px; }
-  .signal .action { color: var(--text); margin: 2px 0 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-  .signal.open-why .action { -webkit-line-clamp: unset; }
-  .signal .chips2 { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-  .signal .chip { font-size: 13px; padding: 3px 10px; border-radius: 999px; background: var(--bg); border: 1px solid var(--border); white-space: nowrap; }
-  .signal .chip.money { font-weight: 700; }
-  .signal .chip.late { color: #d92d20; border-color: #f3b4ae; }
-  .signal .more { display: none; margin-top: 10px; border-top: 1px solid var(--border); padding-top: 10px; }
-  .signal.open-why .more { display: block; }
-  .signal .more ul { margin: 6px 0 0; padding-left: 18px; font-size: 13px; }
-  .signal .why { font-size: 14px; margin: 6px 0; }
-  .signal .meta { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin: 6px 0; }
-  .signal .meta b { color: var(--text); }
-  .signal details { font-size: 13px; margin-top: 6px; }
-  .signal details li { margin: 4px 0; }
-  .signal .lesson { border-left: 3px solid #49C3B8; padding: 4px 8px; margin: 4px 0; }
-  .signal .buttons { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
-  .signal .buttons button { cursor: pointer; }
-  .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 14px; }
-  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 10px 0; }
-  .step { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
-  .step b { display: block; margin-bottom: 4px; }
-  .drivers { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
-  .driver { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
-  .driver .n { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
-  .driver .v { font-size: 18px; font-weight: 700; margin: 2px 0; }
-  .driver .e { font-size: 13px; color: var(--muted); }
-  .callout { padding: 12px 14px; border-radius: 10px; border-left: 5px solid #d92d20; background: var(--accent-soft); margin: 10px 0; }
-  .callout.ok { border-left-color: var(--good); }
-  .timeline { list-style: none; padding: 0; margin: 0; }
-  .timeline li { display: grid; grid-template-columns: 60px 170px 1fr; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px; align-items: center; }
-  .timeline .pill { white-space: nowrap; }
-  .timeline .text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  @media (max-width: 700px) { .timeline li { grid-template-columns: 1fr; } }
-  .pill { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
-  .pill.prevented, .pill.acted { background: #e7f6ec; color: #0f7a3d; }
-  .pill.happened, .pill.happened_anyway, .pill.expired { background: #fdecea; color: #b42318; }
-  .pill.false_alarm, .pill.dismissed { background: #f2f4f7; color: #475467; }
-  .outcome { margin-top: 8px; padding: 8px 10px; border-radius: 8px; font-size: 14px; background: var(--accent-soft); }
-  input[type=range] { padding: 0; width: 200px; vertical-align: middle; }
 
-  /* FalkorDB-style graph */
-  .fgraph { display: grid; grid-template-columns: 1fr 280px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--panel); }
+  /* ---------- decision signals ---------- */
+  .filters { display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin: 20px 0 14px; }
+  .sgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(460px, 1fr)); gap: 14px; }
+  @media (max-width: 560px) { .sgrid { grid-template-columns: 1fr; } }
+  .signal { --u: var(--violet); position: relative; overflow: hidden; background: var(--panel); border: 1px solid var(--border); border-radius: 16px;
+            padding: 18px 18px 14px 22px; transition: transform .2s, border-color .2s, box-shadow .2s, opacity .4s; }
+  .signal::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--u); box-shadow: 0 0 18px var(--u); }
+  .signal:hover { transform: translateY(-2px); border-color: var(--border-hi); box-shadow: var(--shadow); }
+  .signal.high { --u: var(--bad); } .signal.medium { --u: var(--warn); } .signal.low { --u: var(--faint); }
+  .signal.closed { opacity: .6; }
+  .signal.done { border-color: rgba(52,211,153,.6); box-shadow: 0 0 30px -8px rgba(52,211,153,.7); }
+  .signal .top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .signal .urg { font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--u); }
+  .signal h3 { margin: 10px 0 6px; font-size: 17px; line-height: 1.35; letter-spacing: -0.01em; }
+  .signal .action { color: var(--muted); font-size: 14.5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .signal.open-why .action { -webkit-line-clamp: unset; }
+  .meter { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; margin: 14px 0 12px; font-size: 12px; color: var(--muted); }
+  .meter .bar { height: 6px; border-radius: 99px; background: var(--panel-hi); overflow: hidden; }
+  .meter .bar i { display: block; height: 100%; width: 0; border-radius: 99px; background: var(--grad); transition: width 1.2s cubic-bezier(.2,.8,.2,1); }
+  .meter b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .signal .foot { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .signal .foot .actions { margin-left: auto; display: flex; gap: 6px; }
+  .signal .more { display: none; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); font-size: 14px; }
+  .signal.open-why .more { display: block; animation: rise .35s both; }
+  .evidence { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; }
+  .evidence li { display: grid; grid-template-columns: 16px 1fr; gap: 8px; font-size: 13px; color: var(--muted); }
+  .evidence li::before { content: "•"; color: var(--cyan); font-weight: 800; }
+  .evidence li.lesson::before { content: "★"; color: #f5c451; }
+  .outcome { margin-top: 10px; padding: 10px 12px; border-radius: 12px; font-size: 13.5px; background: var(--panel-hi); }
+
+  /* ---------- forecast ---------- */
+  .fc-controls { display: flex; gap: 14px; align-items: end; flex-wrap: wrap; margin: 18px 0; }
+  .fc-controls label { display: block; font-size: 12px; color: var(--muted); font-weight: 600; margin-bottom: 6px; }
+  .fc-top { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1fr; gap: 14px; }
+  @media (max-width: 900px) { .fc-top { grid-template-columns: 1fr 1fr; } }
+  .big { font-size: 44px; font-weight: 800; letter-spacing: -0.03em; line-height: 1; }
+  .chartbox { position: relative; }
+  .chartbox svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .chartbox text { fill: var(--faint); font-size: 11px; font-family: Inter, system-ui; }
+  .tooltip { position: absolute; pointer-events: none; background: var(--panel-solid); border: 1px solid var(--border-hi); border-radius: 12px; padding: 10px 12px;
+             font-size: 13px; box-shadow: var(--shadow); min-width: 150px; opacity: 0; transition: opacity .15s; z-index: 2; }
+  .tooltip b { display: block; font-size: 12px; color: var(--muted); font-weight: 600; margin-bottom: 4px; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); margin-top: 10px; }
+  .legend i { display: inline-block; width: 18px; height: 4px; border-radius: 4px; margin-right: 7px; vertical-align: middle; }
+  .draw { stroke-dasharray: 3000; stroke-dashoffset: 3000; animation: draw 1.8s cubic-bezier(.4,0,.2,1) forwards; }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  .fade { animation: fadein 1.2s .4s both; } @keyframes fadein { from { opacity: 0; } }
+  .callout { display: flex; gap: 14px; align-items: center; padding: 14px 16px; border-radius: 14px; margin: 14px 0; }
+  .callout.alert { background: var(--bad-soft); border: 1px solid rgba(251,113,133,.35); }
+  .callout.ok { background: var(--good-soft); border: 1px solid rgba(52,211,153,.35); }
+  .callout .ic { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; font-weight: 800; flex: none; }
+  .callout.alert .ic { background: var(--bad); color: #fff; } .callout.ok .ic { background: var(--good); color: #052; }
+  .pipeline { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; position: relative; }
+  @media (max-width: 860px) { .pipeline { grid-template-columns: 1fr 1fr; gap: 14px; } }
+  .pipeline .stp { position: relative; padding: 0 16px 0 0; }
+  .pipeline .num { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; color: #fff; background: var(--grad);
+                   box-shadow: 0 0 22px rgba(139,123,255,.55); position: relative; z-index: 1; }
+  .pipeline .stp::after { content: ""; position: absolute; top: 19px; left: 38px; right: 0; height: 2px; background: linear-gradient(90deg, rgba(139,123,255,.6), rgba(51,214,242,.15)); }
+  .pipeline .stp:last-child::after { display: none; }
+  .pipeline h4 { margin: 12px 0 4px; font-size: 14.5px; } .pipeline p { margin: 0; font-size: 13px; color: var(--muted); }
+  .drivers { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+  .driver { padding: 14px 16px; border-radius: 14px; background: var(--panel); border: 1px solid var(--border); }
+  .driver .n { font-size: 12px; color: var(--muted); font-weight: 600; } .driver .v { font-size: 20px; font-weight: 800; margin: 4px 0; }
+  .driver .e { font-size: 12.5px; color: var(--faint); }
+  .bars { display: grid; gap: 10px; }
+  .bars .b { display: grid; grid-template-columns: 220px 1fr 64px; gap: 12px; align-items: center; font-size: 13.5px; }
+  .bars .track { height: 12px; border-radius: 99px; background: var(--panel-hi); overflow: hidden; }
+  .bars .track i { display: block; height: 100%; width: 0; border-radius: 99px; background: var(--faint); transition: width 1.2s cubic-bezier(.2,.8,.2,1); }
+  .bars .b.win .track i { background: var(--grad); box-shadow: 0 0 14px rgba(51,214,242,.5); } .bars .b.win { font-weight: 700; }
+  .bars .val { text-align: right; font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 220px; accent-color: var(--violet); }
+
+  /* ---------- who knows what ---------- */
+  .searchbar { display: flex; gap: 10px; margin: 18px 0 10px; }
+  .searchbar input { flex: 1; font-size: 16px; padding: 13px 16px; border-radius: 14px; }
+  .suggest { display: flex; gap: 8px; flex-wrap: wrap; }
+  .suggest button { cursor: pointer; }
+  .fgraph { display: grid; grid-template-columns: 1fr 300px; border: 1px solid var(--border); border-radius: 18px; overflow: hidden; background: var(--panel); margin-top: 16px; }
   @media (max-width: 860px) { .fgraph { grid-template-columns: 1fr; } }
-  .fgraph-main { position: relative; min-height: 540px; }
-  .fgraph canvas { display: block; width: 100%; height: 540px; cursor: grab; background: var(--gbg); }
-  .fgraph canvas.dragging { cursor: grabbing; }
-  .fgraph .chips-bar { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; gap: 6px; flex-wrap: wrap; pointer-events: none; }
-  .fgraph .chip { pointer-events: auto; font-size: 12px; padding: 3px 10px; border-radius: 999px; color: #fff; font-weight: 600; }
-  .fgraph .chip.rel { background: var(--panel); color: var(--muted); border: 1px solid var(--border); font-weight: 500; }
-  .fgraph .hint { position: absolute; bottom: 8px; left: 12px; font-size: 12px; color: var(--muted); }
-  .fgraph aside { border-left: 1px solid var(--border); padding: 14px; overflow-y: auto; max-height: 540px; font-size: 14px; }
-  .fgraph aside h4 { margin: 0 0 8px; }
-  .fgraph aside .kv { display: grid; grid-template-columns: 90px 1fr; gap: 4px 8px; font-size: 13px; }
+  .fgraph-main { position: relative; min-height: 560px;
+    background-image: radial-gradient(circle, var(--border) 1px, transparent 1px); background-size: 22px 22px; }
+  .fgraph canvas { display: block; width: 100%; height: 560px; cursor: grab; }
+  .fgraph .chips-bar { position: absolute; top: 12px; left: 12px; right: 12px; display: flex; gap: 6px; flex-wrap: wrap; pointer-events: none; }
+  .fgraph .chips-bar .chip { color: #fff; border: 0; }
+  .fgraph .chips-bar .chip.rel { background: var(--panel-solid); color: var(--muted); border: 1px solid var(--border); }
+  .fgraph .hint { position: absolute; bottom: 10px; left: 14px; font-size: 12px; color: var(--faint); }
+  .fgraph aside { border-left: 1px solid var(--border); padding: 18px; overflow-y: auto; max-height: 560px; font-size: 14px; background: var(--panel); }
+  .fgraph aside h4 { margin: 8px 0 10px; font-size: 17px; }
+  .fgraph aside .kv { display: grid; grid-template-columns: 90px 1fr; gap: 6px 8px; font-size: 13px; }
   .fgraph aside .kv span:nth-child(odd) { color: var(--muted); }
-  .fgraph aside .content { margin-top: 8px; font-size: 13px; white-space: pre-wrap; padding: 8px; border: 1px solid var(--border); border-radius: 8px; }
-  .fgraph .badge { display: inline-block; color: #fff; font-size: 12px; font-weight: 600; padding: 2px 10px; border-radius: 999px; margin-bottom: 8px; }
+  .fgraph aside .content { margin-top: 10px; font-size: 13px; white-space: pre-wrap; padding: 10px; border-radius: 10px; background: var(--panel-hi); }
+  .fgraph aside .rel { padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .fgraph aside code { color: var(--cyan); font-size: 12px; }
+  .people { display: grid; gap: 10px; }
+  .person { display: grid; grid-template-columns: 38px 1fr auto; gap: 12px; align-items: center; }
+  .person .av { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; color: #fff; background: var(--grad); }
+  .person .track { height: 6px; border-radius: 99px; background: var(--panel-hi); margin-top: 6px; overflow: hidden; }
+  .person .track i { display: block; height: 100%; background: var(--grad); border-radius: 99px; transition: width 1s; width: 0; }
+
+  /* ---------- evolution ---------- */
+  .tl { list-style: none; margin: 0; padding: 0 0 0 22px; position: relative; }
+  .tl::before { content: ""; position: absolute; left: 6px; top: 6px; bottom: 6px; width: 2px; background: linear-gradient(var(--violet), transparent); }
+  .tl li { position: relative; padding: 8px 0 12px; display: grid; grid-template-columns: 70px 1fr; gap: 12px; align-items: baseline; }
+  .tl li::before { content: ""; position: absolute; left: -21px; top: 13px; width: 12px; height: 12px; border-radius: 50%; background: var(--c, var(--violet)); box-shadow: 0 0 12px var(--c, var(--violet)); }
+  .tl .when { font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; }
+  .tl .what { font-size: 14px; } .tl .what .chip { margin-right: 8px; font-size: 11px; padding: 2px 8px; }
+  .tl .what span.t { color: var(--muted); }
+  .weekbars { display: flex; align-items: end; gap: 10px; height: 160px; padding-top: 10px; }
+  .weekbars .w { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 11.5px; color: var(--faint); }
+  .weekbars .col { width: 100%; max-width: 54px; border-radius: 10px 10px 4px 4px; background: var(--grad); height: 0; transition: height 1.2s cubic-bezier(.2,.8,.2,1);
+                   box-shadow: 0 0 18px -4px rgba(51,214,242,.6); position: relative; }
+  .weekbars .col span { position: absolute; top: -20px; left: 0; right: 0; text-align: center; color: var(--text); font-weight: 700; font-size: 12px; }
 </style>
 </head>
 <body>
-<header>
-  <h1>SecondBrain Explore</h1>
-  <label class="muted">Looking as <select id="user"></select></label>
-  <a href="/">← Chat</a>
-  <a href="/graph-view">Graph view →</a>
-  <a href="/hq">HQ →</a>
-</header>
-<main>
-  <div class="tabs">
-    <button type="button" data-tab="signals" class="active">Decision signals</button>
-    <button type="button" data-tab="forecast">Sales forecast</button>
-    <button type="button" data-tab="experts">Who knows what</button>
-    <button type="button" data-tab="evolution">Brain evolution</button>
-  </div>
-
-  <section id="tab-signals">
-    <div class="panel">
-      <div class="row" style="justify-content:space-between">
-        <span>What the brain advises doing next. Your answers teach it.</span>
-        <label class="muted"><input type="checkbox" id="show-closed"> Show answered</label>
-      </div>
+<main class="page">
+  <div class="head">
+    <div><div class="eyebrow" id="who-eyebrow">Lumen Home</div><h1>Explore the brain</h1></div>
+    <div class="tabs" id="tabs">
+      <button type="button" data-tab="signals" class="on">⚡ Decision signals</button>
+      <button type="button" data-tab="forecast">📈 Sales forecast</button>
+      <button type="button" data-tab="experts">🕸 Who knows what</button>
+      <button type="button" data-tab="evolution">🧬 Brain evolution</button>
     </div>
-    <div id="signals-out"></div>
-  </section>
-
-  <section id="tab-forecast" class="hidden">
-    <div class="panel">
-      <div class="row">
-        <label>Product <select id="product"></select></label>
-        <label>Days ahead <input type="range" id="horizon" min="7" max="120" step="1" value="60"> <b id="horizon-label">60</b></label>
-      </div>
-      <p class="muted">Sales history is generated sample data for Lumen Home. Forecasts follow the same permissions as everything else: they live in Merchandising.</p>
+  </div>
+  <section id="tab-signals" class="tabpane"><div id="signals-out"></div></section>
+  <section id="tab-forecast" class="tabpane hidden">
+    <div class="fc-controls">
+      <div><label>Product</label><select id="product"></select></div>
+      <div><label>Days ahead: <b id="horizon-label">60</b></label><input type="range" id="horizon" min="7" max="120" step="1" value="60"></div>
     </div>
     <div id="forecast-out"></div>
   </section>
-
-  <section id="tab-evolution" class="hidden">
-    <div class="panel">
-      <p style="margin:0">What happened after the brain's advice, and how it is learning from it.</p>
-    </div>
-    <div id="evolution-out"></div>
-  </section>
-
-  <section id="tab-experts" class="hidden">
-    <div class="panel">
-      <form id="search" class="row">
-        <input id="query" placeholder="A customer, supplier, product or topic" style="flex:1;min-width:220px" required>
-        <button class="primary">Search</button>
-      </form>
-      <div class="chips" id="examples"></div>
-      <p class="muted">Only memories the selected person may read are used, so different people get different results.</p>
-    </div>
+  <section id="tab-experts" class="tabpane hidden">
+    <form id="search" class="searchbar">
+      <input id="query" placeholder="Search a customer, supplier, product or topic…" required>
+      <button class="btn primary">Search</button>
+    </form>
+    <div class="suggest" id="examples"></div>
     <div id="experts-out"></div>
   </section>
+  <section id="tab-evolution" class="tabpane hidden"><div id="evolution-out"></div></section>
 </main>
+<script src="/static/sb.js"></script>
 <script>
+const { el, svg, money, shortMoney, pct, fmtDay, countUp, kpi } = SB;
 const $ = (id) => document.getElementById(id);
 const EXAMPLES = ["Priya Shah", "Nordlys", "Aria linen sofa", "Hearth Freight", "Black Friday", "Casa Forma", "UPS", "gross margin"];
-const state = { user: null };
+const state = { user: null, filter: "all" };
+const userSelect = el("select", { id: "user" });
+SB.nav("explore", el("span", { class: "persona" }, "Viewing as", userSelect));
 
-function el(tag, attrs = {}, ...children) {
-  const node = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs)) k === "class" ? node.className = v : node.setAttribute(k, v);
-  for (const c of children) node.append(c instanceof Node ? c : document.createTextNode(c ?? ""));
-  return node;
-}
-
-async function api(path) {
-  const res = await fetch(path, { headers: { "X-User-Id": state.user } });
+async function api(path, options = {}) {
+  const res = await fetch(path, { ...options, headers: { "X-User-Id": state.user, "Content-Type": "application/json", ...(options.headers || {}) } });
   const body = await res.json().catch(() => ({}));
   return { status: res.status, body };
 }
+const who = () => userSelect.selectedOptions[0]?.textContent || "This person";
+const denied = (what) => el("div", { class: "denied rise" }, el("b", {}, "Not visible. "), `${who()} isn't allowed to see ${what}, so the brain answers as if it doesn't exist.`);
+const loading = (h = 220) => el("div", { class: "shimmer", style: { height: h + "px" } });
+const daysUntil = (iso, today) => Math.round((new Date(iso + "T00:00:00") - new Date(today + "T00:00:00")) / 864e5);
 
-function denied(who, what) {
-  return el("div", { class: "denied" }, el("b", {}, "Not found. "), `${who} isn't allowed to see ${what}, so SecondBrain answers as if it doesn't exist.`);
-}
-
-// ---------- decision signals ----------
-const OUTCOME = { prevented: "Prevented", happened: "Happened", happened_anyway: "Happened anyway", false_alarm: "False alarm" };
-const KIND = { stockout: "Stock: runs out", backorder: "Stock: out of stock", excess_stock: "Stock: too much", business: "Business" };
+// ============ decision signals ============
+const KIND = { stockout: ["📦", "Runs out"], backorder: ["⏳", "Out of stock"], excess_stock: ["📉", "Too much stock"], business: ["💡", "Business"] };
+const OUTCOME = { prevented: ["good", "✓ Prevented"], happened: ["bad", "✕ Ran out"], happened_anyway: ["bad", "! Ran out anyway"], false_alarm: ["", "~ False alarm"] };
 
 async function loadSignals() {
   const out = $("signals-out");
-  out.textContent = "Loading…";
-  const { status, body } = await api(`/signals?include_closed=${$("show-closed").checked}`);
-  out.textContent = "";
-  if (status !== 200) { out.append(el("div", { class: "denied" }, "Couldn't load signals.")); return; }
+  out.replaceChildren(loading(110), el("div", { style: { height: "14px" } }), loading(260));
+  const showClosed = state.showClosed || false;
+  const [{ status, body }, quality, evo] = await Promise.all([api(`/signals?include_closed=${showClosed}`), api("/signals/quality"), api("/brain/evolution")]);
+  if (status !== 200) { out.replaceChildren(el("div", { class: "denied" }, "Couldn't load signals.")); return; }
+  const today = evo.body?.today || new Date().toISOString().slice(0, 10);
   const open = body.filter((s) => s.status === "open");
-  const atStake = open.reduce((t, s) => t + (s.impact_value || 0), 0);
-  out.append(el("div", { class: "summary" },
-    stat("Open signals", String(open.length)),
-    stat("Urgent", String(open.filter((s) => s.urgency === "high").length)),
-    stat("Money at stake", "$" + Math.round(atStake).toLocaleString()),
-    stat("Acted on / dismissed", String(body.length - open.length) + ($("show-closed").checked ? "" : " (hidden)"))));
-  const quality = await api("/signals/quality");
-  if (quality.status === 200) out.append(el("p", { class: "muted" }, quality.body.summary));
-  if (!body.length) { out.append(el("div", { class: "denied" }, `No signals ${$("user").selectedOptions[0].textContent} is allowed to see.`)); return; }
-  for (const s of body) out.append(signalCard(s));
+  const q = quality.status === 200 ? quality.body : null;
+  const kpis = el("div", { class: "kpis" },
+    kpi("Open signals", open.length, { glow: "glow" }),
+    kpi("Urgent", open.filter((s) => s.urgency === "high").length, { cls: "bad", delay: 70 }),
+    kpi("Money at stake", open.reduce((t, s) => t + (s.impact_value || 0), 0), { format: shortMoney, delay: 140 }),
+    kpi("Track record", q && q.prevented + q.warnings_came_true ? `${q.prevented} saved` : "Learning", {
+      d: q && q.saved ? shortMoney(q.saved) + " of sales protected" : "outcomes are judged as time passes", glow: "glow-good", delay: 210, tip: q?.summary }));
+  const filters = el("div", { class: "seg" }, [["all", "All"], ["stock", "📦 Stock"], ["business", "💡 Business"]].map(([k, label]) =>
+    el("button", { type: "button", class: state.filter === k ? "on" : "", onclick: () => { state.filter = k; loadSignals(); } }, label)));
+  const toggle = el("label", { class: "muted", style: { fontSize: "13px", display: "flex", gap: "6px", alignItems: "center" } },
+    el("input", { type: "checkbox", checked: showClosed || null, onchange: (e) => { state.showClosed = e.target.checked; loadSignals(); } }), "Show answered");
+  const shown = body.filter((s) => state.filter === "all" || (state.filter === "business") === (s.kind === "business"));
+  const grid = el("div", { class: "sgrid" }, shown.map((s, i) => signalCard(s, today, i)));
+  out.replaceChildren(kpis, el("div", { class: "filters" }, filters, toggle),
+    shown.length ? grid : el("div", { class: "card empty" }, `No signals ${who()} is allowed to see here.`));
 }
 
-const short = (v) => v >= 1e6 ? (v / 1e6).toFixed(1) + "M" : v >= 1e3 ? Math.round(v / 1e3) + "k" : String(Math.round(v));
+function signalCard(s, today, i) {
+  const [icon, kindLabel] = KIND[s.kind] || ["•", s.kind];
+  const card = el("div", { class: `signal rise ${s.urgency}${s.status !== "open" ? " closed" : ""}`, style: { animationDelay: Math.min(i, 8) * 60 + "ms" } });
+  const fill = el("i");
+  const due = s.due ? daysUntil(s.due, today) : null;
+  const dueChip = s.due ? el("span", { class: "chip " + (due <= 0 ? "bad" : due <= 7 ? "warn" : "") },
+    due < 0 ? `⏰ ${-due}d overdue` : due === 0 ? "⏰ Act today" : `⏰ Act by ${fmtDay(s.due)} · ${due}d`) : null;
+  card.append(
+    el("div", { class: "top" }, el("span", { class: "urg" }, "● " + s.urgency), el("span", { class: "chip" }, icon + " " + kindLabel),
+      s.evidence.lessons?.length ? el("span", { class: "chip accent", title: "Uses lessons learned across businesses" }, "★ Learned across businesses") : null),
+    el("h3", {}, s.title),
+    el("div", { class: "action" }, s.action),
+    el("div", { class: "meter" }, el("span", {}, "Confidence"), el("div", { class: "bar" }, fill), el("b", {}, pct(s.confidence))));
+  setTimeout(() => (fill.style.width = s.confidence * 100 + "%"), 150 + i * 60);
 
-function signalCard(s) {
-  const card = el("div", { class: `signal ${s.urgency}${s.status !== "open" ? " closed" : ""}` });
-  card.append(el("div", { class: "top" }, el("span", { class: "urg" }, s.urgency), el("span", { class: "tag" }, KIND[s.kind] || s.kind),
-    s.evidence.lessons && s.evidence.lessons.length ? el("span", { class: "tag", title: "Uses lessons learned across businesses" }, "★ Learned") : ""));
-  card.append(el("h3", {}, s.title), el("div", { class: "action" }, s.action));
-  const today = new Date().toISOString().slice(0, 10);
-  const chips = el("div", { class: "chips2" },
-    s.impact_value ? el("span", { class: "chip money", title: s.impact || "" }, "$" + short(s.impact_value) + " at stake") : "",
-    el("span", { class: "chip", title: "How sure the brain is" }, Math.round(s.confidence * 100) + "% sure"),
-    s.due ? el("span", { class: "chip" + (s.due <= today ? " late" : "") }, "Act by " + fmtDay(s.due)) : "");
-  card.append(chips);
-  const more = el("div", { class: "more" }, el("div", { class: "why" }, s.reason),
-    s.impact ? el("div", { class: "muted" }, "Impact: " + s.impact) : "");
-  const list = el("ul");
-  for (const f of s.evidence.facts || []) list.append(el("li", {}, f));
-  for (const p of s.evidence.products || []) {
-    const link = el("a", { href: "#" }, "See the forecast");
-    link.onclick = (e) => { e.preventDefault(); showTab("forecast"); $("product").value = p.sku; loadForecast(); };
-    list.append(el("li", {}, "Product forecast: ", link));
-  }
-  for (const n of s.evidence.notes || []) list.append(el("li", {}, `Note in ${n.brain.split(".").pop()}${n.created_by ? " by " + n.created_by : ""} (${n.created_at.slice(0, 10)}): ${n.content}`));
-  for (const l of s.evidence.lessons || []) list.append(el("li", { class: "lesson" }, "Lesson from other businesses: " + l));
-  more.append(list);
-  card.append(more);
-  const buttons = el("div", { class: "buttons" });
-  const why = el("button", { type: "button" }, "Why?");
-  why.onclick = () => { card.classList.toggle("open-why"); why.textContent = card.classList.contains("open-why") ? "Hide" : "Why?"; };
+  const more = el("div", { class: "more" }, el("div", {}, s.reason), s.impact ? el("div", { class: "muted", style: { marginTop: "6px" } }, "Impact: " + s.impact) : null);
+  const ev = el("ul", { class: "evidence" });
+  for (const f of s.evidence.facts || []) ev.append(el("li", {}, f));
+  for (const p of s.evidence.products || []) ev.append(el("li", {}, el("a", { href: "#", onclick: (e) => { e.preventDefault(); showTab("forecast"); $("product").value = p.sku; loadForecast(); } }, "Open this product's forecast →")));
+  for (const n of s.evidence.notes || []) ev.append(el("li", {}, `${n.created_by ? n.created_by + ", " : ""}${n.brain.split(".").pop()} (${fmtDay(n.created_at)}): ${n.content}`));
+  for (const l of s.evidence.lessons || []) ev.append(el("li", { class: "lesson" }, l));
+  more.append(ev);
+
+  const why = el("button", { type: "button", class: "btn ghost sm", onclick: () => { card.classList.toggle("open-why"); why.textContent = card.classList.contains("open-why") ? "Hide" : "Why?"; } }, "Why?");
+  const actions = el("div", { class: "actions" });
   if (s.status === "open") {
-    for (const [status, text] of [["acted", "✓ Done"], ["dismissed", "Dismiss"]]) {
-      const b = el("button", { type: "button", class: status === "acted" ? "primary" : "" }, text);
-      b.onclick = async () => {
-        const note = status === "dismissed" ? prompt("Why dismiss it? (optional, helps the brain learn)") : null;
-        await fetch(`/signals/${s.id}/feedback`, { method: "POST", headers: { "Content-Type": "application/json", "X-User-Id": state.user },
-          body: JSON.stringify({ status, note }) });
-        loadSignals();
-      };
-      buttons.append(b);
-    }
-    buttons.append(why);
-  } else {
-    if (s.outcome) card.insertBefore(el("div", { class: "outcome" }, el("span", { class: `pill ${s.outcome}` }, OUTCOME[s.outcome]), " " + s.outcome_detail), buttons);
-    buttons.append(el("span", { class: "muted" }, s.status === "expired" ? "Nobody answered before the deadline"
-      : `${s.status === "acted" ? "Acted on" : "Dismissed"} by ${s.feedback_by || "the simulation"} on ${s.feedback_at.slice(0, 10)}${s.feedback_note ? ": " + s.feedback_note : ""}`));
-    const reopen = el("button", { type: "button" }, "Reopen");
-    reopen.onclick = async () => {
-      await fetch(`/signals/${s.id}/feedback`, { method: "POST", headers: { "Content-Type": "application/json", "X-User-Id": state.user }, body: JSON.stringify({ status: "open" }) });
-      loadSignals();
+    const answer = async (status) => {
+      const note = status === "dismissed" ? prompt("Why dismiss it? (optional, helps the brain learn)") : null;
+      if (status === "acted") card.classList.add("done");
+      await api(`/signals/${s.id}/feedback`, { method: "POST", body: JSON.stringify({ status, note }) });
+      card.style.opacity = 0; setTimeout(loadSignals, 450);
     };
-    buttons.append(reopen);
+    actions.append(why, el("button", { type: "button", class: "btn ghost sm", onclick: () => answer("dismissed") }, "Dismiss"),
+      el("button", { type: "button", class: "btn good sm", onclick: () => answer("acted") }, "✓ Done"));
+  } else {
+    actions.append(why, el("button", { type: "button", class: "btn ghost sm", onclick: async () => {
+      await api(`/signals/${s.id}/feedback`, { method: "POST", body: JSON.stringify({ status: "open" }) }); loadSignals(); } }, "Reopen"));
   }
-  card.append(buttons);
+  const money = s.impact_value ? el("span", { class: "chip", title: s.impact }, "💰 " + shortMoney(s.impact_value) + " at stake") : null;
+  card.append(el("div", { class: "foot" }, money, s.status === "open" ? dueChip : null, actions), more);
+  if (s.status !== "open") {
+    const [cls, label] = OUTCOME[s.outcome] || ["", s.status === "expired" ? "Expired unanswered" : s.status === "acted" ? "Acted on" : "Dismissed"];
+    card.append(el("div", { class: "outcome" }, el("span", { class: "chip " + cls }, label), " ",
+      s.outcome_detail || (s.feedback_by ? `by ${s.feedback_by}${s.feedback_note ? ": " + s.feedback_note : ""}` : "")));
+  }
   return card;
 }
 
-// ---------- brain evolution ----------
-async function loadEvolution() {
-  const out = $("evolution-out");
-  out.textContent = "Loading…";
-  const { status, body } = await api("/brain/evolution");
-  out.textContent = "";
-  if (status !== 200) { out.append(el("div", { class: "denied" }, "Couldn't load.")); return; }
-  const o = body.outcomes, f = body.feedback, n = (k) => (o[k] ? o[k].count : 0);
-  out.append(el("div", { class: "summary" },
-    stat("Brain's date", body.today ? fmtDay(body.today) : "—"),
-    stat("Run-outs prevented", String(n("prevented"))),
-    stat("Sales saved", "$" + Math.round(body.saved || 0).toLocaleString()),
-    stat("Lost when ignored", "$" + Math.round(body.lost || 0).toLocaleString()),
-    stat("Warnings that came true", body.warning_accuracy == null ? "Not judged yet" : Math.round(body.warning_accuracy * 100) + "%"),
-    stat("Acted / dismissed / expired", `${f.acted || 0} / ${f.dismissed || 0} / ${f.expired || 0}`)));
-  if (body.accuracy) out.append(accuracyPanel(body.accuracy));
-  const list = el("ul", { class: "timeline" });
-  const LABEL = { outcome: "Outcome", feedback: "Feedback", expired: "Expired", updated: "Fact updated" };
-  // One line each: what changed. The full reason is in the tooltip.
-  for (const e of body.events.slice(0, 15)) {
-    const [headline] = e.text.split(" — ");
-    list.append(el("li", { title: e.text + (e.who ? ` — ${e.who}` : "") }, el("span", { class: "muted" }, e.at ? fmtDay(e.at.slice(0, 10)) : ""),
-      el("span", {}, el("span", { class: `pill ${e.label}` }, e.kind === "expired" ? "Expired" : e.kind === "updated" ? "Fact " + e.label : `${LABEL[e.kind]}: ${OUTCOME[e.label] || e.label}`)),
-      el("span", { class: "text" }, headline.replace(/^Outcome: /, ""))));
-  }
-  out.append(el("div", { class: "panel" }, el("h3", { style: "margin-top:0" }, "What the brain learned"),
-    body.events.length ? list : el("p", { class: "muted" }, "Nothing yet. Act on or dismiss signals; outcomes appear when time passes (HQ can simulate weeks).")));
-}
-
-// The brain grading itself: forecasts against real sales, warnings against what happened.
-function accuracyPanel(a) {
-  const pct = (v) => (v == null ? "—" : Math.round(v * 100) + "%");
-  const r = a.recent;
-  const panel = el("div", { class: "panel" }, el("h3", { style: "margin-top:0" }, "How good are the brain's forecasts?"),
-    r ? el("div", { class: "summary", title: a.summary || "" },
-      stat("Off from real sales", pct(r.wape)),
-      stat("Days inside the 80% range", pct(r.coverage80)),
-      stat("Running", r.bias == null ? "—" : `${pct(Math.abs(r.bias))} ${r.bias > 0 ? "high" : "low"}`),
-      stat("Product-days graded", r.days.toLocaleString()))
-      : el("p", { class: "muted" }, "Graded once real sales arrive."));
-  if (!a.weeks.length) return panel;
-  const table = el("table", {}, el("thead", {}, el("tr", {}, ...["Week of", "Forecasts made", "Off by (WAPE)", "Ran", "Days inside 80% range",
-    "Inside 95% range", "Warnings judged", "Right"].map((h) => el("th", {}, h)))));
-  const tbody = el("tbody");
-  for (const w of a.weeks.slice().reverse()) {
-    const fc = w.forecasts, n = w.warnings, judged = Object.values(n).reduce((t, x) => t + x, 0);
-    tbody.append(el("tr", {},
-      el("td", {}, fmtDay(w.week)),
-      el("td", {}, fc ? String(fc.forecasts) : "—"),
-      el("td", {}, fc ? pct(fc.wape) : "—"),
-      el("td", {}, fc && fc.bias != null ? `${pct(Math.abs(fc.bias))} ${fc.bias > 0 ? "high" : "low"}` : "—"),
-      el("td", {}, fc ? pct(fc.coverage80) : "—"),
-      el("td", {}, fc ? pct(fc.coverage95) : "—"),
-      el("td", {}, judged ? `${judged}: ${(n.happened || 0) + (n.happened_anyway || 0)} came true, ${n.prevented || 0} prevented, ${n.false_alarm || 0} false alarm${n.false_alarm === 1 ? "" : "s"}` : "—"),
-      el("td", {}, pct(w.warning_precision))));
-  }
-  table.append(tbody);
-  panel.append(el("details", {}, el("summary", { class: "muted" }, "Week by week"), el("div", { style: "overflow-x:auto" }, table)));
-  return panel;
-}
-
-// ---------- forecast ----------
+// ============ sales forecast ============
 async function loadProducts() {
   const { status, body } = await api("/forecast/products");
   const select = $("product");
-  select.textContent = "";
+  select.replaceChildren();
   if (status !== 200 || !body.length) {
-    // Keep the list of products visible so the denial is shown for a concrete one.
     for (const [sku, name] of [["halo-lamp", "Halo brass floor lamp"], ["aria-sofa", "Aria linen sofa"]]) select.append(el("option", { value: sku }, name));
   } else {
     for (const p of body) select.append(el("option", { value: p.sku }, p.name));
@@ -354,188 +267,177 @@ async function loadProducts() {
   loadForecast();
 }
 
-let forecastTimer = null;
+const LABELS = { seasonal_naive: "Repeat last week", year_over_year: "Last year × growth", ets: "ETS (statistical)", gradient_boosting: "Gradient boosting",
+  croston: "Croston (sporadic)", tsb: "TSB (sporadic)", adida: "ADIDA (sporadic)", cold_start: "Recent average (new)", discontinued: "Zero (stopped)", no_sales: "Zero (no sales yet)" };
+const label = (m) => LABELS[m] || m;
+const DRIVER_ICON = { "Recent level": "📍", Growth: "🚀", "Weekday rhythm": "📅", "Same weeks last year": "🔁", Promotions: "🏷️", "Black Friday effect": "🛍️" };
+
 async function loadForecast() {
   const out = $("forecast-out");
-  out.textContent = "Loading…";
+  out.replaceChildren(loading(140), el("div", { style: { height: "14px" } }), loading(340));
   const { status, body } = await api(`/forecast?product=${encodeURIComponent($("product").value)}&horizon=${$("horizon").value}&history=120`);
-  out.textContent = "";
-  const name = $("user").selectedOptions[0].textContent;
-  if (status === 400 && body.detail) { out.append(el("div", { class: "denied" }, body.detail)); return; }
-  if (status !== 200) { out.append(denied(name, "Merchandising's sales data")); return; }
+  if (status === 400 && body.detail) { out.replaceChildren(el("div", { class: "denied" }, body.detail)); return; }
+  if (status !== 200) { out.replaceChildren(denied("Merchandising's sales data")); return; }
   $("horizon").max = body.horizon_available;
-
-  const days = body.forecast, hist = body.history, product = body.product.name;
+  const days = body.forecast, product = body.product.name, q = body.quality || {};
   const total = days.reduce((s, d) => s + d.forecast, 0);
   const peak = days.reduce((a, d) => (d.forecast > a.forecast ? d : a), days[0]);
-  const bt = body.backtest[body.model];
-  const ranked = Object.entries(body.backtest).sort((a, b) => a[1].wape - b[1].wape);
+  const wape = q.wape ?? body.backtest[body.model]?.wape;
+  const gradeCls = { good: "good", fair: "warn", weak: "bad" }[q.grade] || "";
 
-  // 1. The question and the answer in one line.
-  const head = el("div", { class: "panel" },
-    el("h3", { style: "margin:0 0 4px" }, `How many ${product} units will Lumen sell each day?`),
-    el("p", { class: "muted", style: "margin:0" }, `Units sold per day for the next ${days.length} days, from ${fmtDay(days[0].day)} to ${fmtDay(days[days.length - 1].day)}.`),
-    el("div", { class: "stats" },
-      stat(`Expected sales, next ${days.length} days`, Math.round(total).toLocaleString() + " units"),
-      stat("Busiest day", `${fmtDay(peak.day)}: ~${Math.round(peak.forecast)}`),
-      stat("Typical error", `±${(bt.wape * 100).toFixed(0)}% a day`)));
-  // How far to trust it, in plain words: the grade, why, and anything odd in the data.
-  const q = body.quality;
-  if (q) head.append(el("div", { class: "reason" }, el("b", {}, `Forecast quality: ${q.grade}. `), q.summary.replace(/^\w+: /, ""),
-    ...(q.warnings.length ? [el("div", { class: "muted" }, q.warnings.join(" "))] : [])));
-  out.append(head);
+  const top = el("div", { class: "fc-top" },
+    el("div", { class: "kpi glow rise" }, el("div", { class: "k" }, `${product} · next ${days.length} days`),
+      (() => { const v = el("div", { class: "big" }); countUp(v, total, (x) => Math.round(x).toLocaleString()); return v; })(),
+      el("div", { class: "d" }, `units expected, ${fmtDay(days[0].day)} – ${fmtDay(days[days.length - 1].day)}`)),
+    kpi("Busiest day", `${fmtDay(peak.day)}`, { d: `~${Math.round(peak.forecast).toLocaleString()} units`, delay: 70 }),
+    kpi("Accuracy on past data", wape == null ? "—" : (1 - wape) * 100, { format: (x) => Math.round(x) + "%", d: "tested on periods it never saw", delay: 140, glow: "glow-good" }),
+    kpi("Forecast quality", q.grade ? q.grade[0].toUpperCase() + q.grade.slice(1) : "—", { cls: gradeCls, d: q.pattern ? q.pattern + " sales" : "", tip: q.summary, delay: 210 }));
 
-  // 2. What it means for the business: stock and the decision.
-  if (body.stock) out.append(stockPanel(body, product));
-
-  // 3. How the forecast is made, in plain steps.
-  out.append(el("div", { class: "panel" },
-    el("h3", { style: "margin-top:0" }, "How this forecast is made"),
-    el("div", { class: "steps" },
-      el("div", { class: "step" }, el("b", {}, "1. Learn from history"), `${product}'s daily sales since September 2024, with every past promotion and holiday.`),
-      el("div", { class: "step" }, el("b", {}, "2. Try 4 methods"), "Repeat last week · Last year × growth · ETS (statistical) · Gradient boosting (learns promotions and holidays)."),
-      el("div", { class: "step" }, el("b", {}, "3. Test on the past"), "Each method forecasts 4 past 8-week periods it never saw, including the same weeks last year, and is scored on its error."),
-      el("div", { class: "step" }, el("b", {}, "4. Use the best"), `${ranked.length > 1 ? `${label(body.model)} had the smallest error (${(bt.wape * 100).toFixed(1)}% vs ${(ranked[1][1].wape * 100).toFixed(1)}% for the next best), so it makes this forecast. Ranges come from its past errors.` : body.reason}`)),
-    el("p", { class: "muted", style: "margin-bottom:0" }, `Trained on sales up to ${fmtDay(body.trained_through)}. Sales history is generated sample data for Lumen Home.`)));
-
-  // 4. What drives it, measured from the product's own history.
-  const drivers = el("div", { class: "drivers" });
-  for (const d of body.drivers) drivers.append(el("div", { class: "driver" }, el("div", { class: "n" }, d.name), el("div", { class: "v" }, d.value), el("div", { class: "e" }, d.explanation)));
-  out.append(el("div", { class: "panel" }, el("h3", { style: "margin-top:0" }, "What drives this forecast"),
-    el("p", { class: "muted" }, "The patterns the models pick up, measured directly from this product's sales."), drivers));
-
-  // 5. The chart and the model comparison.
-  out.append(el("div", { class: "panel" }, el("h3", { style: "margin-top:0" }, "Past sales and forecast"),
-    chart(hist, days),
+  const chartCard = el("div", { class: "card section" },
+    el("div", { class: "section-head" }, el("div", {}, el("h2", {}, "Past sales and forecast"),
+      el("p", {}, `Hover to see each day. Trained on sales up to ${fmtDay(body.trained_through)}.`))),
+    forecastChart(body.history, days),
     el("div", { class: "legend" },
-      legendItem("Past sales", "var(--history)"), legendItem("Forecast", "var(--accent)"),
-      legendItem("80% likely range", "var(--band)"), legendItem("95% likely range", "var(--band2)"))), backtestTable(body));
+      el("span", {}, el("i", { style: { background: "var(--muted)" } }), "Past sales"),
+      el("span", {}, el("i", { style: { background: "var(--grad)" } }), "Forecast"),
+      el("span", {}, el("i", { style: { background: "rgba(139,123,255,.45)" } }), "80% likely range"),
+      el("span", {}, el("i", { style: { background: "rgba(139,123,255,.18)" } }), "95% likely range")));
+
+  const pipeline = el("div", { class: "card section" }, el("div", { class: "section-head" }, el("h2", {}, "How the brain makes this forecast")),
+    el("div", { class: "pipeline" },
+      step(1, "Learn from history", `Every day of ${product}'s sales, promotions and holidays.`),
+      step(2, `Try ${Object.keys(body.backtest).length} methods`, Object.keys(body.backtest).map(label).join(" · ")),
+      step(3, "Test on the past", "Each method forecasts past periods it never saw, and is scored on its error."),
+      step(4, "Use the best", `${label(body.model)} won${wape != null ? `: off by ${Math.round(wape * 100)}% on a typical day` : ""}.`)));
+
+  const drivers = el("div", { class: "card section" }, el("div", { class: "section-head" }, el("div", {}, el("h2", {}, "What drives it"),
+    el("p", {}, "Patterns measured from this product's own sales."))),
+    el("div", { class: "drivers" }, body.drivers.map((d, i) => el("div", { class: "driver rise", style: { animationDelay: i * 60 + "ms" } },
+      el("div", { class: "n" }, (DRIVER_ICON[d.name] || "•") + "  " + d.name), el("div", { class: "v" }, d.value), el("div", { class: "e" }, d.explanation)))));
+
+  out.replaceChildren(top, body.stock ? stockCard(body) : "", chartCard, pipeline, drivers, backtestCard(body));
 }
+const step = (n, title, text) => el("div", { class: "stp" }, el("div", { class: "num" }, String(n)), el("h4", {}, title), el("p", {}, text));
 
-function stockPanel(body, product) {
-  const st = body.stock, proj = st.projection.slice(0, body.forecast.length);
-  const signal = body.signals[0];
-  const facts = el("div", { class: "stats" },
-    stat("On hand today", st.on_hand.toLocaleString() + " units"),
-    stat("On order", st.on_order ? `${st.on_order.toLocaleString()}, arriving ${fmtDay(st.order_eta)}` : "Nothing"),
-    stat("Supplier lead time", `${st.lead_time_days} days (${st.supplier})`),
-    stat("Runs out", st.runs_out ? fmtDay(st.runs_out) : "Not within the forecast"));
-  const panel = el("div", { class: "panel" }, el("h3", { style: "margin-top:0" }, "Stock outlook: what this means for the business"), facts);
-  if (signal) panel.append(el("div", { class: "callout" }, el("b", {}, signal.title), el("div", {}, signal.action)));
-  else panel.append(el("div", { class: "callout ok" }, `Stock covers the forecast for the next ${body.forecast.length} days. No action needed.`));
-  panel.append(stockChart(proj));
-  return panel;
-}
-
-function stockChart(proj) {
-  const W = 1000, H = 160, P = { l: 52, r: 12, t: 10, b: 24 };
-  const vals = proj.map((p) => p.stock), max = Math.max(...vals, 1), min = Math.min(...vals, 0);
-  const x = (i) => P.l + (i / Math.max(proj.length - 1, 1)) * (W - P.l - P.r);
-  const y = (v) => H - P.b - ((v - min) / (max - min || 1)) * (H - P.t - P.b);
-  const ns = "http://www.w3.org/2000/svg", svg = document.createElementNS(ns, "svg");
-  svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("width", "100%");
-  svg.setAttribute("role", "img"); svg.setAttribute("aria-label", "Projected stock");
-  const add = (tag, attrs) => { const e = document.createElementNS(ns, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); svg.append(e); return e; };
-  add("line", { x1: P.l, x2: W - P.r, y1: y(0), y2: y(0), stroke: "var(--bad)", "stroke-dasharray": "4 4" });
-  add("text", { x: P.l - 6, y: y(0) + 4, "text-anchor": "end" }).textContent = "0";
-  add("text", { x: P.l - 6, y: y(max) + 10, "text-anchor": "end" }).textContent = Math.round(max).toLocaleString();
-  add("polyline", { points: proj.map((p, i) => `${x(i)},${y(Math.max(p.stock, min))}`).join(" "), fill: "none", stroke: "var(--good)", "stroke-width": 2.4 });
-  proj.forEach((p, i) => { if (p.day.endsWith("-01")) add("text", { x: x(i), y: H - 6, "text-anchor": "middle" }).textContent = fmtDay(p.day); });
-  add("text", { x: P.l + 4, y: P.t + 10 }).textContent = "Projected stock left (units), if nothing is ordered";
-  return svg;
-}
-
-function stat(k, v) { return el("div", { class: "stat" }, el("div", { class: "muted" }, k), el("div", { class: "v" }, v)); }
-function legendItem(text, color) { const s = el("span", {}, text); s.style.setProperty("--c", color); return s; }
-const fmtDay = (d) => new Date(d + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" });
-const LABELS = { seasonal_naive: "Repeat last week", year_over_year: "Last year × growth", ets: "ETS (statistical)", gradient_boosting: "Gradient boosting (promotions, holidays)",
-  croston: "Croston (sporadic sales)", tsb: "TSB (sporadic sales)", adida: "ADIDA (sporadic sales)", cold_start: "Recent average (new product)",
-  discontinued: "Zero (stopped selling)", no_sales: "Zero (no sales yet)" };
-const label = (m) => LABELS[m] || m;
-
-function chart(hist, days) {
-  const W = 1000, H = 300, P = { l: 44, r: 12, t: 12, b: 28 };
-  const all = [...hist.map((h) => ({ day: h.day, v: h.units })), ...days.map((d) => ({ day: d.day, v: d.hi95 }))];
-  const max = Math.max(...all.map((p) => p.v)) * 1.08 || 1;
-  const n = hist.length + days.length;
-  const x = (i) => P.l + (i / (n - 1)) * (W - P.l - P.r);
-  const y = (v) => H - P.b - (v / max) * (H - P.t - P.b);
-  const ns = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(ns, "svg");
-  svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("width", "100%");
-  svg.setAttribute("role", "img"); svg.setAttribute("aria-label", "Past sales and forecast");
-  const add = (tag, attrs) => { const e = document.createElementNS(ns, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); svg.append(e); return e; };
-  for (let g = 0; g <= 4; g++) {
-    const v = (max / 4) * g;
-    add("line", { x1: P.l, x2: W - P.r, y1: y(v), y2: y(v), stroke: "var(--border)" });
-    add("text", { x: P.l - 6, y: y(v) + 4, "text-anchor": "end" }).textContent = Math.round(v);
+function forecastChart(hist, days) {
+  const W = 1100, H = 340, P = { l: 48, r: 16, t: 18, b: 30 };
+  const series = [...hist.map((h) => ({ day: h.day, v: h.units, past: true })), ...days.map((d) => ({ ...d, v: d.forecast }))];
+  const max = Math.max(...hist.map((h) => h.units), ...days.map((d) => d.hi95)) * 1.08 || 1;
+  const n = series.length, off = hist.length;
+  const x = (i) => P.l + (i / (n - 1)) * (W - P.l - P.r), y = (v) => H - P.b - (v / max) * (H - P.t - P.b);
+  const g = svg("g");
+  const root = svg("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Past sales and forecast" },
+    svg("defs", {},
+      svg("linearGradient", { id: "fcLine", x1: 0, y1: 0, x2: 1, y2: 0 }, svg("stop", { offset: 0, "stop-color": "#8b7bff" }), svg("stop", { offset: 1, "stop-color": "#33d6f2" })),
+      svg("linearGradient", { id: "histFill", x1: 0, y1: 0, x2: 0, y2: 1 }, svg("stop", { offset: 0, "stop-color": "#8b96ad", "stop-opacity": 0.25 }), svg("stop", { offset: 1, "stop-color": "#8b96ad", "stop-opacity": 0 })),
+      svg("filter", { id: "glow" }, svg("feGaussianBlur", { stdDeviation: 4, result: "b" }), svg("feMerge", {}, svg("feMergeNode", { in: "b" }), svg("feMergeNode", { in: "SourceGraphic" })))), g);
+  for (let k = 0; k <= 4; k++) {
+    const v = (max / 4) * k;
+    g.append(svg("line", { x1: P.l, x2: W - P.r, y1: y(v), y2: y(v), stroke: "var(--border)" }),
+      svg("text", { x: P.l - 8, y: y(v) + 4, "text-anchor": "end" }, String(Math.round(v))));
   }
-  const off = hist.length;
-  const band = (lo, hi, fill) => {
-    const top = days.map((d, i) => `${x(off + i)},${y(d[hi])}`).join(" ");
-    const bottom = days.map((d, i) => `${x(off + i)},${y(d[lo])}`).reverse().join(" ");
-    add("polygon", { points: `${top} ${bottom}`, fill });
+  // Forecast region tint.
+  g.append(svg("rect", { x: x(off), y: P.t, width: W - P.r - x(off), height: H - P.t - P.b, fill: "rgba(139,123,255,0.05)" }));
+  const band = (lo, hi, op) => {
+    const topPts = days.map((d, i) => `${x(off + i)},${y(d[hi])}`).join(" ");
+    const bot = days.map((d, i) => `${x(off + i)},${y(d[lo])}`).reverse().join(" ");
+    return svg("polygon", { points: `${topPts} ${bot}`, fill: `rgba(139,123,255,${op})`, class: "fade" });
   };
-  band("lo95", "hi95", "var(--band2)");
-  band("lo80", "hi80", "var(--band)");
-  add("polyline", { points: hist.map((h, i) => `${x(i)},${y(h.units)}`).join(" "), fill: "none", stroke: "var(--history)", "stroke-width": 1.6 });
-  add("polyline", { points: days.map((d, i) => `${x(off + i)},${y(d.forecast)}`).join(" "), fill: "none", stroke: "var(--accent)", "stroke-width": 2.4 });
-  add("line", { x1: x(off), x2: x(off), y1: P.t, y2: H - P.b, stroke: "var(--muted)", "stroke-dasharray": "4 4" });
-  add("text", { x: x(off) + 6, y: P.t + 12 }).textContent = "today";
-  const points = [...hist.map((h) => h.day), ...days.map((d) => d.day)];
-  points.forEach((d, i) => {
-    if (d.endsWith("-01")) add("text", { x: x(i), y: H - 8, "text-anchor": "middle" }).textContent = fmtDay(d);
-    if (d.endsWith("-11-27")) {
-      add("line", { x1: x(i), x2: x(i), y1: P.t, y2: H - P.b, stroke: "var(--bad)", "stroke-dasharray": "2 4" });
-      add("text", { x: x(i) + 4, y: P.t + 26, fill: "var(--bad)" }).textContent = "Black Friday";
-    }
+  g.append(band("lo95", "hi95", 0.14), band("lo80", "hi80", 0.3));
+  const histPts = hist.map((h, i) => `${x(i)},${y(h.units)}`).join(" ");
+  g.append(svg("polygon", { points: `${x(0)},${y(0)} ${histPts} ${x(off - 1)},${y(0)}`, fill: "url(#histFill)" }),
+    svg("polyline", { points: histPts, fill: "none", stroke: "var(--muted)", "stroke-width": 1.6, class: "draw" }),
+    svg("polyline", { points: days.map((d, i) => `${x(off + i)},${y(d.forecast)}`).join(" "), fill: "none", stroke: "url(#fcLine)", "stroke-width": 3, filter: "url(#glow)", class: "draw", style: "animation-delay:.5s" }),
+    svg("line", { x1: x(off), x2: x(off), y1: P.t, y2: H - P.b, stroke: "var(--cyan)", "stroke-dasharray": "3 5" }),
+    svg("text", { x: x(off) + 6, y: P.t + 10, style: "fill: var(--cyan); font-weight: 700" }, "TODAY"));
+  series.forEach((p, i) => {
+    if (p.day.endsWith("-01")) g.append(svg("text", { x: x(i), y: H - 8, "text-anchor": "middle" }, fmtDay(p.day)));
+    if (p.day.endsWith("-11-27")) g.append(svg("line", { x1: x(i), x2: x(i), y1: P.t, y2: H - P.b, stroke: "var(--pink)", "stroke-dasharray": "2 4" }),
+      svg("text", { x: x(i) + 5, y: P.t + 26, style: "fill: var(--pink); font-weight: 700" }, "Black Friday"));
   });
-  return svg;
+  // Hover: a crosshair and the day's numbers.
+  const cross = svg("line", { y1: P.t, y2: H - P.b, stroke: "var(--border-hi)", opacity: 0 });
+  const dot = svg("circle", { r: 5, fill: "var(--cyan)", stroke: "var(--bg)", "stroke-width": 2, opacity: 0 });
+  g.append(cross, dot);
+  const tip = el("div", { class: "tooltip" });
+  const box = el("div", { class: "chartbox" }, root, tip);
+  const hit = svg("rect", { x: P.l, y: P.t, width: W - P.l - P.r, height: H - P.t - P.b, fill: "transparent" });
+  g.append(hit);
+  hit.addEventListener("mousemove", (ev) => {
+    const r = root.getBoundingClientRect(), sx = ((ev.clientX - r.left) / r.width) * W;
+    const i = Math.max(0, Math.min(n - 1, Math.round(((sx - P.l) / (W - P.l - P.r)) * (n - 1)))), p = series[i];
+    cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.setAttribute("opacity", 1);
+    dot.setAttribute("cx", x(i)); dot.setAttribute("cy", y(p.v)); dot.setAttribute("opacity", 1);
+    tip.replaceChildren(el("b", {}, new Date(p.day + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })),
+      ...(p.past ? [el("div", {}, `Sold ${p.v.toLocaleString()} units`)]
+        : [el("div", {}, `Expected ${Math.round(p.v).toLocaleString()} units`), el("div", { class: "muted" }, `80% range ${Math.round(p.lo80)}–${Math.round(p.hi80)}`)]));
+    const px = (x(i) / W) * r.width;
+    tip.style.left = Math.min(r.width - 170, px + 14) + "px"; tip.style.top = (y(p.v) / H) * r.height - 30 + "px"; tip.style.opacity = 1;
+  });
+  hit.addEventListener("mouseleave", () => { tip.style.opacity = 0; cross.setAttribute("opacity", 0); dot.setAttribute("opacity", 0); });
+  return box;
 }
 
-function backtestTable(body) {
+function stockCard(body) {
+  const st = body.stock, proj = st.projection.slice(0, body.forecast.length), signal = body.signals[0];
+  const W = 1100, H = 170, P = { l: 48, r: 16, t: 14, b: 26 };
+  const vals = proj.map((p) => p.stock), max = Math.max(...vals, 1), min = Math.min(...vals, 0);
+  const x = (i) => P.l + (i / Math.max(proj.length - 1, 1)) * (W - P.l - P.r), y = (v) => H - P.b - ((v - min) / (max - min || 1)) * (H - P.t - P.b);
+  const pts = proj.map((p, i) => `${x(i)},${y(p.stock)}`).join(" ");
+  const outAt = proj.findIndex((p) => p.stock <= 0);
+  const chart = svg("svg", { viewBox: `0 0 ${W} ${H}` },
+    svg("defs", {}, svg("linearGradient", { id: "stk", x1: 0, y1: 0, x2: 0, y2: 1 }, svg("stop", { offset: 0, "stop-color": "#34d399", "stop-opacity": 0.35 }), svg("stop", { offset: 1, "stop-color": "#34d399", "stop-opacity": 0 }))),
+    svg("polygon", { points: `${x(0)},${y(Math.max(min, 0))} ${pts} ${x(proj.length - 1)},${y(Math.max(min, 0))}`, fill: "url(#stk)", class: "fade" }),
+    svg("polyline", { points: pts, fill: "none", stroke: "var(--good)", "stroke-width": 2.6, class: "draw" }),
+    svg("line", { x1: P.l, x2: W - P.r, y1: y(0), y2: y(0), stroke: "var(--bad)", "stroke-dasharray": "5 5" }),
+    svg("text", { x: P.l - 8, y: y(0) + 4, "text-anchor": "end" }, "0"),
+    svg("text", { x: P.l - 8, y: y(max) + 10, "text-anchor": "end" }, Math.round(max).toLocaleString()),
+    outAt >= 0 ? [svg("circle", { cx: x(outAt), cy: y(0), r: 7, fill: "var(--bad)", class: "pop" }),
+      svg("text", { x: x(outAt), y: y(0) - 14, "text-anchor": "middle", style: "fill: var(--bad); font-weight: 800" }, "Runs out " + fmtDay(proj[outAt].day))] : null,
+    proj.map((p, i) => (p.day.endsWith("-01") ? svg("text", { x: x(i), y: H - 6, "text-anchor": "middle" }, fmtDay(p.day)) : null)));
+  return el("div", { class: "card section" },
+    el("div", { class: "section-head" }, el("div", {}, el("h2", {}, "What it means for stock"), el("p", {}, "Projected units left if nothing more is ordered."))),
+    el("div", { class: "kpis" },
+      kpi("On hand", st.on_hand, { d: "units today" }),
+      kpi("On order", st.on_order || 0, { d: st.on_order ? `arriving ${fmtDay(st.order_eta)}` : "nothing ordered", delay: 60 }),
+      kpi("Supplier lead time", `${st.lead_time_days} days`, { d: st.supplier, delay: 120 }),
+      kpi("Runs out", st.runs_out ? fmtDay(st.runs_out) : "Not soon", { cls: st.runs_out ? "bad" : "good", glow: st.runs_out ? "glow-bad" : "glow-good", delay: 180 })),
+    signal ? el("div", { class: "callout alert" }, el("div", { class: "ic" }, "!"), el("div", {}, el("b", {}, signal.title), el("div", { class: "muted" }, signal.action)))
+           : el("div", { class: "callout ok" }, el("div", { class: "ic" }, "✓"), el("div", {}, `Stock covers the next ${body.forecast.length} days. No action needed.`)),
+    el("div", { class: "chartbox" }, chart));
+}
+
+function backtestCard(body) {
   const rows = Object.entries(body.backtest).sort((a, b) => a[1].wape - b[1].wape);
-  const table = el("table", {},
-    el("thead", {}, el("tr", {}, el("th", {}, "Model"), el("th", { class: "num" }, "WAPE"), el("th", { class: "num" }, "MASE"),
-      el("th", { class: "num" }, "Same weeks last year"))));
-  const tbody = el("tbody");
-  for (const [m, s] of rows) {
-    tbody.append(el("tr", { class: m === body.model ? "chosen" : "" },
-      el("td", {}, label(m) + (m === body.model ? "  ✓ chosen" : "")), el("td", { class: "num" }, (s.wape * 100).toFixed(1) + "%"),
-      el("td", { class: "num" }, s.mase == null ? "–" : s.mase.toFixed(2)), el("td", { class: "num" }, ((s.windows["same weeks last year"] ?? 0) * 100).toFixed(1) + "%")));
-  }
-  table.append(tbody);
-  return el("div", { class: "panel" }, el("h3", { style: "margin-top:0" }, "Backtest: how each model did on past data"),
-    el("p", { class: "muted" }, "Lower is better. Each model forecast 4 past 8-week windows it hadn't seen; the most accurate one is used."), table);
+  const worst = Math.max(...rows.map(([, s]) => s.wape), 0.01);
+  const bars = el("div", { class: "bars" }, rows.map(([m, s]) => {
+    const fill = el("i");
+    setTimeout(() => (fill.style.width = (s.wape / worst) * 100 + "%"), 200);
+    return el("div", { class: "b" + (m === body.model ? " win" : "") }, el("span", {}, (m === body.model ? "🏆 " : "") + label(m)),
+      el("div", { class: "track" }, fill), el("span", { class: "val" }, (s.wape * 100).toFixed(1) + "%"));
+  }));
+  return el("div", { class: "card section" }, el("div", { class: "section-head" }, el("div", {}, el("h2", {}, "The contest"),
+    el("p", {}, "Error of each method on past periods it never saw. Shorter is better; the winner makes the forecast."))), bars);
 }
 
-// ---------- who knows what: FalkorDB-style graph ----------
-// The same picture FalkorDB's own browser draws (labelled nodes, typed arrows),
-// built only from the API responses for the selected person, so it never shows
-// more than they may see.
-const LABEL_COLORS = { Customer: "#ED70B1", Supplier: "#EF8759", Product: "#7167F6", Person: "#E9B741",
-  Employee: "#E9B741", Carrier: "#5F95DE", Place: "#49C3B8", Organization: "#9E8CF2", Topic: "#8E9BB3", Memory: "#B4BCC9" };
-const labelOf = (kind) => kind ? kind[0].toUpperCase() + kind.slice(1) : "Entity";
-const colorOf = (label) => LABEL_COLORS[label] || "#7f8fa6";
+// ============ who knows what (FalkorDB-style graph) ============
+const LABEL_COLORS = { Customer: "#f472b6", Supplier: "#fb923c", Product: "#8b7bff", Person: "#fbbf24", Employee: "#fbbf24", Carrier: "#60a5fa",
+  Place: "#2dd4bf", Organization: "#a78bfa", Topic: "#94a3b8", Memory: "#64748b" };
+const labelOf = (kind) => (kind ? kind[0].toUpperCase() + kind.slice(1) : "Entity");
+const colorOf = (l) => LABEL_COLORS[l] || "#7f8fa6";
 const keyOf = (name) => name.trim().toLowerCase().replace(/\s+/g, " ");
 const relType = (r) => r.trim().toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_|_$/g, "");
+const G = { nodes: new Map(), edges: [], view: { x: 0, y: 0, k: 1 }, selected: null, hover: null, alpha: 1, canvas: null, ctx: null, center: null, born: 0 };
 
-const G = { nodes: new Map(), edges: [], view: { x: 0, y: 0, k: 1 }, selected: null, hover: null, alpha: 1, canvas: null, ctx: null, center: null };
-
-function addNode(id, label, caption, props, pos) {
+function addNode(id, lbl, caption, props, pos) {
   if (!G.nodes.has(id)) {
     const a = Math.random() * Math.PI * 2, r = 80 + Math.random() * 60;
-    G.nodes.set(id, { id, label, caption, props, x: (pos?.x ?? 0) + Math.cos(a) * r, y: (pos?.y ?? 0) + Math.sin(a) * r, vx: 0, vy: 0 });
+    G.nodes.set(id, { id, label: lbl, caption, props, x: (pos?.x ?? 0) + Math.cos(a) * r, y: (pos?.y ?? 0) + Math.sin(a) * r, vx: 0, vy: 0, t: performance.now() });
   }
   return G.nodes.get(id);
 }
-function addEdge(s, t, type) {
-  if (s === t || G.edges.some((e) => e.s === s && e.t === t && e.type === type)) return;
-  G.edges.push({ s, t, type });
-}
+function addEdge(s, t, type) { if (s !== t && !G.edges.some((e) => e.s === s && e.t === t && e.type === type)) G.edges.push({ s, t, type }); }
 
-// One entity answer becomes: the entity, the entities it relates to, the memories
-// that mention it, and the people who wrote those memories.
 function mergeEntity(e, anchor) {
   const center = addNode("e:" + keyOf(e.name), labelOf(e.kind), e.name, { name: e.name, kind: e.kind, memories: e.memory_count }, anchor);
   center.props.memories = e.memory_count;
@@ -545,174 +447,122 @@ function mergeEntity(e, anchor) {
   }
   for (const m of (e.memories || []).slice(0, 12)) {
     const first = (m.content || "").split("\n").find((l) => l.trim()) || "";
-    const mem = addNode("m:" + m.id, "Memory", first.replace(/›.*/, "").slice(0, 28), {
-      brain: m.brain, type: m.type, created: (m.created_at || "").slice(0, 10), content: m.content }, center);
+    const mem = addNode("m:" + m.id, "Memory", first.replace(/›.*/, "").slice(0, 28), { brain: m.brain, type: m.type, created: (m.created_at || "").slice(0, 10), content: m.content }, center);
     addEdge(mem.id, center.id, "MENTIONS");
     for (const r of e.relations) if (r.memory_id === m.id) addEdge(mem.id, "e:" + keyOf(r.entity.name), "MENTIONS");
     if (m.created_by) {
       const person = (e.people || []).find((p) => p.id === m.created_by);
-      const node = addNode("p:" + m.created_by, "Person", (person?.name || m.created_by).replace(/\s*\(.*\)/, ""),
-        { id: m.created_by, name: person?.name || m.created_by }, mem);
+      const node = addNode("p:" + m.created_by, "Person", (person?.name || m.created_by).replace(/\s*\(.*\)/, ""), { id: m.created_by, name: person?.name || m.created_by }, mem);
       addEdge(node.id, mem.id, "WROTE");
     }
   }
-  for (const p of e.people || []) {
-    if (!G.nodes.has("p:" + p.id)) {
-      const node = addNode("p:" + p.id, "Person", p.name.replace(/\s*\(.*\)/, ""), { id: p.id, name: p.name }, center);
-      addEdge(node.id, center.id, "MENTIONED_IN_NOTES_ABOUT");
-    }
+  for (const p of e.people || []) if (!G.nodes.has("p:" + p.id)) {
+    const node = addNode("p:" + p.id, "Person", p.name.replace(/\s*\(.*\)/, ""), { id: p.id, name: p.name }, center);
+    addEdge(node.id, center.id, "MENTIONED_IN_NOTES_ABOUT");
   }
   G.alpha = 1;
   return center;
 }
 
 function graphPanel() {
-  const canvas = el("canvas");
-  const chips = el("div", { class: "chips-bar" });
+  const canvas = el("canvas"), chips = el("div", { class: "chips-bar" });
   const aside = el("aside", {}, el("p", { class: "muted" }, "Click a node to see its properties. Double-click an entity to expand it."));
-  const main = el("div", { class: "fgraph-main" }, canvas, chips, el("div", { class: "hint" }, "Drag nodes · scroll to zoom · drag the background to move"));
   G.canvas = canvas; G.ctx = canvas.getContext("2d"); G.chips = chips; G.aside = aside;
   bindGraphEvents(canvas);
-  return el("div", { class: "fgraph" }, main, aside);
+  return el("div", { class: "fgraph rise" }, el("div", { class: "fgraph-main" }, canvas, chips, el("div", { class: "hint" }, "Drag nodes · scroll to zoom · drag the background to pan")), aside);
 }
-
 function renderChips() {
-  G.chips.textContent = "";
-  const counts = {};
+  const counts = {}, types = {};
   for (const n of G.nodes.values()) counts[n.label] = (counts[n.label] || 0) + 1;
-  for (const [label, count] of Object.entries(counts)) {
-    const c = el("span", { class: "chip" }, `${label} (${count})`); c.style.background = colorOf(label); G.chips.append(c);
-  }
-  const types = {};
   for (const e of G.edges) types[e.type] = (types[e.type] || 0) + 1;
-  for (const [type, count] of Object.entries(types)) G.chips.append(el("span", { class: "chip rel" }, `${type} (${count})`));
+  G.chips.replaceChildren(...Object.entries(counts).map(([l, c]) => el("span", { class: "chip", style: { background: colorOf(l) } }, `${l} ${c}`)),
+    ...Object.entries(types).slice(0, 6).map(([t, c]) => el("span", { class: "chip rel" }, `${t} ${c}`)));
 }
-
 function showDetails(n) {
-  G.aside.textContent = "";
-  if (!n) { G.aside.append(el("p", { class: "muted" }, "Click a node to see its properties. Double-click an entity to expand it.")); return; }
-  const badge = el("span", { class: "badge" }, n.label); badge.style.background = colorOf(n.label);
-  G.aside.append(badge, el("h4", {}, n.caption));
+  if (!n) { G.aside.replaceChildren(el("p", { class: "muted" }, "Click a node to see its properties. Double-click an entity to expand it.")); return; }
   const kv = el("div", { class: "kv" });
-  for (const [k, v] of Object.entries(n.props)) if (k !== "content" && v !== undefined && v !== null) kv.append(el("span", {}, k), el("span", {}, String(v)));
-  G.aside.append(kv);
-  if (n.props.content) G.aside.append(el("div", { class: "content" }, n.props.content));
+  for (const [k, v] of Object.entries(n.props)) if (k !== "content" && v != null) kv.append(el("span", {}, k), el("span", {}, String(v)));
   const rels = G.edges.filter((e) => e.s === n.id || e.t === n.id);
-  if (rels.length) {
-    G.aside.append(el("h4", { style: "margin-top:12px" }, `Relationships (${rels.length})`));
-    for (const e of rels) {
-      const other = G.nodes.get(e.s === n.id ? e.t : e.s);
-      G.aside.append(el("div", { class: "rel" }, e.s === n.id ? "→ " : "← ", el("code", {}, e.type), " " + other.caption));
-    }
-  }
-  if (n.id.startsWith("e:")) {
-    const b = el("button", { type: "button", style: "margin-top:10px" }, "Expand this node");
-    b.onclick = () => expand(n);
-    G.aside.append(b);
-  }
+  G.aside.replaceChildren(el("div", {}, el("span",{ class: "chip", style: { background: colorOf(n.label), color: "#fff", border: 0 } }, n.label), el("h4", {}, n.caption), kv,
+    n.props.content ? el("div", { class: "content" }, n.props.content) : null,
+    rels.length ? el("div", { class: "eyebrow", style: { margin: "16px 0 6px" } }, `Relationships · ${rels.length}`) : null,
+    rels.map((e) => { const o = G.nodes.get(e.s === n.id ? e.t : e.s); return el("div", { class: "rel" }, e.s === n.id ? "→ " : "← ", el("code", {}, e.type), " " + o.caption); }),
+    n.id.startsWith("e:") ? el("button", { type: "button", class: "btn sm", style: { marginTop: "12px" }, onclick: () => expand(n) }, "＋ Expand") : null));
 }
-
-async function expand(n) {
-  const { status, body } = await api(`/entities/${encodeURIComponent(n.props.name)}`);
-  if (status === 200) { mergeEntity(body, n); renderChips(); showDetails(n); }
-}
+async function expand(n) { const { status, body } = await api(`/entities/${encodeURIComponent(n.props.name)}`); if (status === 200) { mergeEntity(body, n); renderChips(); showDetails(n); } }
 
 function tickGraph() {
   const nodes = [...G.nodes.values()], a = G.alpha;
   if (a < 0.01) return;
   for (let i = 0; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) {
-    const p = nodes[i], q = nodes[j];
-    let dx = q.x - p.x, dy = q.y - p.y, d2 = Math.max(dx * dx + dy * dy, 100);
-    const f = (5200 / d2) * a, d = Math.sqrt(d2); dx /= d; dy /= d;
-    p.vx -= dx * f; p.vy -= dy * f; q.vx += dx * f; q.vy += dy * f;
+    const p = nodes[i], q = nodes[j]; let dx = q.x - p.x, dy = q.y - p.y; const d2 = Math.max(dx * dx + dy * dy, 100);
+    const f = (5200 / d2) * a, d = Math.sqrt(d2); dx /= d; dy /= d; p.vx -= dx * f; p.vy -= dy * f; q.vx += dx * f; q.vy += dy * f;
   }
   for (const e of G.edges) {
-    const s = G.nodes.get(e.s), t = G.nodes.get(e.t);
-    let dx = t.x - s.x, dy = t.y - s.y; const d = Math.sqrt(dx * dx + dy * dy) || 1;
-    const f = (d - 150) * 0.03 * a; dx /= d; dy /= d;
-    s.vx += dx * f; s.vy += dy * f; t.vx -= dx * f; t.vy -= dy * f;
+    const s = G.nodes.get(e.s), t = G.nodes.get(e.t); let dx = t.x - s.x, dy = t.y - s.y; const d = Math.sqrt(dx * dx + dy * dy) || 1;
+    const f = (d - 150) * 0.03 * a; dx /= d; dy /= d; s.vx += dx * f; s.vy += dy * f; t.vx -= dx * f; t.vy -= dy * f;
   }
-  for (const n of nodes) {
-    if (n.fixed || n === G.center) { n.vx = n.vy = 0; continue; }
-    n.vx = (n.vx - n.x * 0.002 * a) * 0.8; n.vy = (n.vy - n.y * 0.002 * a) * 0.8;
-    n.x += n.vx; n.y += n.vy;
-  }
+  for (const n of nodes) { if (n.fixed || n === G.center) { n.vx = n.vy = 0; continue; } n.vx = (n.vx - n.x * 0.002 * a) * 0.8; n.vy = (n.vy - n.y * 0.002 * a) * 0.8; n.x += n.vx; n.y += n.vy; }
   G.alpha *= 0.985;
 }
-
-const R = (n) => (n === G.center ? 30 : n.label === "Memory" ? 18 : 24);
-
-function drawGraph() {
-  const c = G.canvas;
-  if (!c || !c.isConnected) return;
+const R = (n) => (n === G.center ? 32 : n.label === "Memory" ? 18 : 25);
+function drawGraph(now) {
+  const c = G.canvas; if (!c || !c.isConnected) return;
   const dpr = devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
   if (c.width !== w * dpr) { c.width = w * dpr; c.height = h * dpr; }
   const ctx = G.ctx, css = getComputedStyle(document.documentElement);
-  const edgeColor = css.getPropertyValue("--gedge").trim(), textColor = css.getPropertyValue("--gtext").trim();
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, w, h);
-  ctx.save();
+  const textColor = css.getPropertyValue("--text").trim(), edgeColor = css.getPropertyValue("--faint").trim(), labelBg = css.getPropertyValue("--panel-solid").trim();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h); ctx.save();
   ctx.translate(w / 2 + G.view.x, h / 2 + G.view.y); ctx.scale(G.view.k, G.view.k);
   const focus = G.hover || G.selected;
   const near = focus ? new Set([focus.id, ...G.edges.filter((e) => e.s === focus.id || e.t === focus.id).flatMap((e) => [e.s, e.t])]) : null;
-
   for (const e of G.edges) {
     const s = G.nodes.get(e.s), t = G.nodes.get(e.t);
     const on = !near || (near.has(s.id) && near.has(t.id) && (s === focus || t === focus));
-    ctx.globalAlpha = on ? 1 : 0.15;
+    ctx.globalAlpha = on ? 0.9 : 0.12;
     const dx = t.x - s.x, dy = t.y - s.y, d = Math.sqrt(dx * dx + dy * dy) || 1, ux = dx / d, uy = dy / d;
     const x1 = s.x + ux * R(s), y1 = s.y + uy * R(s), x2 = t.x - ux * (R(t) + 2), y2 = t.y - uy * (R(t) + 2);
-    ctx.strokeStyle = edgeColor; ctx.lineWidth = 1.2;
+    ctx.strokeStyle = on && focus ? colorOf(focus.label) : edgeColor; ctx.lineWidth = on && focus ? 1.8 : 1.1;
     ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-    ctx.fillStyle = edgeColor;
+    ctx.fillStyle = ctx.strokeStyle;
     ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - ux * 9 - uy * 4.5, y2 - uy * 9 + ux * 4.5); ctx.lineTo(x2 - ux * 9 + uy * 4.5, y2 - uy * 9 - ux * 4.5); ctx.fill();
-    // Relationship type along the edge, like FalkorDB's browser.
     let ang = Math.atan2(dy, dx); if (ang > Math.PI / 2 || ang < -Math.PI / 2) ang += Math.PI;
-    ctx.save(); ctx.translate((x1 + x2) / 2, (y1 + y2) / 2); ctx.rotate(ang);
-    ctx.font = "600 9px system-ui"; ctx.textAlign = "center";
-    const tw = ctx.measureText(e.type).width;
-    ctx.fillStyle = css.getPropertyValue("--gbg").trim(); ctx.fillRect(-tw / 2 - 3, -7, tw + 6, 11);
-    ctx.fillStyle = textColor; ctx.fillText(e.type, 0, 2);
-    ctx.restore();
+    ctx.save(); ctx.translate((x1 + x2) / 2, (y1 + y2) / 2); ctx.rotate(ang); ctx.font = "600 9px Inter, system-ui"; ctx.textAlign = "center";
+    const tw = ctx.measureText(e.type).width; ctx.fillStyle = labelBg; ctx.fillRect(-tw / 2 - 4, -7, tw + 8, 12);
+    ctx.fillStyle = textColor; ctx.fillText(e.type, 0, 2); ctx.restore();
   }
   for (const n of G.nodes.values()) {
-    const on = !near || near.has(n.id);
-    ctx.globalAlpha = on ? 1 : 0.25;
-    const r = R(n);
-    ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
-    ctx.fillStyle = colorOf(n.label); ctx.fill();
+    const on = !near || near.has(n.id), grow = Math.min(1, (now - n.t) / 400), r = R(n) * (0.4 + 0.6 * grow);
+    ctx.globalAlpha = on ? 1 : 0.22;
+    const col = colorOf(n.label);
+    ctx.shadowColor = col; ctx.shadowBlur = n === focus || n === G.center ? 26 : 10;
+    const gr = ctx.createRadialGradient(n.x - r / 3, n.y - r / 3, 1, n.x, n.y, r);
+    gr.addColorStop(0, "#ffffff55"); gr.addColorStop(0.25, col); gr.addColorStop(1, col);
+    ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fillStyle = gr; ctx.fill(); ctx.shadowBlur = 0;
     if (n === G.selected) { ctx.lineWidth = 3; ctx.strokeStyle = textColor; ctx.stroke(); }
-    // Caption inside the node, wrapped on two lines, as FalkorDB does.
-    ctx.fillStyle = "#ffffff"; ctx.font = `600 ${n.label === "Memory" ? 8 : 10}px system-ui`; ctx.textAlign = "center";
+    ctx.fillStyle = "#fff"; ctx.font = `600 ${n.label === "Memory" ? 8 : 10}px Inter, system-ui`; ctx.textAlign = "center";
     const words = n.caption.split(" "), lines = [""];
     for (const word of words) {
       const test = lines[lines.length - 1] ? lines[lines.length - 1] + " " + word : word;
-      if (ctx.measureText(test).width > r * 1.7 && lines[lines.length - 1]) { if (lines.length === 2) { lines[1] += "…"; break; } lines.push(word); }
-      else lines[lines.length - 1] = test;
+      if (ctx.measureText(test).width > r * 1.7 && lines[lines.length - 1]) { if (lines.length === 2) { lines[1] += "…"; break; } lines.push(word); } else lines[lines.length - 1] = test;
     }
     lines.forEach((line, i) => ctx.fillText(line.length > 18 ? line.slice(0, 17) + "…" : line, n.x, n.y + 3 + (i - (lines.length - 1) / 2) * 11));
   }
-  ctx.restore();
-  ctx.globalAlpha = 1;
+  ctx.restore(); ctx.globalAlpha = 1;
 }
-
-function graphLoop() { tickGraph(); drawGraph(); requestAnimationFrame(graphLoop); }
-
+function graphLoop(now) { tickGraph(); drawGraph(now || performance.now()); requestAnimationFrame(graphLoop); }
 function bindGraphEvents(canvas) {
   const toWorld = (ev) => { const r = canvas.getBoundingClientRect(); return [(ev.clientX - r.left - r.width / 2 - G.view.x) / G.view.k, (ev.clientY - r.top - r.height / 2 - G.view.y) / G.view.k]; };
   const hit = (ev) => { const [x, y] = toWorld(ev); return [...G.nodes.values()].reverse().find((n) => (n.x - x) ** 2 + (n.y - y) ** 2 <= (R(n) + 3) ** 2) || null; };
   let drag = null;
-  canvas.addEventListener("pointerdown", (ev) => { drag = { node: hit(ev), x: ev.clientX, y: ev.clientY, vx: G.view.x, vy: G.view.y, moved: false }; canvas.setPointerCapture(ev.pointerId); canvas.classList.add("dragging"); });
+  canvas.addEventListener("pointerdown", (ev) => { drag = { node: hit(ev), x: ev.clientX, y: ev.clientY, vx: G.view.x, vy: G.view.y, moved: false }; canvas.setPointerCapture(ev.pointerId); });
   canvas.addEventListener("pointermove", (ev) => {
     if (!drag) { G.hover = hit(ev); canvas.style.cursor = G.hover ? "pointer" : "grab"; return; }
     if (Math.abs(ev.clientX - drag.x) + Math.abs(ev.clientY - drag.y) > 3) drag.moved = true;
     if (drag.node) { const [x, y] = toWorld(ev); drag.node.x = x; drag.node.y = y; drag.node.fixed = true; G.alpha = Math.max(G.alpha, 0.2); }
     else { G.view.x = drag.vx + ev.clientX - drag.x; G.view.y = drag.vy + ev.clientY - drag.y; }
   });
-  canvas.addEventListener("pointerup", () => {
-    if (drag && !drag.moved) { G.selected = drag.node; showDetails(drag.node); }
-    drag = null; canvas.classList.remove("dragging");
-  });
+  canvas.addEventListener("pointerup", () => { if (drag && !drag.moved) { G.selected = drag.node; showDetails(drag.node); } drag = null; });
   canvas.addEventListener("pointerleave", () => { G.hover = null; });
   canvas.addEventListener("dblclick", (ev) => { const n = hit(ev); if (n && n.id.startsWith("e:")) expand(n); });
   canvas.addEventListener("wheel", (ev) => { ev.preventDefault(); G.view.k = Math.min(3, Math.max(0.3, G.view.k * Math.exp(-ev.deltaY * 0.0015))); }, { passive: false });
@@ -721,72 +571,113 @@ function bindGraphEvents(canvas) {
 async function search(query) {
   $("query").value = query;
   const out = $("experts-out");
-  out.textContent = "Searching…";
-  const name = $("user").selectedOptions[0].textContent;
+  out.replaceChildren(el("div", { style: { height: "16px" } }), loading(480));
   const [experts, entity] = await Promise.all([api(`/experts?topic=${encodeURIComponent(query)}`), api(`/entities/${encodeURIComponent(query)}`)]);
-  out.textContent = "";
   const people = experts.status === 200 ? experts.body.people : [];
-  if (!people.length && entity.status !== 200) { out.append(denied(name, `anything about "${query}"`)); return; }
-
+  if (!people.length && entity.status !== 200) { out.replaceChildren(el("div", { style: { height: "16px" } }), denied(`anything about "${query}"`)); return; }
   G.nodes = new Map(); G.edges = []; G.selected = null; G.view = { x: 0, y: 0, k: 1 };
+  const parts = [];
   if (entity.status === 200) {
-    out.append(graphPanel());
-    G.center = mergeEntity(entity.body, { x: 0, y: 0 });
-    G.center.x = 0; G.center.y = 0;
-    renderChips();
-    G.selected = G.center; showDetails(G.center);
+    parts.push(graphPanel());
+    G.center = mergeEntity(entity.body, { x: 0, y: 0 }); G.center.x = 0; G.center.y = 0;
+    renderChips(); G.selected = G.center; showDetails(G.center);
   }
-  const list = el("div", { class: "panel", style: "margin-top:14px" }, el("h3", { style: "margin-top:0" }, `Who knows about "${query}"`));
-  if (people.length) for (const p of people)
-    list.append(el("div", { class: "person" }, el("span", {}, p.name), el("span", { class: "muted" }, `${p.memories} memor${p.memories === 1 ? "y" : "ies"}`)));
-  else list.append(el("p", { class: "muted" }, "Nobody you're allowed to see."));
-  if (experts.status === 200 && experts.body.brains.length)
-    list.append(el("p", { class: "muted" }, "Held in: " + experts.body.brains.map((b) => `${b.name} (${b.memories})`).join(", ")));
-  out.append(list);
+  const most = Math.max(1, ...people.map((p) => p.memories));
+  const list = el("div", { class: "card section" }, el("div", { class: "section-head" }, el("div", {}, el("h2", {}, `Who knows about “${query}”`),
+    el("p", {}, experts.status === 200 && experts.body.brains.length ? "Held in " + experts.body.brains.map((b) => `${b.name} (${b.memories})`).join(" · ") : "Only people this viewer may see."))),
+    people.length ? el("div", { class: "people" }, people.map((p, i) => {
+      const fill = el("i"); setTimeout(() => (fill.style.width = (p.memories / most) * 100 + "%"), 150 + i * 80);
+      return el("div", { class: "person rise", style: { animationDelay: i * 70 + "ms" } }, el("div", { class: "av" }, p.name[0]),
+        el("div", {}, el("div", {}, el("b", {}, p.name.replace(/\s*\(.*\)/, "")), el("span", { class: "muted", style: { fontSize: "13px" } }, " " + (p.name.match(/\((.*)\)/)?.[1] || ""))),
+          el("div", { class: "track" }, fill)),
+        el("span", { class: "chip" }, `${p.memories} memor${p.memories === 1 ? "y" : "ies"}`));
+    })) : el("div", { class: "empty" }, "Nobody you're allowed to see."));
+  out.replaceChildren(...parts, list);
 }
 
-// ---------- setup ----------
+// ============ brain evolution ============
+const TL_COLOR = { prevented: "var(--good)", acted: "var(--good)", happened: "var(--bad)", happened_anyway: "var(--bad)", expired: "var(--bad)", false_alarm: "var(--faint)", dismissed: "var(--faint)" };
+async function loadEvolution() {
+  const out = $("evolution-out");
+  out.replaceChildren(loading(110), el("div", { style: { height: "14px" } }), loading(260));
+  const { status, body } = await api("/brain/evolution");
+  if (status !== 200) { out.replaceChildren(el("div", { class: "denied" }, "Couldn't load.")); return; }
+  const o = body.outcomes, f = body.feedback, n = (k) => (o[k] ? o[k].count : 0);
+  const kpis = el("div", { class: "kpis" },
+    kpi("Brain's date", body.today ? fmtDay(body.today) : "—", { glow: "glow" }),
+    kpi("Run-outs prevented", n("prevented"), { cls: "good", glow: "glow-good", delay: 60 }),
+    kpi("Sales saved", body.saved || 0, { format: shortMoney, cls: "good", delay: 120 }),
+    kpi("Lost when ignored", body.lost || 0, { format: shortMoney, cls: body.lost ? "bad" : "", delay: 180 }),
+    kpi("Warnings that came true", body.warning_accuracy == null ? "—" : body.warning_accuracy * 100, { format: (x) => Math.round(x) + "%", delay: 240 }),
+    kpi("Answered", `${f.acted || 0} / ${f.dismissed || 0}`, { d: `acted / dismissed · ${f.expired || 0} expired`, delay: 300 }));
+  const parts = [kpis];
+  if (body.accuracy) parts.push(accuracyCard(body.accuracy));
+  const tl = el("ul", { class: "tl" });
+  const LABEL = { outcome: "Outcome", feedback: "Answer", expired: "Expired", updated: "Fact" };
+  body.events.slice(0, 18).forEach((e, i) => {
+    const [headline] = e.text.split(" — ");
+    tl.append(el("li", { class: "rise", title: e.text + (e.who ? ` — ${e.who}` : ""), style: { "--c": TL_COLOR[e.label] || "var(--violet)", animationDelay: i * 40 + "ms" } },
+      el("span", { class: "when" }, e.at ? fmtDay(e.at) : ""),
+      el("div", { class: "what" }, el("span", { class: "chip" }, e.kind === "updated" ? "Fact " + e.label : `${LABEL[e.kind]}: ${e.label.replace("_", " ")}`),
+        el("span", { class: "t" }, headline.replace(/^Outcome: /, "")))));
+  });
+  parts.push(el("div", { class: "card section" }, el("div", { class: "section-head" }, el("div", {}, el("h2", {}, "What the brain learned"),
+    el("p", {}, "Outcomes, answers and facts it updated, most recent first. Hover for details."))),
+    body.events.length ? tl : el("div", { class: "empty" }, "Nothing yet. Answer signals; outcomes appear as time passes (HQ can run weeks).")));
+  out.replaceChildren(...parts);
+}
+function accuracyCard(a) {
+  const r = a.recent;
+  const weeks = a.weeks.filter((w) => w.forecasts && w.forecasts.wape != null).slice(-10);
+  const bars = el("div", { class: "weekbars" }, weeks.map((w, i) => {
+    const acc = Math.max(0, 1 - w.forecasts.wape), col = el("div", { class: "col" }, el("span", {}, pct(acc)));
+    setTimeout(() => (col.style.height = acc * 120 + "px"), 200 + i * 80);
+    return el("div", { class: "w" }, col, fmtDay(w.week));
+  }));
+  return el("div", { class: "card section" }, el("div", { class: "section-head" }, el("div", {}, el("h2", {}, "The brain grades its own forecasts"),
+    el("p", {}, "Every forecast is checked against what really sold."))),
+    r ? el("div", { class: "kpis" },
+      kpi("Accuracy", (1 - r.wape) * 100, { format: (x) => Math.round(x) + "%", glow: "glow-good", tip: a.summary }),
+      kpi("Days inside the 80% range", r.coverage80 * 100, { format: (x) => Math.round(x) + "%", delay: 60 }),
+      kpi("Bias", r.bias == null ? "—" : `${pct(Math.abs(r.bias))} ${r.bias > 0 ? "high" : "low"}`, { delay: 120 }),
+      kpi("Product-days graded", r.days, { delay: 180 })) : el("div", { class: "empty" }, "Graded once real sales arrive."),
+    weeks.length > 1 ? el("div", { class: "section" }, el("div", { class: "eyebrow" }, "Accuracy week by week"), bars) : null);
+}
+
+// ============ setup ============
+function showTab(name) {
+  document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === name));
+  for (const t of ["signals", "forecast", "experts", "evolution"]) $("tab-" + t).classList.toggle("hidden", t !== name);
+  if (name === "evolution") loadEvolution();
+  const url = new URL(location); url.searchParams.set("tab", name); history.replaceState(null, "", url);
+}
+document.querySelectorAll("#tabs button").forEach((b) => (b.onclick = () => showTab(b.dataset.tab)));
+let horizonTimer = null;
+$("horizon").oninput = () => { $("horizon-label").textContent = $("horizon").value; clearTimeout(horizonTimer); horizonTimer = setTimeout(loadForecast, 350); };
+$("product").onchange = () => loadForecast();
+$("search").onsubmit = (e) => { e.preventDefault(); search($("query").value.trim()); };
+
 async function init() {
   const res = await fetch("/demo/users");
   const users = res.ok ? await res.json() : [];
-  const select = $("user");
-  for (const u of users) select.append(el("option", { value: u.id }, u.name));
-  const wanted = new URLSearchParams(location.search).get("user");
-  select.value = users.some((u) => u.id === wanted) ? wanted : (users.find((u) => u.id === "omar") || users[0]).id;
-  state.user = select.value;
-  for (const q of EXAMPLES) { const b = el("button", { type: "button" }, q); b.onclick = () => search(q); $("examples").append(b); }
-  const tab = new URLSearchParams(location.search).get("tab");
+  for (const u of users) userSelect.append(el("option", { value: u.id }, u.name));
+  const params = new URLSearchParams(location.search), wanted = params.get("user");
+  userSelect.value = users.some((u) => u.id === wanted) ? wanted : (users.find((u) => u.id === "omar") || users[0]).id;
+  state.user = userSelect.value;
+  $("who-eyebrow").textContent = "Lumen Home · " + who();
+  $("examples").replaceChildren(...EXAMPLES.map((q) => el("button", { type: "button", class: "chip", onclick: () => search(q) }, q)));
+  const tab = params.get("tab");
   if (["experts", "forecast", "evolution"].includes(tab)) showTab(tab);
-  loadSignals();
-  loadProducts();
-  graphLoop();
+  loadSignals(); loadProducts(); requestAnimationFrame(graphLoop);
 }
-
-function showTab(name) {
-  document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
-  $("tab-signals").classList.toggle("hidden", name !== "signals");
-  $("tab-evolution").classList.toggle("hidden", name !== "evolution");
-  if (name === "evolution") loadEvolution();
-  $("tab-forecast").classList.toggle("hidden", name !== "forecast");
-  $("tab-experts").classList.toggle("hidden", name !== "experts");
-}
-
-$("user").onchange = () => {
-  state.user = $("user").value;
-  loadSignals();
+userSelect.onchange = () => {
+  state.user = userSelect.value;
+  $("who-eyebrow").textContent = "Lumen Home · " + who();
+  const url = new URL(location); url.searchParams.set("user", state.user); history.replaceState(null, "", url);
+  loadSignals(); loadProducts();
   if (!$("tab-evolution").classList.contains("hidden")) loadEvolution();
-  loadProducts();
   if ($("query").value) search($("query").value);
 };
-$("product").onchange = loadForecast;
-$("horizon").oninput = () => {
-  $("horizon-label").textContent = $("horizon").value;
-  clearTimeout(forecastTimer);
-  forecastTimer = setTimeout(loadForecast, 250);
-};
-$("show-closed").onchange = loadSignals;
-$("search").onsubmit = (e) => { e.preventDefault(); search($("query").value.trim()); };
-document.querySelectorAll(".tabs button").forEach((b) => b.onclick = () => showTab(b.dataset.tab));
 init();
 </script>
 </body>
