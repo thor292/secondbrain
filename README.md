@@ -240,6 +240,23 @@ can't see Merchandising.
 To try it next to the running stack (port 55433):
 `docker compose -f docker-compose.timescale.yml -p secondbrain-ts up -d --wait`.
 
+## Connecting a real business (real sales and stock)
+
+Sales, stock, purchase orders and promotions can come from a real business
+instead of the sample generators, over MQTT (`sb/v1/{company}/{brain}/{kind}`)
+or HTTP (`POST /ingest/{kind}`, CSV for history), with per-company ingest
+keys. Every message is applied once, bad ones are dead-lettered, and the
+company's forecasts and signals are recalculated (at most every 10 minutes).
+The contract and setup are in [docs/INTEGRATION.md](docs/INTEGRATION.md).
+
+```bash
+uv run python -m secondbrain.ingest schema                  # once, on a database created before ingestion
+uv run python -m secondbrain.ingest key create lumen "Lumen ERP"
+docker compose up -d mosquitto                              # dev broker on 51883
+SB_MQTT_PORT=51883 SB_MQTT_TLS=false uv run python -m secondbrain.ingest.mqtt
+uv run python scripts/publish_sample_events.py              # a live day of Lumen events
+```
+
 ## Connecting the company models
 
 In `.env`:
@@ -284,7 +301,8 @@ Tests use a separate `secondbrain_test` database and their own small companies
 - Real sign-in (SSO). Users are identified by an `X-User-Id` header, so only
   run the demo on a trusted network. Needs the company's identity provider.
 - Connectors (Google Drive, Slack, email). Need app credentials from IT.
-- Pushing root patterns down to companies (variant V1), MQTT, self-hosting
-  (see ARCHITECTURE.md).
+- Pushing root patterns down to companies (variant V1), MQTT for memory
+  updates and self-hosted brains (MQTT ingestion of business data is built),
+  self-hosting (see ARCHITECTURE.md).
 - Using the relationship graph when answering questions, and showing entities
   in the graph view (see ARCHITECTURE.md, phase 3).

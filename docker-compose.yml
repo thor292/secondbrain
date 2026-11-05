@@ -39,5 +39,14 @@ services:
       interval: 2s
       retries: 30
 
+  # Event stream from client businesses (dev only: plain MQTT on 51883).
+  # Production runs MQTTS on 8883; see docs/INTEGRATION.md.
+  mosquitto:
+    image: eclipse-mosquitto:2.0.20
+    ports:
+      - "51883:1883"
+    volumes:
+      - ./docker/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
 volumes:
   pgdata:

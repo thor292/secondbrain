@@ -21,6 +21,7 @@ from secondbrain import admin, evolution, learning, maintenance, relationships, 
 from secondbrain.documents import UnsupportedDocument, extract_text
 from secondbrain.forecasting.api import build_router as forecast_router
 from secondbrain.graph import build_full_graph
+from secondbrain.ingest.api import build_router as ingest_router
 from secondbrain.config import Settings, get_settings
 from secondbrain.memory.short_term import ShortTermMemory
 from secondbrain.memory.store import MemoryStore
@@ -66,6 +67,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             raise HTTPException(404, "Admin API is disabled")
         if not x_admin_token or not hmac.compare_digest(x_admin_token, settings.admin_token):
             raise HTTPException(401, "Invalid admin token")
+
+    app.include_router(ingest_router(settings, require_admin))
 
     UserId = Annotated[str, Header(alias="X-User-Id")]
     Brain = Annotated[SecondBrain, Depends(brain)]
