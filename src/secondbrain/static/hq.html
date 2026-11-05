@@ -121,6 +121,8 @@ function askToken() {
   $("out").replaceChildren(el("div", { class: "panel" }, "Enter the admin token at the top to open HQ."));
 }
 
+// The brain's run-out advice is carried out as it appears; answers people
+// already gave (e.g. a dismissal) are kept.
 const state = { policy: "follow", days: 28, company: null, busy: false };
 
 async function load() {
@@ -184,13 +186,9 @@ function timeMachine(companies) {
   reset.onclick = () => resetDemo();
   return el("div", { class: "panel" },
     el("div", { class: "row", style: "justify-content:space-between" }, el("h2", { style: "margin:0" }, "Time machine"), reset),
-    el("div", { class: "muted", style: "margin:2px 0 14px" }, "Move a business forward in time and watch what its brain's advice is worth."),
+    el("div", { class: "muted", style: "margin:2px 0 14px" }, "Let the brain run a business for a few weeks: it predicts, decides, checks itself and learns."),
     el("div", { class: "controls" },
       el("div", {}, el("label", {}, "Business"), company),
-      el("div", {}, el("label", {}, "The business…"), seg([
-        ["follow", "Follows the brain", "Acts on every run-out warning as it appears"],
-        ["ignore", "Ignores the brain", "Leaves every warning unanswered"],
-        ["as_is", "Decides itself", "Keeps what people marked as acted on or dismissed"]], "policy")),
       el("div", {}, el("label", {}, "For"), seg([[14, "2 weeks"], [28, "4 weeks"], [56, "8 weeks"]], "days")),
       go),
     el("div", { id: "tm-result" }));
@@ -225,16 +223,15 @@ async function resetDemo() {
   } catch (e) { alert("Couldn't reset: " + e.message); }
 }
 
-const POLICY = { follow: ["Followed the brain", "good"], ignore: ["Ignored the brain", "bad"], as_is: ["Decided itself", ""] };
 const RESULT = {
-  prevented: ["✓", "good", "Run-out prevented"], happened: ["✕", "bad", "Ran out, warning ignored"],
-  happened_anyway: ["!", "bad", "Ran out despite acting"], false_alarm: ["~", "info", "False alarm"],
+  prevented: ["✓", "good", "ordered in time, never ran out"], happened: ["✕", "bad", "nobody acted, it ran out as predicted"],
+  happened_anyway: ["!", "bad", "ordered, but it still ran out"], false_alarm: ["~", "info", "didn't run out: the brain was wrong"],
 };
 
 function showResult(r) {
   const box = $("tm-result");
   if (!box || !r.before || !r.after) return;
-  const b = r.before, a = r.after, [policyLabel, policyCls] = POLICY[r.policy] || POLICY.as_is;
+  const b = r.before, a = r.after;
   const delta = (x, y) => y - x;
   const savedNow = delta(b.saved, a.saved);
   const products = Object.values(r.products || {});
@@ -243,18 +240,21 @@ function showResult(r) {
 
   const jump = el("div", { class: "jump" },
     el("span", { class: "date" }, fmtDay(b.today)), el("span", { class: "arrow" }, "→"), el("span", { class: "date" }, fmtDay(a.today)),
-    el("span", { class: "badge " + policyCls }, policyLabel),
-    r.acted ? el("span", { class: "muted" }, `${r.acted} warning${r.acted > 1 ? "s" : ""} acted on`) : null);
+    r.acted ? el("span", { class: "badge" }, `${r.acted} decision${r.acted > 1 ? "s" : ""} by the brain`) : null);
 
+  const prevented = a.prevented - b.prevented, cameTrue = a.came_true - b.came_true, wrong = a.false_alarms - b.false_alarms;
+  const checked = prevented + cameTrue + wrong;
   const tiles = el("div", { class: "tiles" },
-    tile("Sales missed: empty shelves", money(lostSales), { cls: lostSales ? "bad" : "good", bg: lostSales ? "bad-bg" : "good-bg",
-      d: outDays ? `${outDays} product-days out of stock` : "never out of stock" }),
-    tile("Saved by acting", money(savedNow), { cls: savedNow ? "good" : "", d: `${a.prevented - b.prevented} run-out(s) prevented` }),
-    tile("Warnings that came true", String(a.came_true - b.came_true), { cls: a.came_true > b.came_true ? "bad" : "",
-      d: (a.false_alarms - b.false_alarms) ? `${a.false_alarms - b.false_alarms} false alarm(s)` : "no false alarms" }),
-    tile("Forecast error", pct(a.forecast_error), { d: b.forecast_error != null ? `was ${pct(b.forecast_error)}` : "now graded on real sales",
+    tile("Predictions checked", String(checked), { d: checked ? `${prevented + cameTrue} right, ${wrong} wrong` : "none came due yet",
+      tip: "Each run-out the brain predicted, checked against what really happened" }),
+    tile("Run-outs prevented", String(prevented), { cls: prevented ? "good" : "", bg: prevented ? "good-bg" : "",
+      d: `${money(a.saved - b.saved)} of sales saved` }),
+    tile("Forecast error", pct(a.forecast_error), { d: b.forecast_error != null ? `was ${pct(b.forecast_error)}` : "graded on real sales",
       tip: r.accuracy_text || "" }),
-    tile("Open signals", String(a.open_signals), { d: `was ${b.open_signals}` }));
+    tile("New memories", "+" + (a.memories - b.memories), { d: `+${a.forecasts_graded - b.forecasts_graded} forecasts graded`,
+      tip: "Every outcome is remembered and changes how sure the brain is next time" }),
+    tile("Sales missed", money(lostSales), { cls: lostSales ? "bad" : "good",
+      d: outDays ? `${outDays} product-days out of stock` : "never out of stock" }));
 
   const charts = el("div", { class: "charts" }, ...products
     .sort((x, y) => y.lost - x.lost || x.name.localeCompare(y.name))
@@ -271,7 +271,8 @@ function showResult(r) {
   const grouped = new Map();
   for (const o of r.outcomes || []) {
     const key = o.title.split(" runs out")[0] + "|" + o.result;
-    const g = grouped.get(key) || { name: key.split("|")[0], result: o.result, n: 0, details: [] };
+    const g = grouped.get(key) || { name: key.split("|")[0], result: o.result, n: 0, details: [],
+      predicted: (o.title.match(/runs out on (\w+ \d+)/) || [])[1] };
     g.n += 1; g.details.push(o.detail); grouped.set(key, g);
   }
   const events = el("ul", { class: "events" });
@@ -279,10 +280,10 @@ function showResult(r) {
     const [icon, cls, label] = RESULT[g.result] || ["•", "info", g.result];
     events.append(el("li", { title: g.details.join("\n") }, el("span", { class: "dot " + cls }, icon),
       el("div", {}, el("div", {}, el("b", {}, g.name), g.n > 1 ? el("span", { class: "muted" }, `  ×${g.n}`) : null),
-        el("div", { class: "muted" }, label))));
+        el("div", { class: "muted" }, (g.predicted ? `Predicted to run out ${g.predicted}: ` : "") + label))));
   }
   if (!events.children.length) events.append(el("li", {}, el("span", { class: "dot info" }, "…"),
-    el("div", { class: "muted" }, "No warning came due yet. Try a longer period.")));
+    el("div", { class: "muted" }, "None of the brain's predictions came due yet. Try a longer period.")));
   const next = el("ul", { class: "events" }, ...(r.top_signals || []).slice(0, 4).map((s) =>
     el("li", { title: s.action }, el("span", { class: "dot " + (s.urgency === "high" ? "bad" : "info") }, s.urgency === "high" ? "!" : "→"),
       el("div", {}, s.title))));
@@ -290,7 +291,7 @@ function showResult(r) {
   box.replaceChildren(jump, tiles,
     el("div", { class: "cols" },
       el("div", {}, el("h2", {}, "Stock, day by day"), charts, legend),
-      el("div", {}, el("h2", {}, "What happened"), events, el("h2", { style: "margin-top:18px" }, "The brain's next moves"), next)));
+      el("div", {}, el("h2", {}, "Predicted → what happened"), events, el("h2", { style: "margin-top:18px" }, "What the brain will do next"), next)));
 }
 
 function sparkline(p) {

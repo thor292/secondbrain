@@ -597,7 +597,10 @@ def snapshot(conn: psycopg.Connection, company: str) -> dict:
         """SELECT (SELECT max(as_of) FROM inventory WHERE brain_path <@ %(c)s::ltree) AS today,
                   (SELECT count(*) FROM signals WHERE company = %(c)s::ltree AND status = 'open') AS open_signals,
                   (SELECT coalesce(sum(impact_value), 0)::float FROM signals
-                    WHERE company = %(c)s::ltree AND status = 'open') AS at_stake""",
+                    WHERE company = %(c)s::ltree AND status = 'open') AS at_stake,
+                  (SELECT count(*) FROM memories WHERE brain_path <@ %(c)s::ltree
+                    AND source = 'signal outcome') AS memories,
+                  (SELECT count(*) FROM forecast_accuracy WHERE brain_path <@ %(c)s::ltree) AS forecasts_graded""",
         {"c": company},
     ).fetchone()
     results = {r["result"]: r for r in conn.execute(
@@ -615,6 +618,9 @@ def snapshot(conn: psycopg.Connection, company: str) -> dict:
         "came_true": get("happened", "n") + get("happened_anyway", "n"),
         "false_alarms": get("false_alarm", "n"),
         "forecast_error": accuracy["wape"] if accuracy else None,
+        # What the brain has learned from: outcomes it remembers, forecasts it graded.
+        "memories": row["memories"],
+        "forecasts_graded": row["forecasts_graded"],
     }
 
 
