@@ -99,10 +99,24 @@ function gate() {
 
 const state = { days: 56, company: null };
 
+// Live: the root operator hears every notice across all companies (read-only login).
+let listening = false;
+const onLive = SB.batcher(1800, (items) => {
+  const sig = items.filter((m) => m.signal_id), mem = items.filter((m) => m.memory_id);
+  const where = [...new Set(items.map((m) => (m.brain || "").split(".")[1]).filter(Boolean))].join(", ");
+  if (sig.length) SB.toast("🔔", `${sig.length} new decision signal${sig.length === 1 ? "" : "s"}`, `Raised just now in ${where}`,
+    { tone: sig.some((m) => m.detail?.urgency === "high") ? "bad" : "" });
+  if (mem.length) SB.toast("🧠", `${mem.length} new memor${mem.length === 1 ? "y" : "ies"}`, `Learned just now in ${where}`);
+});
+
 async function load() {
   if (!token()) return gate();
   const data = await admin("/admin/hq");
   if (!data) return;
+  if (!listening) {
+    listening = true;
+    SB.live("/admin/live/monitor", { "X-Admin-Token": token() }, (topic, m) => { if (m.signal_id || m.memory_id) onLive(m); });
+  }
   const sum = (f) => data.companies.reduce((t, c) => t + f(c), 0);
   const oc = (c, k) => (c.outcomes[k] || { count: 0, value: 0 });
   const graded = data.companies.filter((c) => c.accuracy && c.accuracy.wape != null);

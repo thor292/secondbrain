@@ -170,7 +170,16 @@ function pick(u) {
   document.querySelectorAll(".sb-links a").forEach((a) => { if (a.pathname !== "/" && a.pathname !== "/hq") a.href = a.pathname + "?user=" + encodeURIComponent(u.id); });
   $("input").placeholder = state.mode === "ask" ? `Ask as ${short(u)}…` : "Tell the brain something to remember…";
   welcome();
+  SB.live("/live/credentials", { "X-User-Id": u.id }, (topic, m) => {
+    if (m.event === "inbox" && m.outcome === "saved") SB.toast("✅", "Saved to long-term memory", `${m.count} note${m.count === 1 ? "" : "s"} — your team can now ask about ${m.count === 1 ? "it" : "them"}`, { tone: "good" });
+    else if (m.memory_id && m.by_user !== u.id) onMemory(m);
+    else if (m.signal_id) onSignal(m);
+  });
 }
+const onMemory = SB.batcher(1500, (items) => SB.toast("🧠", items.length === 1 ? "New knowledge just arrived" : `${items.length} new memories`,
+  `From ${[...new Set(items.map((m) => m.by_user || "someone"))].join(", ")} · ask about it now`));
+const onSignal = SB.batcher(1500, (items) => SB.toast("🔔", items.length === 1 ? "New decision signal" : `${items.length} new decision signals`,
+  "Open Explore to see what the brain recommends", { onclick: () => (location.href = "/explore?user=" + encodeURIComponent(state.user.id)) }));
 
 function formatted(text) {
   const p = el("div", { class: "bubble" });

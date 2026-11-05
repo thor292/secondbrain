@@ -667,7 +667,7 @@ def advance(settings: Settings, llm: LLM, embedder: Embedder, company: str, days
                 # warnings from the current forecasts; no re-forecast or AI calls.
                 summary["outcomes"] += judge(conn, embedder, settings, company)["outcomes"]
                 conn.commit()
-                signals_module.generate(conn, llm, company, business=False)
+                signals_module.generate(conn, llm, company, business=False, settings=settings)
     result = refresh(settings, llm, embedder, company)
     summary.update({k: result[k] for k in ("expired", "waiting", "signals", "accuracy", "accuracy_text")})
     summary["outcomes"] += result["outcomes"]

@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from psycopg.rows import dict_row
 from pydantic import BaseModel
 
-from secondbrain import admin, demo, evolution, learning, maintenance, relationships, signals, tree
+from secondbrain import admin, demo, evolution, learning, live, maintenance, relationships, signals, tree
 from secondbrain.documents import UnsupportedDocument, extract_text
 from secondbrain.forecasting.api import build_router as forecast_router
 from secondbrain.graph import build_full_graph
@@ -167,6 +167,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 raise HTTPException(404, "No such signal that you can see")
         return {"ok": True}
 
+    @app.get("/live/credentials")
+    def live_credentials(user_id: UserId, brain: Brain):
+        """This person's own login for live notices: they can only hear brains they may see."""
+        brain._user(user_id)
+        if not settings.live_host:
+            raise HTTPException(404, "Live notifications are switched off")
+        return live.credentials(settings, user_id)
+
+    @app.get("/admin/live/monitor", dependencies=[Depends(require_admin)])
+    def live_monitor():
+        """Read-only login that hears every notice (operations view)."""
+        if not settings.live_host:
+            raise HTTPException(404, "Live notifications are switched off")
+        return live.monitor_credentials(settings)
+
+    @app.post("/admin/live/sync", dependencies=[Depends(require_admin)])
+    def live_sync():
+        """Regenerate broker logins and ACL from the grants table (after onboarding or a role change)."""
+        if not settings.live_host:
+            raise HTTPException(404, "Live notifications are switched off")
+        return live.sync_broker(settings)
+
     @app.get("/brain/evolution")
     def brain_evolution(user_id: UserId, brain: Brain):
         """Track record, feedback, outcomes and updated facts this person may see."""
@@ -274,12 +296,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {**result, "stored": [{"pattern": p.text, "topic": p.topic} for p in result["stored"]]}
 
     @app.post("/admin/companies", dependencies=[Depends(require_admin)])
-    def onboard_company(spec: dict):
+    def onboard_company(spec: dict, background: BackgroundTasks):
         with psycopg.connect(settings.admin_database_url) as conn:
             try:
-                return {"company": admin.onboard(conn, spec)}
+                company = admin.onboard(conn, spec)
             except (KeyError, ValueError) as exc:
                 raise HTTPException(400, f"Invalid company spec: {exc}")
+        if settings.live_host:  # new people and grants: the broker must know them too
+            background.add_task(live.sync_broker, settings)
+        return {"company": company}
 
     @app.post("/admin/brains/{brain_path}/documents", dependencies=[Depends(require_admin)])
     async def upload_documents(

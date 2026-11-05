@@ -80,10 +80,62 @@ const SB = (() => {
     return bar;
   }
 
+  // ---------- live notices ----------
+  // The page logs in to the live broker with this person's own login. The broker only
+  // delivers notices for brains they may see; messages carry ids, so the page reloads
+  // from the API, which checks permissions again.
+  const MQTT_JS = "https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js";
+  let liveClient = null;
+  function loadScript(src) {
+    if (window.mqtt) return Promise.resolve();
+    return new Promise((ok, fail) => document.head.append(el("script", { src, onload: ok, onerror: fail })));
+  }
+  function liveBadge(state) {
+    let b = document.querySelector(".sb-nav .live-badge");
+    if (!b) { b = el("span", { class: "live-badge" }); document.querySelector(".sb-nav .right")?.prepend(b); }
+    b.className = "live-badge " + state;
+    b.textContent = state === "on" ? "Live" : "Reconnecting…";
+    b.title = state === "on" ? "Connected: new signals and knowledge appear the moment they happen" : "Live notices paused";
+  }
+  async function live(credentialsUrl, headers, onMessage) {
+    if (liveClient) { liveClient.end(true); liveClient = null; }
+    try {
+      const res = await fetch(credentialsUrl, { headers });
+      if (!res.ok) return null;  // live notices switched off: the page still works
+      const c = await res.json();
+      await loadScript(MQTT_JS);
+      const client = window.mqtt.connect(c.url, { username: c.username, password: c.password, reconnectPeriod: 3000 });
+      client.on("connect", () => { client.subscribe(c.topics, { qos: 1 }); liveBadge("on"); });
+      client.on("offline", () => liveBadge("off"));
+      client.on("message", (topic, payload) => {
+        let m; try { m = JSON.parse(new TextDecoder().decode(payload)); } catch { return; }
+        onMessage(topic, m);
+      });
+      liveClient = client;
+      return client;
+    } catch { return null; }
+  }
+  // Many notices in a burst (e.g. the time machine) become one summary toast.
+  function batcher(ms, flush) {
+    let items = [], timer = null;
+    return (item) => { items.push(item); clearTimeout(timer); timer = setTimeout(() => { const all = items; items = []; flush(all); }, ms); };
+  }
+  function toast(icon, title, text, { tone = "", ms = 6000, onclick } = {}) {
+    let stack = document.querySelector(".toasts");
+    if (!stack) { stack = el("div", { class: "toasts", "aria-live": "polite" }); document.body.append(stack); }
+    const t = el("div", { class: `toast ${tone}`, onclick: () => { onclick?.(); t.remove(); } },
+      el("div", { class: "toast-icon" }, icon),
+      el("div", {}, el("div", { class: "toast-title" }, title), text ? el("div", { class: "toast-text" }, text) : null),
+      el("div", { class: "toast-bar", style: { animationDuration: ms + "ms" } }));
+    stack.append(t);
+    setTimeout(() => { t.classList.add("out"); setTimeout(() => t.remove(), 400); }, ms);
+    while (stack.children.length > 4) stack.firstChild.remove();
+  }
+
   const store = {
     get(k) { try { return JSON.parse(sessionStorage.getItem(k)); } catch { return null; } },
     set(k, v) { try { v == null ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, JSON.stringify(v)); } catch {} },
   };
 
-  return { el, svg, money, shortMoney, pct, fmtDay, addDays, countUp, kpi, sparkline, nav, store, LOGO };
+  return { el, svg, money, shortMoney, pct, fmtDay, addDays, countUp, kpi, sparkline, nav, store, LOGO, live, toast, batcher };
 })();

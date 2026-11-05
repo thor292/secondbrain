@@ -37,6 +37,15 @@ class Settings(BaseSettings):
     # production, identity comes from SSO instead of an X-User-Id header.
     demo_mode: bool = False
 
+    # Live notifications to people (a second MQTT broker, separate from data
+    # ingest): empty host switches them off. Per-user broker passwords are
+    # derived from live_secret; see docs/LIVE.md.
+    live_host: str = ""
+    live_port: int = 51884
+    live_ws_url: str = "ws://localhost:59001"
+    live_secret: str = ""
+    live_publisher_password: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:

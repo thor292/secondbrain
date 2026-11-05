@@ -48,5 +48,18 @@ services:
     volumes:
       - ./docker/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
 
+  # Live notifications OUT to people's screens (separate from ingest above).
+  # Logins and ACL are generated from the grants table: run
+  # `uv run python -m secondbrain.live sync --no-reload` before the first start.
+  live-broker:
+    image: eclipse-mosquitto:2.0.20
+    ports:
+      - "51884:1883"   # backend publisher, CLI monitor
+      - "59001:9001"   # WebSockets for browsers
+    volumes:
+      - ./docker/live-broker:/mosquitto/config
+      - livedata:/mosquitto/data
+
 volumes:
   pgdata:
+  livedata:

@@ -5,3 +5,5 @@ __pycache__/
 .venv/
 .pytest_cache/
 data/
+docker/live-broker/passwd
+docker/live-broker/acl

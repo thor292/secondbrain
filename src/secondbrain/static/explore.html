@@ -668,10 +668,30 @@ async function init() {
   $("examples").replaceChildren(...EXAMPLES.map((q) => el("button", { type: "button", class: "chip", onclick: () => search(q) }, q)));
   const tab = params.get("tab");
   if (["experts", "forecast", "evolution"].includes(tab)) showTab(tab);
-  loadSignals(); loadProducts(); requestAnimationFrame(graphLoop);
+  loadSignals(); loadProducts(); requestAnimationFrame(graphLoop); goLive();
+}
+// Live: a new decision signal appears the moment the brain raises it.
+const URG = { high: "Urgent", medium: "Soon", low: "Watch" };
+const onSignals = SB.batcher(1200, (items) => {
+  const urgent = items.filter((m) => m.detail?.urgency === "high").length;
+  SB.toast(urgent ? "🚨" : "🔔", items.length === 1 ? `New decision signal · ${URG[items[0].detail?.urgency] || ""}` : `${items.length} new decision signals`,
+    urgent ? `${urgent} urgent — the brain just spotted ${urgent === 1 ? "it" : "them"}` : "The brain just spotted this from the latest data",
+    { tone: urgent ? "bad" : "", onclick: () => showTab("signals") });
+  loadSignals();
+});
+const onMemory = SB.batcher(1500, (items) => {
+  SB.toast("🧠", items.length === 1 ? "New knowledge in the brain" : `${items.length} new memories`,
+    `Added by ${[...new Set(items.map((m) => m.by_user || "someone"))].join(", ")} in ${items[0].brain.split(".").pop()}`);
+});
+function goLive() {
+  SB.live("/live/credentials", { "X-User-Id": state.user }, (topic, m) => {
+    if (m.signal_id) onSignals(m);
+    else if (m.memory_id && m.by_user !== state.user) onMemory(m);
+  });
 }
 userSelect.onchange = () => {
   state.user = userSelect.value;
+  goLive();
   $("who-eyebrow").textContent = "Lumen Home · " + who();
   const url = new URL(location); url.searchParams.set("user", state.user); history.replaceState(null, "", url);
   loadSignals(); loadProducts();

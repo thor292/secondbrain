@@ -29,7 +29,9 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
+from secondbrain import live
 from secondbrain.config import Settings, get_settings
+from secondbrain.sensitivity import Sensitivity
 from secondbrain.models import LLM
 
 SCHEMA_SQL = """
@@ -774,10 +776,13 @@ def business_signals(conn: psycopg.Connection, llm: LLM, company: str,
     return out
 
 
-def generate(conn: psycopg.Connection, llm: LLM, company: str, business: bool = True) -> list[Signal]:
+def generate(conn: psycopg.Connection, llm: LLM, company: str, business: bool = True,
+             settings: Settings | None = None) -> list[Signal]:
     """Replace a company's open signals with fresh ones. Signals someone acted on
     or dismissed recently are not raised again. ``business=False`` recalculates
     only the stock signals and keeps the open advice from notes (no AI call).
+    With ``settings``, people who may see the company hear about each signal that
+    wasn't open before, the moment it is committed (live notifications).
 
     "Recently" is measured on the business's own clock for stock signals (the
     date of its stock data, which runs ahead of the wall clock in a simulation)
@@ -795,17 +800,26 @@ def generate(conn: psycopg.Connection, llm: LLM, company: str, business: bool = 
     records = learned_records(conn, company)
     advice = business_signals(conn, llm, company, records) if business else []
     fresh = [s for s in stock_signals(conn, company, records) + advice if s.fingerprint not in quiet]
+    was_open = {r["fingerprint"] for r in conn.execute(
+        "SELECT fingerprint FROM signals WHERE company = %s::ltree AND status = 'open'", (company,)).fetchall()}
     conn.execute("DELETE FROM signals WHERE company = %s::ltree AND status = 'open'"
                  + ("" if business else " AND kind <> 'business'"), (company,))
+    events = []
     for s in fresh:
-        conn.execute(
+        signal_id = conn.execute(
             """INSERT INTO signals (company, kind, fingerprint, title, action, reason, impact, impact_value,
                                     urgency, confidence, due, evidence, details)
-               VALUES (%s::ltree, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+               VALUES (%s::ltree, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id::text AS id""",
             (company, s.kind, s.fingerprint, s.title, s.action, s.reason, s.impact, s.impact_value,
              s.urgency, s.confidence, s.due, Jsonb(s.evidence), Jsonb(s.details)),
-        )
+        ).fetchone()["id"]
+        if s.fingerprint not in was_open:
+            events.append({"event": "opened", "signal_id": signal_id, "brain_path": company,
+                           "sensitivity": int(Sensitivity.INTERNAL), "time": live.now(),
+                           "detail": {"urgency": s.urgency, "signal_kind": s.kind}})
     conn.commit()
+    if settings is not None:
+        live.publish(settings, events)
     return fresh
 
 
@@ -813,7 +827,7 @@ def run(settings: Settings, llm: LLM, company: str | None = None) -> dict[str, l
     with psycopg.connect(settings.admin_database_url, row_factory=dict_row) as conn:
         companies = [company] if company else [r["path"] for r in conn.execute(
             "SELECT path::text FROM brains WHERE kind = 'company' ORDER BY path").fetchall()]
-        return {c: generate(conn, llm, c) for c in companies}
+        return {c: generate(conn, llm, c, settings=settings) for c in companies}
 
 
 # Reads and feedback below run on the app connection as the user, under row-level security.

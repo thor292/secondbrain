@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 
 import psycopg
 
-from secondbrain import tree
+from secondbrain import live, tree
 from secondbrain.graph import build_graph
 from secondbrain.config import Settings
 from secondbrain.memory.short_term import ShortTermMemory
@@ -101,9 +101,10 @@ class SecondBrain:
         if not items:
             return 0
         embeddings = self.embedder.embed([item["content"] for item in items])
+        events = []
         with self.store.as_user(user_id) as conn:
             for item, embedding in zip(items, embeddings):
-                self.store.insert(
+                memory_id = self.store.insert(
                     conn,
                     brain_path=user.home_brain,
                     memory_type=item["memory_type"],
@@ -113,8 +114,13 @@ class SecondBrain:
                     embedding_model=self.embedder.name,
                     created_by=user_id,
                 )
+                events.append({"event": "created", "memory_id": memory_id, "brain_path": user.home_brain,
+                               "sensitivity": item["sensitivity"], "user_id": user_id, "time": live.now(),
+                               "detail": {"source": "chat"}})
         # Only after the insert committed, so a failure loses nothing.
         self.short_term.drop_oldest(user_id, len(items))
+        live.publish(self.settings, events + [
+            {"event": "inbox", "user_id": user_id, "outcome": "saved", "count": len(items), "time": live.now()}])
         return len(items)
 
     def _standalone(self, question: str, history: list[dict]) -> str:
