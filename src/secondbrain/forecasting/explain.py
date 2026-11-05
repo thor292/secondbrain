@@ -5,14 +5,20 @@ so instead of pretending to decompose it, this measures the same patterns the
 models use, directly from past sales: the recent level, growth, the weekday
 rhythm, last year's same weeks, how promotions moved sales, and the Black
 Friday effect. Each driver says what was measured and what it means.
+
+Only days that reflect demand count: out-of-stock days, gaps in the feed and
+one-off bulk orders are left out (the same cleaning the models get, see
+``prepare``), and a comparison with last year is only made when last year's
+days are actually there.
 """
 
 from datetime import date, timedelta
 from statistics import mean
 
-from secondbrain.forecasting import calendar
+from secondbrain.forecasting import calendar, prepare
 
 WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+COVERED = 0.8  # share of a period's days that must have real data to compare it
 
 
 def _avg(values: list[float]) -> float:
@@ -26,8 +32,9 @@ def _fmt(d: date) -> str:
 def drivers(sales: list[dict], promotions: list[dict], cutoff: date, points: list[dict]) -> list[dict]:
     """sales: [{day, units, in_stock}] for about a year and a half up to the cutoff;
     promotions: [{sku, starts, ends, discount, name}] that apply to this product."""
-    units = {s["day"]: s["units"] for s in sales if s["in_stock"]}
+    units = _demand_days(sales)
     window = lambda start, end: [units[d] for d in units if start <= d <= end]
+    covered = lambda start, end: len(window(start, end)) >= COVERED * ((end - start).days + 1)
     out = []
 
     recent = _avg(window(cutoff - timedelta(days=27), cutoff))
@@ -36,7 +43,8 @@ def drivers(sales: list[dict], promotions: list[dict], cutoff: date, points: lis
 
     now = sum(window(cutoff - timedelta(days=90), cutoff))
     before = sum(window(cutoff - timedelta(days=90 + 364), cutoff - timedelta(days=364)))
-    if before:
+    if before and covered(cutoff - timedelta(days=90 + 364), cutoff - timedelta(days=364)) \
+            and covered(cutoff - timedelta(days=90), cutoff):
         growth = now / before - 1
         out.append({"name": "Growth", "value": f"{growth:+.0%} year over year",
                     "explanation": "The last 13 weeks compared with the same 13 weeks a year earlier."})
@@ -53,7 +61,7 @@ def drivers(sales: list[dict], promotions: list[dict], cutoff: date, points: lis
         first, last = date.fromisoformat(points[0]["day"]), date.fromisoformat(points[-1]["day"])
         ahead = _avg([p["forecast"] for p in points])
         last_year = _avg(window(first - timedelta(days=364), last - timedelta(days=364)))
-        if last_year:
+        if last_year and covered(first - timedelta(days=364), min(last - timedelta(days=364), cutoff)):
             out.append({"name": "Same weeks last year", "value": f"{last_year:.1f} a day",
                         "explanation": f"What sold from {_fmt(first - timedelta(days=364))} to {_fmt(last - timedelta(days=364))} last year. "
                                        f"The forecast for the coming {len(points)} days averages {ahead:.1f} a day."})
@@ -76,8 +84,18 @@ def drivers(sales: list[dict], promotions: list[dict], cutoff: date, points: lis
     bf = calendar.black_friday(cutoff.year - 1)
     peak = window(bf, calendar.cyber_monday(cutoff.year - 1))
     base = window(bf - timedelta(days=35), bf - timedelta(days=8))
-    if peak and base and _avg(base):
+    if len(peak) >= 3 and len(base) >= 14 and _avg(base):
         out.append({"name": "Black Friday effect", "value": f"{_avg(peak) / _avg(base):.1f}x normal sales",
                     "explanation": f"Last year's Black Friday to Cyber Monday ({_fmt(bf)}–{_fmt(calendar.cyber_monday(bf.year))}) against "
                                    f"the weeks before. This year Black Friday is {_fmt(calendar.black_friday(cutoff.year))}."})
     return out
+
+
+def _demand_days(sales: list[dict]) -> dict[date, float]:
+    """Units per day on days that reflect demand: in stock, in the feed, not a one-off spike."""
+    rows = [{"sku": "_", "day": s["day"], "units": s["units"], "in_stock": s["in_stock"]} for s in sales]
+    if not rows:
+        return {}
+    df = prepare.panel(rows)
+    df = df[df["known"]]
+    return {d.date(): float(u) for d, u in zip(df["day"], df["units"])}

@@ -18,24 +18,32 @@ def run(admin_database_url: str, under: str = "root", horizon: int = backtest.DE
     """Forecast every product with sales history under a brain; returns results per brain."""
     results = {}
     with psycopg.connect(admin_database_url) as conn:
+        store.migrate(conn)
         for brain in store.series_brains(conn, under):
             sales = store.load_sales(conn, brain)
+            if not sales:  # products registered, no sales yet
+                continue
             forecasts = backtest.run(sales, store.load_promotions(conn, brain), horizon)
             cutoff = max(r["day"] for r in sales)
             for f in forecasts:
-                store.save_forecast(conn, brain, f.sku, cutoff, f.model, f.reason, f.points, f.scores)
+                store.save_forecast(conn, brain, f.sku, cutoff, f.model, f.reason, f.points, f.scores, f.quality)
             results[brain] = forecasts
     return results
 
 
 def print_scores(results: dict) -> None:
     for brain, forecasts in results.items():
-        models = list(forecasts[0].scores)
+        models = list(dict.fromkeys(m for f in forecasts for m in f.scores))
         print(f"\n{brain}: average WAPE per model over the backtest windows (* = chosen)\n")
-        print(f"{'product':<16}" + "".join(f"{m:>19}" for m in models) + "   MASE of chosen")
+        print(f"{'product':<16}" + "".join(f"{m:>19}" for m in models) + "   MASE of chosen  grade")
         for f in forecasts:
-            cells = "".join(f"{f.scores[m]['wape']:>18.1%}{'*' if m == f.model else ' '}" for m in models)
-            print(f"{f.sku:<16}{cells}   {f.scores[f.model]['mase']:.2f}")
+            cells = "".join(_cell(f.scores.get(m, {}).get("wape")) + ("*" if m == f.model else " ") for m in models)
+            mase = f.scores[f.model].get("mase")
+            print(f"{f.sku:<16}{cells}   {mase if mase is None else round(mase, 2)!s:>15}  {f.quality.get('grade')}")
+
+
+def _cell(wape: float | None) -> str:
+    return f"{wape:>18.1%}" if wape is not None else f"{'-':>18}"
 
 
 def main() -> None:

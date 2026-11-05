@@ -64,7 +64,10 @@ CREATE TABLE forecasts (
     model        text NOT NULL,
     reason       text NOT NULL,
     points       jsonb NOT NULL,  -- [{day, forecast, lo80, hi80, lo95, hi95}]
-    backtest     jsonb NOT NULL,  -- {model: {wape, mase, smape, bias, windows}}
+    backtest     jsonb NOT NULL,  -- {model: {wape, mase, smape, bias, rmsse, windows}}
+    -- How far to trust it: {grade, summary, pattern, history_days, wape, bias,
+    -- coverage80, coverage95, backtest_windows, backtest_days, warnings}
+    quality      jsonb,
     sensitivity  smallint NOT NULL CHECK (sensitivity BETWEEN 0 AND 2),
     FOREIGN KEY (brain_path, sku) REFERENCES products
 );
@@ -128,6 +131,11 @@ def create_schema(conn: psycopg.Connection) -> bool:
     return True
 
 
+def migrate(conn: psycopg.Connection) -> None:
+    """Bring a database created before forecast quality was stored up to date."""
+    conn.execute("ALTER TABLE forecasts ADD COLUMN IF NOT EXISTS quality jsonb")
+
+
 def save_history(
     conn: psycopg.Connection,
     brain_path: str,
@@ -188,12 +196,14 @@ def load_promotions(conn: psycopg.Connection, brain_path: str) -> list[dict]:
 
 
 def save_forecast(conn: psycopg.Connection, brain_path: str, sku: str, cutoff: date,
-                  model: str, reason: str, points: list[dict], backtest: dict) -> None:
+                  model: str, reason: str, points: list[dict], backtest: dict,
+                  quality: dict | None = None) -> None:
     conn.execute(
-        """INSERT INTO forecasts (brain_path, sku, cutoff, model, reason, points, backtest, sensitivity)
-           SELECT %s::ltree, %s, %s, %s, %s, %s, %s, sensitivity FROM products
+        """INSERT INTO forecasts (brain_path, sku, cutoff, model, reason, points, backtest, quality, sensitivity)
+           SELECT %s::ltree, %s, %s, %s, %s, %s, %s, %s, sensitivity FROM products
            WHERE brain_path = %s::ltree AND sku = %s""",
-        (brain_path, sku, cutoff, model, reason, Jsonb(points), Jsonb(backtest), brain_path, sku),
+        (brain_path, sku, cutoff, model, reason, Jsonb(points), Jsonb(backtest),
+         Jsonb(quality) if quality is not None else None, brain_path, sku),
     )
 
 
@@ -225,7 +235,7 @@ def find_products(conn: psycopg.Connection, product: str, brain: str | None = No
 def latest_forecast(conn: psycopg.Connection, brain_path: str, sku: str) -> dict | None:
     with conn.cursor(row_factory=dict_row) as cur:
         return cur.execute(
-            """SELECT created_at, cutoff, model, reason, points, backtest FROM forecasts
+            """SELECT created_at, cutoff, model, reason, points, backtest, quality FROM forecasts
                WHERE brain_path = %s::ltree AND sku = %s ORDER BY created_at DESC LIMIT 1""",
             (brain_path, sku),
         ).fetchone()

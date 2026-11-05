@@ -324,6 +324,10 @@ async function loadForecast() {
       stat(`Expected sales, next ${days.length} days`, Math.round(total).toLocaleString() + " units"),
       stat("Busiest day", `${fmtDay(peak.day)}: ~${Math.round(peak.forecast)}`),
       stat("Typical error", `±${(bt.wape * 100).toFixed(0)}% a day`)));
+  // How far to trust it, in plain words: the grade, why, and anything odd in the data.
+  const q = body.quality;
+  if (q) head.append(el("div", { class: "reason" }, el("b", {}, `Forecast quality: ${q.grade}. `), q.summary.replace(/^\w+: /, ""),
+    ...(q.warnings.length ? [el("div", { class: "muted" }, q.warnings.join(" "))] : [])));
   out.append(head);
 
   // 2. What it means for the business: stock and the decision.
@@ -336,7 +340,7 @@ async function loadForecast() {
       el("div", { class: "step" }, el("b", {}, "1. Learn from history"), `${product}'s daily sales since September 2024, with every past promotion and holiday.`),
       el("div", { class: "step" }, el("b", {}, "2. Try 4 methods"), "Repeat last week · Last year × growth · ETS (statistical) · Gradient boosting (learns promotions and holidays)."),
       el("div", { class: "step" }, el("b", {}, "3. Test on the past"), "Each method forecasts 4 past 8-week periods it never saw, including the same weeks last year, and is scored on its error."),
-      el("div", { class: "step" }, el("b", {}, "4. Use the best"), `${label(body.model)} had the smallest error (${(bt.wape * 100).toFixed(1)}% vs ${(ranked[1][1].wape * 100).toFixed(1)}% for the next best), so it makes this forecast. Ranges come from its past errors.`)),
+      el("div", { class: "step" }, el("b", {}, "4. Use the best"), `${ranked.length > 1 ? `${label(body.model)} had the smallest error (${(bt.wape * 100).toFixed(1)}% vs ${(ranked[1][1].wape * 100).toFixed(1)}% for the next best), so it makes this forecast. Ranges come from its past errors.` : body.reason}`)),
     el("p", { class: "muted", style: "margin-bottom:0" }, `Trained on sales up to ${fmtDay(body.trained_through)}. Sales history is generated sample data for Lumen Home.`)));
 
   // 4. What drives it, measured from the product's own history.
@@ -389,7 +393,9 @@ function stockChart(proj) {
 function stat(k, v) { return el("div", { class: "stat" }, el("div", { class: "muted" }, k), el("div", { class: "v" }, v)); }
 function legendItem(text, color) { const s = el("span", {}, text); s.style.setProperty("--c", color); return s; }
 const fmtDay = (d) => new Date(d + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" });
-const LABELS = { seasonal_naive: "Repeat last week", year_over_year: "Last year × growth", ets: "ETS (statistical)", gradient_boosting: "Gradient boosting (promotions, holidays)" };
+const LABELS = { seasonal_naive: "Repeat last week", year_over_year: "Last year × growth", ets: "ETS (statistical)", gradient_boosting: "Gradient boosting (promotions, holidays)",
+  croston: "Croston (sporadic sales)", tsb: "TSB (sporadic sales)", adida: "ADIDA (sporadic sales)", cold_start: "Recent average (new product)",
+  discontinued: "Zero (stopped selling)", no_sales: "Zero (no sales yet)" };
 const label = (m) => LABELS[m] || m;
 
 function chart(hist, days) {
@@ -441,7 +447,7 @@ function backtestTable(body) {
   for (const [m, s] of rows) {
     tbody.append(el("tr", { class: m === body.model ? "chosen" : "" },
       el("td", {}, label(m) + (m === body.model ? "  ✓ chosen" : "")), el("td", { class: "num" }, (s.wape * 100).toFixed(1) + "%"),
-      el("td", { class: "num" }, s.mase.toFixed(2)), el("td", { class: "num" }, ((s.windows["same weeks last year"] ?? 0) * 100).toFixed(1) + "%")));
+      el("td", { class: "num" }, s.mase == null ? "–" : s.mase.toFixed(2)), el("td", { class: "num" }, ((s.windows["same weeks last year"] ?? 0) * 100).toFixed(1) + "%")));
   }
   table.append(tbody);
   return el("div", { class: "panel" }, el("h3", { style: "margin-top:0" }, "Backtest: how each model did on past data"),

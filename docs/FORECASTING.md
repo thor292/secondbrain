@@ -114,13 +114,18 @@ on quiet September–October weeks and then trusted with Black Friday.
 | MAPE | Average percentage error | **Not used**: undefined on zero-sale days and explodes on slow ones |
 | Bias | Over/under forecasting as a share of sales | Reported: consistent under-forecasting means stockouts |
 
-Known limit: on products that sell only now and then (intermittent demand),
-WAPE can favour forecasting zero. If that happens with real merchants, choose
-by MASE or a scaled squared error (RMSSE, used in M5) for those products.
+On products that sell only now and then (intermittent demand), WAPE and MASE
+reward forecasting zero (they are smallest at the median, which is zero), so
+for those products **RMSSE** (scaled squared error, smallest at the average
+rate; used in M5) chooses the model instead.
 
-**Intervals** come from each chosen model's own backtest errors (relative
-errors, quantiles at 80% and 95%), in the spirit of conformal prediction, so
-they're honest about how wrong that model has been on this product.
+**Intervals** are split conformal ranges from the chosen model's backtest
+errors (`intervals.py`): errors are normalised by `sqrt(a·f + b·f²)` fitted per
+product (Poisson-like noise on slow days, relative error on busy ones),
+quantiles are taken per horizon bucket (days 1–7, 8–28, 29–56, later), and a
+leave-one-window-out check scales them until the 80% and 95% ranges hold about
+80% and 95% of the time on a window they didn't see. That held-out coverage is
+stored with the forecast.
 
 ## 4. How often to retrain, and "evolving every second"
 
@@ -156,7 +161,36 @@ src/secondbrain/forecasting/
 | `seasonal_naive` | Repeats last week | The baseline; anything that can't beat it is dropped |
 | `year_over_year` | Last year's same weekdays × growth over the last 4 weeks | How merchants plan by hand; catches Black Friday from last year's spike |
 | `ets` | statsforecast AutoETS, weekly season | The standard statistical model |
-| `gradient_boosting` | scikit-learn histogram gradient boosting (LightGBM algorithm), one model over all products: weekday, day of year, days to Black Friday and Christmas, planned discount, recent level, last year's sales | The M5 approach; the only one that knows a sale is planned |
+| `gradient_boosting` | scikit-learn histogram gradient boosting (LightGBM algorithm), one model over all products: weekday, day of year, days to Black Friday and Christmas, planned discount, recent level, last year's sales. The recent level is taken 7, 14, 28, 56, 91 or 182 days back depending on how far ahead the day is (one model, lag as a feature) | The M5 approach; the only one that knows a sale is planned |
+| `croston`, `tsb`, `adida` | statsforecast Croston (SBA), TSB and ADIDA; only for products that sell on fewer than ~3 days in 4 | Built for intermittent demand; TSB decays when sales dry up |
+| `cold_start` | Recent average × the shop's forecast shape (or the product's weekdays), wide ranges | Products too new to backtest |
+| `discontinued`, `no_sales` | Zero | A product that stopped selling isn't forecast at its old average forever |
+
+### Real-world data (`prepare.py`, `quality.py`)
+
+Before any model runs, the feed becomes a clean daily panel per product:
+
+- **Out of stock** days are censored: unknown demand (at least what sold),
+  filled from the same weekday nearby, never a zero, and never scored.
+- **Gaps**: a day missing for the whole shop is a feed outage (unknown); a day
+  missing for one product is a zero sale if its feed omits zero rows (no zero
+  rows and >10% of days missing), unknown otherwise; days after a product's
+  last row are zero sales (it left the feed).
+- **Outliers**: a day above 4× the 90th percentile of the surrounding 8 weeks
+  (and 10+ units above it) is set aside as a one-off order, unless a promotion
+  or Black Friday–Cyber Monday explains it.
+- **Short histories** get shorter backtest windows (56/28/14/7 days) and only
+  the models that can work on them; under ~5 weeks, a cold start.
+- **Discontinued**: a run of zero days that would almost never happen by
+  chance at the product's old rate (or 90+ days) means a zero forecast.
+- **Level shifts** (last 4 weeks vs the 8 before, allowing for the season)
+  are flagged; the lag-bucketed gradient boosting and ETS follow them.
+
+Every forecast stores `quality` (grade good/fair/weak, a plain-language
+summary, history days, WAPE, bias, held-out 80%/95% coverage, backtest windows
+and data warnings), returned by `GET /forecast` and shown on the forecast page.
+`scripts/forecast_reliability.py` checks all of this out of sample on Lumen and
+on a synthetic messy shop.
 
 Not built yet: Chronos-2 / TimesFM (cold start, see 6), AutoARIMA and MSTL
 (slower; ETS covers the statistical slot), hierarchical reconciliation
@@ -222,8 +256,14 @@ will have messier promotions, returns, new products and stockouts. The value
 here is the pipeline (variants, honest backtest, choice per product), not
 these numbers.
 
-Runtime: ~30 s for the whole backtest of 8 products on a laptop (4 windows ×
-4 models + final fit); the statistical models are a small part of it.
+Runtime: ~20 s for the whole backtest of 8 products at a 120-day horizon on a
+laptop (it was ~75–130 s: scikit-learn's OpenMP threads made each gradient
+boosting fit ~70× slower on this small data, so fits run single-threaded).
+
+The table above is from the first version. With lag-bucketed gradient
+boosting, `scripts/forecast_reliability.py` measures, out of sample, on the
+demo's setting (cut 3 Nov, 120 days ahead): WAPE 27.0% (was 30.9%), bias
++1.6%, 80% range held 84% of days, 95% range 97%.
 
 ## 7. Recommendation
 
