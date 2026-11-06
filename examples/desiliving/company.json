@@ -1,0 +1,28 @@
+{
+  "id": "desiliving",
+  "name": "Desi Living",
+  "sharing": "patterns",
+  "departments": [
+    {"id": "support", "name": "Customer Support"},
+    {"id": "marketing", "name": "Marketing"},
+    {"id": "operations", "name": "Operations & Fulfillment"},
+    {"id": "finance", "name": "Finance"},
+    {"id": "people", "name": "People & HR"},
+    {"id": "merchandising", "name": "Merchandising"}
+  ],
+  "users": [
+    {"id": "meera", "name": "Meera Iyer (CEO)", "role": "executive"},
+    {"id": "arjun", "name": "Arjun Mehta (Head of Support)", "department": "support", "role": "lead"},
+    {"id": "neha", "name": "Neha Kulkarni (Support agent)", "department": "support", "role": "member",
+     "extra_grants": [{"department": "operations", "max_sensitivity": "internal"}]},
+    {"id": "rohan", "name": "Rohan Kapoor (Marketing lead)", "department": "marketing", "role": "lead",
+     "extra_grants": [{"department": "merchandising", "max_sensitivity": "internal"}]},
+    {"id": "sana", "name": "Sana Sheikh (Content marketer)", "department": "marketing", "role": "member"},
+    {"id": "vikram", "name": "Vikram Rao (Operations manager)", "department": "operations", "role": "lead"},
+    {"id": "priya", "name": "Priya Nair (Warehouse coordinator)", "department": "operations", "role": "member"},
+    {"id": "anand", "name": "Anand Krishnan (CFO)", "department": "finance", "role": "executive"},
+    {"id": "tanvi", "name": "Tanvi Shah (Finance analyst)", "department": "finance", "role": "member"},
+    {"id": "farah", "name": "Farah Khan (People partner)", "department": "people", "role": "lead"},
+    {"id": "kabir", "name": "Kabir Singh (Merchandiser)", "department": "merchandising", "role": "member"}
+  ]
+}

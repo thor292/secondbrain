@@ -35,7 +35,7 @@ import numpy as np
 import psycopg
 from psycopg.rows import dict_row
 
-from scripts.generate_lumen_sales import PRODUCTS, generate
+from scripts.generate_sales import PRODUCTS, generate
 from secondbrain import admin, evolution
 from secondbrain.forecasting import store
 from secondbrain.forecasting.__main__ import run as run_forecasts
@@ -45,8 +45,8 @@ from secondbrain.sensitivity import Sensitivity
 from tests.conftest import EXAMPLES, TEST_DB, make_test_settings
 
 COMPANY, BRAIN = "root.acme", "root.acme.sales"
-SKUS = ["halo-lamp", "cloud-throw", "aria-sofa"]
-SUPPLIERS = {"halo-lamp": "Lampworks", "cloud-throw": "Weavers", "aria-sofa": "Sofa Co"}
+SKUS = ["brass-floor-lamp", "kantha-throw", "sheesham-sofa"]
+SUPPLIERS = {"brass-floor-lamp": "Noor Metalcraft", "kantha-throw": "Panipat Looms", "sheesham-sofa": "Saharanpur Woodcraft"}
 
 
 def setup(settings, rng: np.random.Generator) -> dict:
@@ -64,7 +64,7 @@ def setup(settings, rng: np.random.Generator) -> dict:
         for sku in SKUS:
             points = store.latest_forecast(conn, BRAIN, sku)["points"][:56]
             daily = sum(p["forecast"] for p in points) / len(points)
-            stock.append({"sku": sku, "as_of": date(2026, 11, 4), "on_hand": int(daily * rng.uniform(8, 70)),
+            stock.append({"sku": sku, "as_of": date(2026, 11, 6), "on_hand": int(daily * rng.uniform(8, 70)),
                           "on_order": 0, "order_eta": None, "supplier": SUPPLIERS[sku],
                           "lead_time_days": int(rng.choice([14, 21, 28, 42])), "unit_cost": 50})
         store.save_inventory(conn, BRAIN, stock)
@@ -153,7 +153,7 @@ def scenario(settings, llm, embedder, seed: int, step: int, days: int) -> dict:
     again = evolution.refresh(settings, llm, embedder, COMPANY)
     with psycopg.connect(settings.admin_database_url, row_factory=dict_row) as conn:
         after = snapshot(conn)
-        problems = check(conn, start_stock, date(2026, 11, 4))
+        problems = check(conn, start_stock, date(2026, 11, 6))
         outcomes = Counter({r["result"]: r["n"] for r in conn.execute(
             "SELECT result, count(*) AS n FROM signal_outcomes GROUP BY 1")})
         grades = conn.execute(f"SELECT {evolution._SUMS} FROM forecast_accuracy WHERE complete").fetchone()

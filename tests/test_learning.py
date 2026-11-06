@@ -8,7 +8,7 @@ from tests.conftest import ADMIN_TOKEN, ask
 def test_anonymity_check():
     forbidden = {"acme", "asha", "zenith"}
     assert is_anonymous("Escalating large credits to a lead keeps spending consistent.", forbidden)
-    assert not is_anonymous("Free shipping above 60 dollars lifts conversion.", forbidden)
+    assert not is_anonymous("Free shipping above 499 rupees lifts conversion.", forbidden)
     assert not is_anonymous("Zenith buyers respond to early offers.", forbidden)
     assert not is_anonymous("Ask asha@acme.com for details.", forbidden)
 

@@ -1,0 +1,11 @@
+{
+  "id": "bharatfleet",
+  "name": "BharatFleet Logistics",
+  "sharing": "none",
+  "departments": [
+    {"id": "operations", "name": "Operations"}
+  ],
+  "users": [
+    {"id": "karan", "name": "Karan Malhotra (Operations director)", "department": "operations", "role": "lead"}
+  ]
+}

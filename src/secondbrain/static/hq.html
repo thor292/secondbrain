@@ -122,7 +122,7 @@ async function load() {
   const graded = data.companies.filter((c) => c.accuracy && c.accuracy.wape != null);
   const accuracy = graded.length ? 1 - graded.reduce((t, c) => t + c.accuracy.wape, 0) / graded.length : null;
   const companies = data.companies.filter((c) => c.today);
-  if (!state.company && companies.length) state.company = (companies.find((c) => c.path === "root.lumen") || companies[0]).path;
+  if (!state.company && companies.length) state.company = (companies.find((c) => c.path === "root.desiliving") || companies[0]).path;
 
   const canvas = el("canvas");
   const hero = el("section", { class: "card hero rise" },
@@ -181,7 +181,7 @@ function bizCard(c, oc, i) {
     el("div", { class: "head" }, el("div", { class: "avatar" }, c.name[0]),
       el("div", {}, el("h3", {}, c.name), el("div", { class: "row", style: { marginTop: "4px" } },
         el("span", { class: "chip " + (c.sharing === "patterns" ? "accent" : "") }, c.sharing === "patterns" ? "↑ Shares patterns" : "🔒 Private"),
-        el("span", { class: "muted", style: { fontSize: "13px" } }, c.today ? `Brain's date ${fmtDay(c.today)}` : "No sales data yet"))),
+        el("span", { class: "muted", style: { fontSize: "13px" } }, c.today ? `Brain's date ${fmtDay(c.today)}${SB.festivalNote(c.today) ? " · 🪔 " + SB.festivalNote(c.today) : ""}` : "No sales data yet"))),
       ring),
     el("div", { class: "stats" },
       stat("Open signals", String(c.signals.open || 0)),
@@ -189,7 +189,7 @@ function bizCard(c, oc, i) {
       stat("Saved", shortMoney(oc(c, "prevented").value), "good"),
       stat("People", String(c.people)),
       stat("Departments", String(c.departments)),
-      stat("Lost", lost ? shortMoney(lost) : "$0", lost ? "bad" : "")));
+      stat("Lost", lost ? shortMoney(lost) : "₹0", lost ? "bad" : "")));
 }
 
 // ---------- the living network: departments → company → root, lessons back down ----------
@@ -283,7 +283,7 @@ function timeMachine(companies) {
   return el("section", { class: "section" },
     el("div", { class: "section-head" },
       el("div", {}, el("div", { class: "eyebrow" }, "Time machine"), el("h2", {}, "Watch the brain run a business"),
-        el("p", {}, "Weeks of sales play out. The brain predicts run-outs, places orders, checks itself and learns.")),
+        el("p", {}, "Weeks of sales play out, through Diwali and the wedding season. The brain predicts run-outs, places orders, checks itself and learns.")),
       el("button", { class: "btn ghost sm", onclick: resetDemo, title: "Back to the saved starting point" }, "↺ Reset demo")),
     el("div", { class: "card" },
       el("div", { class: "tm-controls" },
@@ -329,8 +329,9 @@ function timeline(r) {
     p.arrived_on.forEach((d) => events.push({ day: d, ic: "cyan", icon: "▼", text: `${p.name}: order arrived`, name: p.name }));
     p.stock.forEach((s, i) => { if (s === 0 && p.demand[i] > 0 && (i === 0 || p.stock[i - 1] > 0)) events.push({ day: p.days[i], ic: "bad", icon: "!", text: `${p.name} ran out`, name: p.name }); });
   }
+  for (const f of SB.festivalsBetween(r.from, r.to)) events.push({ day: f.day, ic: "info", icon: "🪔", text: f.name, name: f.name });
   for (const o of r.outcomes) {
-    const m = o.title.match(/runs out on (\w+ \d+)/), name = o.title.split(" runs out")[0];
+    const m = o.title.match(/runs out on (\w+ \d+|\d+ \w+)/), name = o.title.split(" runs out")[0];
     const day = m ? isoOf(m[1], r.from) : r.to;
     const good = o.result === "prevented";
     events.push({ day: day < r.from ? r.from : day > r.to ? r.to : day, ic: good ? "good" : o.result === "false_alarm" ? "info" : "bad",
@@ -380,7 +381,7 @@ function playback(r) {
     fill.style.width = t * 100 + "%";
     let sold = 0, out = 0, orders = 0;
     for (const c of charts) { c.reveal(t, idx); sold += c.soldUntil(idx); out += c.outUntil(idx); orders += c.arrivalsUntil(days[idx]); }
-    live.sold.textContent = sold.toLocaleString(); live.out.textContent = String(out); live.orders.textContent = String(orders);
+    live.sold.textContent = sold.toLocaleString("en-IN"); live.out.textContent = String(out); live.orders.textContent = String(orders);
     while (shown < events.length && events[shown].day <= days[idx]) {
       const e = events[shown++];
       feed.prepend(el("li", { class: "pop" }, el("span", { class: "ic " + e.ic }, e.icon), el("span", {}, e.text), el("span", { class: "when" }, fmtDay(e.day))));

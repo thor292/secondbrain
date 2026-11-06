@@ -51,9 +51,9 @@ week one, and the Brain evolution tab and HQ show that grade.
 
 ```bash
 SB_MQTT_PORT=51883 SB_MQTT_TLS=false uv run python -m secondbrain.ingest.mqtt   # the bridge
-uv run python scripts/publish_sample_events.py --delay 0.05                       # one business day of Lumen events
+uv run python scripts/publish_sample_events.py --delay 0.05                       # one business day of Desi Living events
 curl -X POST localhost:8765/admin/refresh -H 'X-Admin-Token: dev-admin-token' \
-     -H 'Content-Type: application/json' -d '{"company":"root.lumen"}'          # or wait for the auto refresh
+     -H 'Content-Type: application/json' -d '{"company":"root.desiliving"}'          # or wait for the auto refresh
 ```
 
 Then show Explore → Decision signals and Brain evolution, and HQ.

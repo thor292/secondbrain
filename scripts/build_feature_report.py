@@ -32,10 +32,10 @@ CODE = ParagraphStyle("Code", parent=BODY, fontName="Courier", fontSize=8, leadi
                       backColor=colors.HexColor("#f4f5f7"), borderPadding=5, spaceBefore=3, spaceAfter=6)
 
 PEOPLE = {
-    "maya": "Maya (CEO)", "rachel": "Rachel (CFO)", "arjun": "Arjun (Head of Support)", "nina": "Nina (Support agent)",
-    "leo": "Leo (Marketing lead)", "sofia": "Sofia (Content marketer)", "daniel": "Daniel (Ops manager)",
-    "ivy": "Ivy (Warehouse)", "tom": "Tom (Finance analyst)", "hana": "Hana (People partner)",
-    "omar": "Omar (Merchandiser)", "karim": "Karim (Brightpath)",
+    "meera": "Meera (CEO)", "anand": "Anand (CFO)", "arjun": "Arjun (Head of Support)", "neha": "Neha (Support agent)",
+    "rohan": "Rohan (Marketing lead)", "sana": "Sana (Content marketer)", "vikram": "Vikram (Ops manager)",
+    "priya": "Priya (Warehouse)", "tanvi": "Tanvi (Finance analyst)", "farah": "Farah (People partner)",
+    "kabir": "Kabir (Merchandiser)", "karan": "Karan (BharatFleet)",
 }
 
 
@@ -183,24 +183,26 @@ def main() -> None:
     p("Features F8 and F9 add notes. To go back to the original demo data (about a minute, VPN needed):")
     code("uv run python -m secondbrain.schema --reset\n./scripts/load_examples.sh")
     h2("The demo data")
-    p("<b>Lumen Home</b> is a fictional online home decor and furniture brand with 6 departments (Customer Support, "
-      "Marketing, Operations & Fulfillment, Finance, People & HR, Merchandising), 11 people and 18 documents: an Employee "
-      "Handbook and a Holiday Campaign Plan in <b>Word</b>, a Returns Policy, a Fulfillment SOP and Q3 Results in <b>PDF</b>, "
-      "and policies and playbooks in Markdown. Four documents are <b>restricted</b>. 20 notes from its people add events "
-      "and updates. <b>Brightpath Logistics</b> is a second company that shares nothing, used to show isolation.")
+    p("<b>Desi Living</b> is a fictional Bengaluru D2C home decor brand (brass, block print, dhurries, sheesham wood) selling "
+      "on its own Shopify store, JioMart and DMart, with 6 departments (Customer Support, "
+      "Marketing, Operations & Fulfillment, Finance, People & HR, Merchandising), 11 people and its documents: an Employee "
+      "Handbook and a Diwali Campaign Plan in <b>Word</b>, a Returns Policy, a Fulfillment SOP and Q2 FY27 Results in <b>PDF</b>, "
+      "and policies and playbooks in Markdown. Four documents are <b>restricted</b>. Notes from its people add events "
+      "and updates. Money is in rupees. <b>BharatFleet Logistics</b>, its furniture carrier, is a second company that shares "
+      "nothing, used to show isolation.")
     table([["Person", "Role", "Can see"],
-           ["Maya Chen", "CEO", "All of Lumen, including restricted"],
-           ["Rachel Kim", "CFO (Finance)", "All of Lumen, including restricted"],
+           ["Meera Iyer", "CEO", "All of Desi Living, including restricted"],
+           ["Anand Krishnan", "CFO (Finance)", "All of Desi Living, including restricted"],
            ["Arjun Mehta", "Head of Support", "Support (incl. restricted) + company"],
-           ["Nina Alvarez", "Support agent", "Support + company + Operations (extra grant)"],
-           ["Leo Park", "Marketing lead", "Marketing (incl. restricted) + company + Merchandising (extra grant)"],
-           ["Sofia Rossi", "Content marketer", "Marketing + company"],
-           ["Daniel Okafor", "Operations manager", "Operations (incl. restricted) + company"],
-           ["Ivy Thompson", "Warehouse coordinator", "Operations + company"],
-           ["Tom Bauer", "Finance analyst", "Finance (not restricted) + company"],
-           ["Hana Sato", "People partner", "People & HR (incl. restricted) + company"],
-           ["Omar Haddad", "Merchandiser", "Merchandising + company"],
-           ["Karim Nasser", "Brightpath Operations director", "Brightpath only"]], [32, 45, 101])
+           ["Neha Kulkarni", "Support agent", "Support + company + Operations (extra grant)"],
+           ["Rohan Kapoor", "Marketing lead", "Marketing (incl. restricted) + company + Merchandising (extra grant)"],
+           ["Sana Sheikh", "Content marketer", "Marketing + company"],
+           ["Vikram Rao", "Operations manager", "Operations (incl. restricted) + company"],
+           ["Priya Nair", "Warehouse coordinator", "Operations + company"],
+           ["Tanvi Shah", "Finance analyst", "Finance (not restricted) + company"],
+           ["Farah Khan", "People partner", "People & HR (incl. restricted) + company"],
+           ["Kabir Singh", "Merchandiser", "Merchandising + company"],
+           ["Karan Malhotra", "BharatFleet Operations director", "BharatFleet only"]], [32, 45, 101])
     story.append(PageBreak())
 
     # Summary
@@ -227,7 +229,7 @@ def main() -> None:
             "Each department has its own brain. A question is answered first from the asker's department, in plain language, with the sources it used.",
             ["Pick the person in the table, click <b>New conversation</b>, ask the question.",
              "Expect a green badge <b>Answered from your department</b> and the fact in the Expected column."],
-            "Nina's question is answered from her own department's knowledge, and she can click through to the exact document section.")
+            "Neha's question is answered from her own department's knowledge, and she can click through to the exact document section.")
     ask_table(groups["F1"])
 
     section("F2", "Falling back to the company brain",
@@ -245,14 +247,14 @@ def main() -> None:
     ask_table(groups["F3"])
 
     section("F4", "Access between departments (extra grants)",
-            "Departments can't read each other, unless a person has an explicit grant. Nina (Support) may read Operations; Leo (Marketing lead) may read Merchandising.",
+            "Departments can't read each other, unless a person has an explicit grant. Neha (Support) may read Operations; Rohan (Marketing lead) may read Merchandising.",
             ["Ask as the person with the grant: expect the answer.", "Ask the same as someone without it: expect <b>Not found</b>."],
             "Access between departments goes through permissions on a person, not through the departments themselves.")
     ask_table(groups["F4"])
 
     section("F5", "Isolation between companies",
-            "Each company's knowledge is completely separate. Brightpath never sees Lumen, and the reverse.",
-            ["Ask as Karim (Brightpath) and as Lumen people."],
+            "Each company's knowledge is completely separate. BharatFleet never sees Desi Living, and the reverse.",
+            ["Ask as Karan (BharatFleet) and as Desi Living people."],
             "Two companies ask the same question and get only their own answer. Nothing crosses between companies.")
     ask_table(groups["F5"])
 
@@ -279,7 +281,7 @@ def main() -> None:
     h2("How to test it")
     bullets(["Pick <b>Arjun</b>, open the <b>Remember</b> tab, enter each note and click <b>Remember</b>: the reply shows its type.",
              "Click <b>Save to long-term</b>, switch to <b>Ask</b> and ask the recall questions.",
-             "Ask the last recall question as Leo: Arjun's Support notes are not visible in Marketing."])
+             "Ask the last recall question as Rohan: Arjun's Support notes are not visible in Marketing."])
     note("<b>How to explain it:</b> new knowledge is captured in plain words, sorted automatically, and only visible to the right people.")
     table([["#", "Note typed by Arjun", "Expected type", "Got", "Result"]] + [
         [i, esc(r["note"]), r["expected"], r["got"], r["passed"]] for i, r in enumerate(d["notes"], 1)
@@ -312,13 +314,13 @@ def main() -> None:
          "uses the newer one, while the full history stays in the graph.")
 
     h1("F10. Learning at the root (anonymous lessons)")
-    p("<b>What it does:</b> companies that allow it (Lumen: sharing = patterns) send <b>general lessons</b> to our root brain. "
+    p("<b>What it does:</b> companies that allow it (Desi Living: sharing = patterns) send <b>general lessons</b> to our root brain. "
       "Restricted data is never used, and code rejects any lesson with a number or a name. Companies that don't share "
-      "(Brightpath) contribute nothing, and company users never get answers from the root.")
+      "(BharatFleet) contribute nothing, and company users never get answers from the root.")
     h2("How to test it")
     bullets(["Open the graph, choose <b>Whole SecondBrain (admin)</b>, enter the admin token.",
              "Click the small nodes around the gold root to read the lessons."])
-    h2(f"The {len(d.get('lessons', []))} lessons the root learned from Lumen in this run")
+    h2(f"The {len(d.get('lessons', []))} lessons the root learned from Desi Living in this run")
     for lesson in d.get("lessons", []):
         story.append(Paragraph(esc(lesson), BULLET, bulletText="•"))
     story.append(Spacer(1, 4))
@@ -331,9 +333,9 @@ def main() -> None:
     p("<b>What it does:</b> shows the brains, people and memories as a graph. A person's view is built by the database for "
       "that person, so it can't show more than they may see. The admin view shows the whole SecondBrain.")
     h2("How to test it")
-    bullets(["Open http://localhost:8765/graph-view and pick <b>Rachel</b>: all departments filled, restricted memories outlined in red.",
-             "Pick <b>Sofia</b>: most department zones are empty.",
-             "Pick <b>Whole SecondBrain (admin)</b>: root with lessons in the middle, Lumen and Brightpath around it.",
+    bullets(["Open http://localhost:8765/graph-view and pick <b>Anand</b>: all departments filled, restricted memories outlined in red.",
+             "Pick <b>Sana</b>: most department zones are empty.",
+             "Pick <b>Whole SecondBrain (admin)</b>: root with lessons in the middle, Desi Living and BharatFleet around it.",
              "Click any node to see its details and relationships; faded nodes with dashed rings are updated memories."])
     table([["#", "Check", "Expected", "Got", "Result"]] + [
         [i, esc(c["check"]), esc(c["expected"]), clean(c["got"], 80), c["passed"]] for i, c in enumerate(groups["F11"], 1)
@@ -346,9 +348,9 @@ def main() -> None:
     h2("How to test it (for technical audiences)")
     code("docker compose exec postgres psql \"postgresql://secondbrain_app:dev_app_password@localhost/secondbrain\" \\\n"
          "  -c \"SELECT count(*) FROM memories;\"")
-    p("Expect 0. Then as Sofia:")
+    p("Expect 0. Then as Sana:")
     code("docker compose exec postgres psql \"postgresql://secondbrain_app:dev_app_password@localhost/secondbrain\" \\\n"
-         "  -c \"BEGIN; SELECT set_config('app.user_id','sofia',true); SELECT DISTINCT brain_path FROM memories; COMMIT;\"")
+         "  -c \"BEGIN; SELECT set_config('app.user_id','sana',true); SELECT DISTINCT brain_path FROM memories; COMMIT;\"")
     table([["#", "Check", "Expected", "Got", "Result"]] + [
         [i, esc(c["check"]), esc(c["expected"]), clean(c["got"], 80), c["passed"]] for i, c in enumerate(groups["F12"], 1)
     ], [6, 82, 40, 34, 13], status_col=4)
@@ -361,17 +363,17 @@ def main() -> None:
 
     h1("F13. Relationships: who knows what (FalkorDB)")
     p("<b>What it does:</b> when notes and documents are saved, the AI picks out the people, customers, suppliers, products, "
-      "carriers and places they mention, and how they relate (\"Casa Forma supplies the Aria linen sofa\"). Each company gets its "
+      "carriers and places they mention, and how they relate (\"Saharanpur Woodcraft supplies the sheesham sofa\"). Each company gets its "
       "own graph in FalkorDB. Two new questions can be answered: <b>who knows about X?</b> and <b>what do we know about X?</b> "
       "FalkorDB has no permissions of its own, so every graph query is limited to the memories PostgreSQL says the person may see.")
     h2("How to test it")
     p("There is no screen for this yet; use these commands in Terminal (the person is set with X-User-Id):")
-    code('curl -s "http://localhost:8765/experts?topic=Priya%20Shah" -H "X-User-Id: nina"\n'
-         'curl -s "http://localhost:8765/experts?topic=Priya%20Shah" -H "X-User-Id: sofia"\n'
-         'curl -s "http://localhost:8765/entities/Nordlys" -H "X-User-Id: omar"\n'
-         'curl -s "http://localhost:8765/entities/Nordlys" -H "X-User-Id: karim"')
-    p("The first returns Nina as the person who knows about Priya Shah; the second returns nobody, because Support's notes are "
-      "hidden from Sofia; the third describes Nordlys as a supplier; the fourth is not found, because Karim is in another company.")
+    code('curl -s "http://localhost:8765/experts?topic=Ananya%20Reddy" -H "X-User-Id: neha"\n'
+         'curl -s "http://localhost:8765/experts?topic=Ananya%20Reddy" -H "X-User-Id: sana"\n'
+         'curl -s "http://localhost:8765/entities/Noor%20Metalcraft" -H "X-User-Id: kabir"\n'
+         'curl -s "http://localhost:8765/entities/Noor%20Metalcraft" -H "X-User-Id: karan"')
+    p("The first returns Neha as the person who knows about Ananya Reddy; the second returns nobody, because Support's notes are "
+      "hidden from Sana; the third describes Noor Metalcraft as a supplier; the fourth is not found, because Karan is in another company.")
     checks_table("F13")
     note("<b>How to explain it:</b> SecondBrain knows who in the company knows about a customer, supplier or product, but only "
          "tells you about the people and notes you're allowed to see.")
@@ -380,18 +382,18 @@ def main() -> None:
     p("<b>What it does:</b> forecasts daily sales per product with 80% and 95% ranges. Four models are compared on past data "
       "(repeat last week, last year with growth, ETS, and gradient boosting with promotions and holidays), including the same "
       "weeks last year, and the most accurate one is picked per product with the reason. Sales data follows the same "
-      "permissions: it lives in Merchandising. The sales history is <b>generated sample data</b> for Lumen (2 years, 8 products), "
+      "permissions: it lives in Merchandising. The sales history is <b>generated sample data</b> for Desi Living (Sep 2024 to 5 Nov 2026, 8 products), "
       "not real sales.")
     h2("How to test it")
-    code('curl -s "http://localhost:8765/forecast/products" -H "X-User-Id: omar"\n'
-         'curl -s "http://localhost:8765/forecast?product=halo-lamp&horizon=30" -H "X-User-Id: omar"\n'
-         'curl -s "http://localhost:8765/forecast?product=halo-lamp&horizon=30" -H "X-User-Id: nina"')
+    code('curl -s "http://localhost:8765/forecast/products" -H "X-User-Id: kabir"\n'
+         'curl -s "http://localhost:8765/forecast?product=brass-floor-lamp&horizon=30" -H "X-User-Id: kabir"\n'
+         'curl -s "http://localhost:8765/forecast?product=brass-floor-lamp&horizon=30" -H "X-User-Id: neha"')
     p("The second shows the chosen model, why it was chosen, every model's backtest scores and 30 days of forecasts; look for "
-      "the Black Friday peak around November 27. The third is not found: Nina has no access to Merchandising.")
+      "the Dhanteras peak on 6 November and the lull after Diwali. The third is not found: Neha has no access to Merchandising.")
     checks_table("F14")
     note("<b>How to explain it:</b> SecondBrain doesn't trust one model: it tests several on the merchant's own history and "
-         "uses the one that would have been most accurate, and says so. Caveat: on this sample data the best model still "
-         "under-predicts the very top of the Black Friday peak.")
+         "uses the one that would have been most accurate, and says so. Caveat: check how close the best model gets to the "
+         "very top of the Dhanteras and Diwali peak on this sample data.")
 
     h1("F15. Onboarding a new company")
     p("<b>What it does:</b> a company is described in one file (departments, people, roles, sharing) and its documents are imported. "
@@ -428,7 +430,7 @@ def main() -> None:
             "Host the app where it can reach the LiteLLM proxy, or get model access that doesn't need the VPN."],
            ["<b>No hosted version</b>", "It runs on one laptop; there is no link to share.", "A small server (cloud or company) and a deployment."],
            ["<b>Client data and consent</b>", "Real documents would be processed by the models behind our proxy.",
-            "Written agreement from the client, or use the industry sample data (Lumen) for the demo."],
+            "Written agreement from the client, or use the industry sample data (Desi Living) for the demo."],
            ["<b>No real sign-in</b>", "The demo uses a person picker; fine for a guided demo, not for client self-service.",
             "SSO with the client's identity provider."],
            ["<b>Admin view shows every company</b>", "Must never show another real client's data.", "Only demo with sample companies, or restrict the view per client."],
@@ -436,7 +438,7 @@ def main() -> None:
            ["<b>No screens for relationships and forecasts</b>", "They can only be shown with Terminal commands today.", "A simple page for each before showing them to a client."],
            ["<b>Forecasts use sample sales</b>", "The numbers are generated, not a real merchant's history.", "A merchant's real order history (and their consent)."]],
           [42, 66, 70])
-    note("<b>Bottom line:</b> a <b>guided demo</b> on this laptop with the Lumen sample data is ready now. A demo the "
+    note("<b>Bottom line:</b> a <b>guided demo</b> on this laptop with the Desi Living sample data is ready now. A demo the "
          "<b>client can use on their own</b> needs hosting, model access without the VPN, and real sign-in.")
 
     doc = SimpleDocTemplate(out, pagesize=A4, leftMargin=15 * mm, rightMargin=15 * mm, topMargin=15 * mm,

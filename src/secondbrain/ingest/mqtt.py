@@ -3,7 +3,7 @@
     uv run python -m secondbrain.ingest.mqtt
 
 Topics are ``sb/v1/{company}/{brain}/{kind}``, e.g.
-``sb/v1/lumen/merchandising/sale``; ``{brain}`` is a department id, a deeper
+``sb/v1/desiliving/merchandising/sale``; ``{brain}`` is a department id, a deeper
 path with dots (``sales.emea``) or ``_`` for the company brain itself. A
 payload is one message or a JSON list of messages, and must name the same
 company and brain as its topic. Broker ACLs should let each client publish
@@ -74,13 +74,13 @@ class MqttSettings(BaseSettings):
 
 @dataclass
 class Topic:
-    company: str  # root.lumen
-    brain: str  # root.lumen.merchandising
+    company: str  # root.desiliving
+    brain: str  # root.desiliving.merchandising
     kind: str
 
 
 def parse_topic(topic: str, prefix: str = "sb/v1") -> Topic:
-    """``sb/v1/lumen/merchandising/sale`` → Topic; raises ValueError."""
+    """``sb/v1/desiliving/merchandising/sale`` → Topic; raises ValueError."""
     rest = topic.removeprefix(prefix + "/") if topic.startswith(prefix + "/") else None
     parts = rest.split("/") if rest else []
     if len(parts) != 3:

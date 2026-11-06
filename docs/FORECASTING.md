@@ -1,11 +1,11 @@
 # Forecasting sales and demand
 
 > Status: **first working version** (November 2026). Implements ARCHITECTURE.md
-> section 8.2. Built on synthetic history for Lumen Home.
+> section 8.2. Built on synthetic history for Desi Living (Indian D2C home decor).
 
 Goal: for each merchant, forecast daily units per product for the next weeks,
 with a range and a reason for the model behind it. Uses: stock planning
-("will the Halo lamp run out before Christmas?"), promotion planning, and
+("will the brass floor lamp run out before the wedding season?"), promotion planning, and
 later the checkout discount engine (8.3), which needs to know whether a
 product is scarce or overstocked.
 
@@ -89,10 +89,10 @@ Data model (`src/secondbrain/forecasting/store.py`):
   reason and every model's backtest scores
 
 All four belong to a brain and use the same row-level security as memories:
-`sb_can_see(brain_path, sensitivity)`. Lumen's sales live in
-`root.lumen.merchandising` at `internal`, so Merchandising, the CEO and CFO,
-and Leo (Marketing, who has a grant on Merchandising) see them; Support does
-not. The app role can only read; loading history and storing forecasts are
+`sb_can_see(brain_path, sensitivity)`. Desi Living's sales live in
+`root.desiliving.merchandising` at `internal`, so Merchandising, the CEO and
+CFO, and Rohan (Marketing, who has a grant on Merchandising) see them; Support
+does not. The app role can only read; loading history and storing forecasts are
 system jobs on the admin connection, like memory maintenance.
 
 ## 3. Backtesting and metrics
@@ -100,8 +100,13 @@ system jobs on the admin connection, like memory maintenance.
 **Backtest (rolling origin).** Pretend it is an earlier day, give each model
 only the history up to then, forecast the next 8 weeks, compare with what
 actually sold. We use four windows: the three most recent 8-week periods and
-**the same 8 weeks last year**. Without the last one, models would be chosen
-on quiet September–October weeks and then trusted with Black Friday.
+**the same 8 weeks last year**, aligned on Diwali: Diwali moves by up to three
+weeks (1 Nov 2024, 20 Oct 2025, 8 Nov 2026), so a forecast cut three days
+before Dhanteras 2026 is tested on the 8 weeks from three days before
+Dhanteras 2025, not on the same dates. Without that window, models would be
+chosen on quiet monsoon and festive-sale weeks and then trusted with
+Dhanteras. At a long horizon (120 days) the year-ago window overlaps the
+oldest recent one and takes its place.
 
 **Metrics** (from [Hyndman, intermittent demand](https://robjhyndman.com/papers/foresight.pdf);
 [Hewamalage et al., forecast evaluation pitfalls](https://arxiv.org/abs/2203.10716)):
@@ -144,9 +149,11 @@ into the nowcast and the next nightly run.
 ## 5. What is built
 
 ```
-scripts/generate_lumen_sales.py          synthetic history and promotion calendar
+scripts/generate_sales.py                synthetic history and promotion calendar (Desi Living)
+scripts/generate_inventory.py            stock positions set against the forecasts
 src/secondbrain/forecasting/
-  calendar.py   Black Friday, Cyber Monday, Christmas, Memorial and Labor Day
+  calendar.py   Indian calendar: Dhanteras, Diwali, Holi, Raksha Bandhan, Independence
+                and Republic Day, festive sale start, wedding seasons, shipping cutoff
   models.py     variants: seasonal_naive, year_over_year, ets, gradient_boosting
   backtest.py   windows, scores, choice per product, intervals
   metrics.py    WAPE, MASE, sMAPE, bias
@@ -159,9 +166,9 @@ src/secondbrain/forecasting/
 | Variant | What it does | Why it's in |
 |---|---|---|
 | `seasonal_naive` | Repeats last week | The baseline; anything that can't beat it is dropped |
-| `year_over_year` | Last year's same weekdays × growth over the last 4 weeks | How merchants plan by hand; catches Black Friday from last year's spike |
+| `year_over_year` | Last year's same weekdays × growth over the last 4 weeks; around Diwali (45 days before to 15 after), last year's day at the same distance from Diwali | How merchants plan by hand ("this Diwali week vs last Diwali week"); catches Dhanteras from last year's spike |
 | `ets` | statsforecast AutoETS, weekly season | The standard statistical model |
-| `gradient_boosting` | scikit-learn histogram gradient boosting (LightGBM algorithm), one model over all products: weekday, day of year, days to Black Friday and Christmas, planned discount, recent level, last year's sales. The recent level is taken 7, 14, 28, 56, 91 or 182 days back depending on how far ahead the day is (one model, lag as a feature) | The M5 approach; the only one that knows a sale is planned |
+| `gradient_boosting` | scikit-learn histogram gradient boosting (LightGBM algorithm), one model over all products: weekday, day of year (left unknown within 45 days before and 15 after Diwali, where it would memorise past years' dates), days to Diwali and to Dhanteras, days since the festive sale opened, wedding season, days to Holi, Raksha Bandhan and the Independence/Republic Day sales, planned discount, recent level, last year's sales (aligned on Diwali) and last year's lift over its own level. The recent level is taken 7, 14, 28, 56, 91 or 182 days back depending on how far ahead the day is (one model, lag as a feature) | The M5 approach; the only one that knows a sale is planned |
 | `croston`, `tsb`, `adida` | statsforecast Croston (SBA), TSB and ADIDA; only for products that sell on fewer than ~3 days in 4 | Built for intermittent demand; TSB decays when sales dry up |
 | `cold_start` | Recent average × the shop's forecast shape (or the product's weekdays), wide ranges | Products too new to backtest |
 | `discontinued`, `no_sales` | Zero | A product that stopped selling isn't forecast at its old average forever |
@@ -178,18 +185,20 @@ Before any model runs, the feed becomes a clean daily panel per product:
   last row are zero sales (it left the feed).
 - **Outliers**: a day above 4× the 90th percentile of the surrounding 8 weeks
   (and 10+ units above it) is set aside as a one-off order, unless a promotion
-  or Black Friday–Cyber Monday explains it.
+  or the Diwali peak (the week before Dhanteras through the day after Diwali)
+  explains it.
 - **Short histories** get shorter backtest windows (56/28/14/7 days) and only
   the models that can work on them; under ~5 weeks, a cold start.
 - **Discontinued**: a run of zero days that would almost never happen by
   chance at the product's old rate (or 90+ days) means a zero forecast.
-- **Level shifts** (last 4 weeks vs the 8 before, allowing for the season)
+- **Level shifts** (last 4 weeks vs the 8 before, allowing for the season,
+  with "a year ago" aligned on Diwali so the festive ramp-up isn't a shift)
   are flagged; the lag-bucketed gradient boosting and ETS follow them.
 
 Every forecast stores `quality` (grade good/fair/weak, a plain-language
 summary, history days, WAPE, bias, held-out 80%/95% coverage, backtest windows
 and data warnings), returned by `GET /forecast` and shown on the forecast page.
-`scripts/forecast_reliability.py` checks all of this out of sample on Lumen and
+`scripts/forecast_reliability.py` checks all of this out of sample on Desi Living and
 on a synthetic messy shop.
 
 Not built yet: Chronos-2 / TimesFM (cold start, see 6), AutoARIMA and MSTL
@@ -198,79 +207,90 @@ Not built yet: Chronos-2 / TimesFM (cold start, see 6), AutoARIMA and MSTL
 
 ### Synthetic data
 
-Eight Lumen products (the four bestsellers plus a duvet set, table lamp, side
-table and candle trio), daily from 1 Sep 2024 to 3 Nov 2026 (26 months),
-seed 2026. Weekly pattern (Sunday and Monday busiest), yearly seasons per
-category, 18% growth a year (Q3 was +18%), Thanksgiving-week lull, Black
-Friday to Cyber Monday spike, December gift season stopping at the Dec 17
-shipping cutoff, sitewide and product promotions with price-sensitive demand,
-a three-week Aria sofa stockout (Aug 2025), and negative binomial noise.
-Planned promotions include Black Friday 2026 (20% sitewide, Nov 27 – Dec 1,
-from the Holiday Campaign Plan), so forecasts made on Nov 4 can see it.
+Desi Living's eight products (`scripts/generate_sales.py`: sheesham sofa and
+side table, Moradabad brass floor lamp, Khurja ceramic lamp, dhurrie, kantha
+throw, block-print bedsheets, brass diya set; prices in rupees), daily from
+1 Sep 2024 to 5 Nov 2026 (the day before Dhanteras), seed 2026. Shaped like an
+Indian D2C brand selling on its Shopify store, JioMart and DMart shelves:
 
-These eight products make about $27M of 2025 revenue, 32% of it in November
-and December (Lumen's documents say the holiday season is ~34% of annual
-revenue).
+- weekly rhythm of evening and weekend shopping, Sunday strongest (+23%);
+- yearly seasons per category, 18% growth a year;
+- **Dhanteras and Diwali** as the year's peak: gifting (diya sets, lamps,
+  throws) builds from the festive sale to Dhanteras; brass is bought on
+  Dhanteras itself, the year's biggest day (~2× the busiest festive-sale days
+  for the brass lamp and diya set, ~1.1-1.3× for the other gift products);
+  Diwali day is quiet and the following ~12 days are a lull; furniture sells
+  in the weeks before Diwali, while it can still be delivered, and drops after;
+- the **shipping cutoff** (Dhanteras minus 2 days): online gift orders dip
+  between it and Dhanteras;
+- the **Festive Sale** (20% sitewide for 10 days from the spec's start dates,
+  3-12 Oct in 2026, with a Ghar Club early-access day before), then a 10%
+  Diwali gifting offer until the shipping cutoff; **Independence Day**
+  (13-16 Aug) and **Republic Day** (24-26 Jan) sales; wedding-season offers
+  on furniture; discounts capped at 20% (the sofa at 15%), price-sensitive
+  demand;
+- **wedding seasons** (mid-Nov to mid-Dec, mid-Jan to Feb) lifting furniture
+  and textiles, small gifting lifts the week before **Raksha Bandhan** and
+  **Holi**, and the **monsoon** (mid-June to mid-Sept) slowing furniture;
+- a three-week sofa stockout (Aug 2025) and negative binomial noise.
 
-## 6. Results on Lumen (synthetic)
+Revenue of the eight products: FY26 (Apr 2025-Mar 2026) ₹48.3 crore; Q1 FY27
+₹10.5 crore; Q2 FY27 (Jul-Sep 2026) ₹11.9 crore, +21% year over year;
+Q2 split textiles 41%, lighting 29%, furniture 24%, decor 6%.
 
-`uv run python -m secondbrain.forecasting`, cutoff 3 Nov 2026, horizon 56
-days, four backtest windows. Average WAPE per model (lower is better;
-\* = chosen). The last column is the **noise floor**: the WAPE of a forecast
-that knows the generator's true expected demand. No model can beat it; the
-gap to it is what is left to win.
+## 6. Results on Desi Living (synthetic)
 
-| Product | seasonal_naive | year_over_year | ets | gradient_boosting | MASE (chosen) | Noise floor |
-|---|---|---|---|---|---|---|
-| Aria linen sofa | 51.5% | 46.1% | 41.4% | **39.6%**\* | 0.86 | 32.8% |
-| Ember candle trio | 40.4% | 32.2% | 38.3% | **24.6%**\* | 0.60 | 20.7% |
-| Cloud waffle throw | 38.8% | 28.7% | 34.8% | **23.0%**\* | 0.69 | 18.8% |
-| Halo brass floor lamp | 40.3% | 33.9% | 43.3% | **24.7%**\* | 0.70 | 21.4% |
-| Woven jute rug 5x8 | 38.6% | 35.3% | 45.7% | **28.9%**\* | 0.80 | 23.3% |
-| Linen duvet set | 35.1% | 31.9% | 29.3% | **26.7%**\* | 0.85 | 21.2% |
-| Oak side table | 46.3% | 42.2% | 35.7% | **32.1%**\* | 0.80 | 29.0% |
-| Orb table lamp | 38.4% | 34.6% | 30.7% | **23.8%**\* | 0.76 | 20.5% |
+`scripts/forecast_reliability.py`, out of sample (scored on days the
+forecaster never saw), chosen model per product against repeating last week:
+
+| Cut | Horizon | Median WAPE per product (chosen) | Seasonal naive | Avg bias | 80% / 95% range held |
+|---|---|---|---|---|---|
+| 5 Nov 2026 (demo setting, day before Dhanteras) | 120 days | 31.4% | 112.2% | +16% | 81% / 94% |
+| 6 Jul 2026 | 120 days | 28.0% | 50.6% | -10% | 85% / 97% |
+| 15 Oct 2025 (3 days before Dhanteras, one Diwali to learn from) | 56 days | 36.2% | 93.1% | -12% | 71% / 86% |
+
+Gradient boosting is chosen for every product at the demo cut. Repeating last
+week fails badly across Diwali: it carries the festive run-up into the
+post-Diwali lull. The demo's stored forecast (the nightly job on the demo
+history, cut 5 Nov 2026, 120 days), against the last two weeks' actual
+average and the generator's true expected demand on Dhanteras:
+
+| Product | Forecast, Dhanteras 6 Nov | Last 14 days, actual | True expected demand | Forecast, 9-12 Nov |
+|---|---|---|---|---|
+| Brass floor lamp | 157 | 106 a day | 233 | 28-42 a day |
+| Diya & candle set | 401 | 334 a day | 621 | 44-93 a day |
+| Kantha throw | 492 | 365 a day | 570 | 100-139 a day |
 
 What this shows:
 
-- **Gradient boosting wins every product**, 3–7 points above the noise
-  floor. It is the only variant that knows Black Friday 2026 is planned
-  (from `promotions`) and where it falls; for the Halo lamp it forecasts
-  2.6× a normal mid-November day on Black Friday. The true lift is 3.4×, so
-  it under-forecasts the peak itself (219 vs ~282 units): with one past Black
-  Friday per window to learn from, trees average the spike away. More
-  holiday history, or a peak-specific feature, should close that gap.
-- **ETS is often worse than repeating last week**, because it can't see the
-  holiday coming and smooths the spike away; on the quiet windows it is fine
-  (Halo lamp, window 2: 22.9%). This is why the backtest includes last year's
-  season.
-- **Year over year** is a strong, explainable second for seasonal gift items.
-- **Slow sellers** (sofa ~6/day, side table ~10/day) have a high noise floor:
-  daily forecasts for them are mostly useful summed over weeks.
-- Gradient boosting over-forecasts slightly (bias +2 to +11%); for stock
-  planning that is the safer side, but it should be watched.
+- The forecast puts Dhanteras above the festive weeks before it and keeps
+  the drop after Diwali, but under-forecasts the peak day itself (the lamp
+  by ~33%): with two past Diwalis, the trees shrink a one-day spike. More
+  festival history should close that gap.
+- What made the peak visible: an earlier version forecast Dhanteras *below*
+  the recent level (58 for the lamp). The day of the year had memorised that
+  6 Nov was a post-Diwali lull in 2024 and 2025, and "last year" (52 weeks
+  back) pointed at that lull. Now, inside the festive window, the day of the
+  year is left unknown, "last year" is aligned on Diwali, and last year's
+  lift over its own level is a feature.
+- Year over year, aligned on Diwali, is a close second for the gift products.
+- Slow sellers (the sofa, the side table) have a high noise floor: daily
+  forecasts for them are mostly useful summed over weeks.
 
 Caveat: the data is synthetic, generated with the same kind of structure the
-features describe, so it flatters feature-based models. Real merchant data
-will have messier promotions, returns, new products and stockouts. The value
-here is the pipeline (variants, honest backtest, choice per product), not
-these numbers.
+features describe, so it flatters feature-based models. The value here is the
+pipeline (variants, honest backtest, choice per product), not these numbers.
 
-Runtime: ~20 s for the whole backtest of 8 products at a 120-day horizon on a
-laptop (it was ~75–130 s: scikit-learn's OpenMP threads made each gradient
-boosting fit ~70× slower on this small data, so fits run single-threaded).
-
-The table above is from the first version. With lag-bucketed gradient
-boosting, `scripts/forecast_reliability.py` measures, out of sample, on the
-demo's setting (cut 3 Nov, 120 days ahead): WAPE 27.0% (was 30.9%), bias
-+1.6%, 80% range held 84% of days, 95% range 97%.
+Runtime: ~17 s for the whole backtest of 8 products at a 120-day horizon on a
+laptop (fits run single-threaded: scikit-learn's OpenMP threads made each
+gradient boosting fit ~70× slower on this small data).
 
 ## 7. Recommendation
 
 1. **Keep "variants + backtest + choose per product"** as the core, as built.
    Choose by WAPE over windows that include the same season last year; report
    MASE and bias next to it.
-2. **Gradient boosting with promotion and holiday features is the main
+2. **Gradient boosting with promotion and festival features is the main
    model** for merchants with a year or more of history. Promotions must be
    recorded as a plan (dates, discount, scope) before they happen; that
    single input is what separates it from the statistical models. On Linux

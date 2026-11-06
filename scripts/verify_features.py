@@ -26,152 +26,155 @@ BASE = "http://localhost:8765"
 NONE = None  # expect "not found"
 
 # (feature id, person, question, expected fragment or NONE, note for the reader)
+# Facts are from examples/desiliving and examples/bharatfleet (docs/INDIA_WORLD.md).
 ASK = [
     # F1 Department answers
-    ("F1", "nina", "Can I give a customer a 50 dollar credit without asking anyone?", "25", "Support Playbook"),
-    ("F1", "nina", "What is the first response target for email tickets?", "4 business hours", "Support Playbook"),
-    ("F1", "arjun", "Who counts as a VIP customer?", "2,000", "Support Playbook"),
+    ("F1", "neha", "Can I give a customer a ₹2,000 credit without asking anyone?", "500", "Support Playbook"),
+    ("F1", "neha", "What is the first response target for email tickets?", "6 business hours", "Support Playbook"),
+    ("F1", "arjun", "Who counts as a VIP customer?", "50,000", "Support Playbook"),
     ("F1", "arjun", "Which issues go straight to the Head of Support?", "legal", "Support Playbook"),
-    ("F1", "leo", "What is the theme of this year's holiday campaign?", "light up your home", "Holiday Campaign Plan (Word)"),
-    ("F1", "sofia", "Which words should we avoid in our copy?", "cheap", "Brand Voice Guide"),
-    ("F1", "daniel", "What time is the express UPS pickup?", "5", "Fulfillment SOP (PDF)"),
-    ("F1", "ivy", "What do we do with damaged inbound stock?", "aisle q", "Fulfillment SOP (PDF)"),
-    ("F1", "tom", "Up to what amount can a manager approve purchases?", "2,500", "Spending and Approval Policy"),
-    ("F1", "hana", "How much is the referral bonus?", "1,500", "Hiring Process"),
-    ("F1", "omar", "What is the maximum discount for a promotion?", "30", "Pricing and Discount Policy"),
-    ("F1", "omar", "Who supplies our lighting?", "nordlys", "Assortment Notes"),
+    ("F1", "rohan", "What is the theme of this year's Diwali campaign?", "ghar ki roshni", "Diwali Campaign Plan (Word)"),
+    ("F1", "sana", "Which words should we avoid in our copy?", "cheap", "Brand Voice Guide"),
+    ("F1", "vikram", "What time is the Blue Dart express pickup?", "6", "Fulfillment SOP (PDF)"),
+    ("F1", "priya", "What do we do with damaged inbound stock?", "bay q", "Fulfillment SOP (PDF)"),
+    ("F1", "tanvi", "Up to what amount can a manager approve purchases?", "2 lakh", "Spending and Approval Policy"),
+    ("F1", "farah", "How much is the referral bonus?", "40,000", "Hiring Process"),
+    ("F1", "kabir", "What is the maximum discount for a promotion?", "20", "Pricing and Discount Policy"),
+    ("F1", "kabir", "Who supplies our brass lamps?", "noor metalcraft", "Assortment Notes"),
     # F2 Fallback to the company brain
-    ("F2", "nina", "How many vacation days do I get?", "25", "Employee Handbook (Word)"),
-    ("F2", "sofia", "What is the hotel cap for a manager?", "190", "Employee Handbook table (Word)"),
-    ("F2", "tom", "How many sick days do we get?", "10", "Employee Handbook (Word)"),
-    ("F2", "ivy", "How long is parental leave for primary caregivers?", "16 weeks", "Employee Handbook (Word)"),
-    ("F2", "omar", "Which days are we in the Portland office?", "tuesday", "Employee Handbook (Word)"),
-    ("F2", "hana", "How long do customers have to return an item?", "30 days", "Returns Policy (PDF)"),
-    ("F2", "daniel", "What is the home office allowance for new employees?", "600", "Employee Handbook (Word)"),
-    ("F2", "leo", "What are the company's values?", "customers first", "Company Overview"),
-    ("F2", "tom", "What is our FY2026 revenue goal?", "61", "Company Overview"),
-    ("F2", "arjun", "Which tool do we use for expenses?", "ramp", "Employee Handbook (Word)"),
+    ("F2", "neha", "How many days of earned leave do I get?", "18", "Employee Handbook (Word)"),
+    ("F2", "sana", "What is the hotel cap for a manager?", "6,500", "Employee Handbook table (Word)"),
+    ("F2", "tanvi", "How many sick days do we get?", "10", "Employee Handbook (Word)"),
+    ("F2", "priya", "How long is maternity leave?", "26 weeks", "Employee Handbook (Word)"),
+    ("F2", "kabir", "Which days are we in the Indiranagar office?", "tuesday", "Employee Handbook (Word)"),
+    ("F2", "farah", "How long do customers have to return an item?", "10 days", "Returns Policy (PDF)"),
+    ("F2", "vikram", "What is the home office allowance for new employees?", "25,000", "Employee Handbook (Word)"),
+    ("F2", "rohan", "What are the company's values?", "customers first", "Company Overview"),
+    ("F2", "tanvi", "What is our FY2026-27 revenue goal?", "51", "Company Overview"),
+    ("F2", "arjun", "Which tool do we use for expenses?", "zoho expense", "Employee Handbook (Word)"),
     # F3 Restricted information: denied vs allowed
-    ("F3", "tom", "What was gross margin in Q3?", NONE, "Finance member: restricted"),
-    ("F3", "rachel", "What was gross margin in Q3?", "46", "CFO: Q3 Results (PDF)"),
-    ("F3", "sofia", "What is the holiday paid media budget?", NONE, "Marketing member: restricted"),
-    ("F3", "leo", "What is the holiday paid media budget?", "180,000", "Marketing lead: Marketing Budget"),
-    ("F3", "ivy", "What discount do we get on UPS ground shipping?", NONE, "Operations member: restricted"),
-    ("F3", "daniel", "What discount do we get on UPS ground shipping?", "42", "Operations lead: Carrier Contracts"),
-    ("F3", "nina", "What is the salary range for a support agent?", NONE, "Support agent: People data, restricted"),
-    ("F3", "hana", "What is the salary range for a support agent?", "48,000", "People lead: Compensation Bands"),
-    ("F3", "omar", "What was Q3 revenue?", NONE, "Merchandiser: Finance restricted"),
-    ("F3", "maya", "What was Q3 revenue?", "14.2", "CEO: Q3 Results (PDF)"),
-    ("F3", "tom", "How much cash did we have at the end of Q3?", NONE, "Finance member: restricted"),
-    ("F3", "rachel", "How much cash did we have at the end of Q3?", "9.8", "CFO: Q3 Results (PDF)"),
-    ("F3", "sofia", "What was our customer acquisition cost in Q3?", NONE, "Marketing member: restricted"),
-    ("F3", "leo", "What was our customer acquisition cost in Q3?", "38", "Marketing lead: Marketing Budget"),
-    ("F3", "arjun", "What is the 2026 merit budget?", NONE, "Support lead: People restricted"),
-    ("F3", "hana", "What is the 2026 merit budget?", "3.5", "People lead: Compensation Bands"),
-    # F4 Access between departments (Nina may read Operations, Leo may read Merchandising)
-    ("F4", "nina", "Why are UPS shipments to Chicago delayed?", "storm", "Daniel's Operations note"),
-    ("F4", "sofia", "Why are UPS shipments to Chicago delayed?", NONE, "No access to Operations"),
-    ("F4", "nina", "What time is the same-day order cutoff?", "2", "Fulfillment SOP (Operations)"),
-    ("F4", "tom", "What time is the same-day order cutoff?", NONE, "No access to Operations"),
-    ("F4", "nina", "Is the warehouse adding a second shift?", "second shift", "Daniel's Operations note"),
-    ("F4", "arjun", "Is the warehouse adding a second shift?", NONE, "Support lead has no Operations grant"),
-    ("F4", "leo", "When is the Aria linen sofa back in stock?", "december 2", "Omar's Merchandising note"),
-    ("F4", "sofia", "When is the Aria linen sofa back in stock?", NONE, "No access to Merchandising"),
-    ("F4", "leo", "What is the margin floor for promotions?", "35", "Pricing and Discount Policy"),
-    ("F4", "sofia", "What is the margin floor for promotions?", NONE, "No access to Merchandising"),
-    ("F4", "leo", "Who supplies our upholstery?", "casa forma", "Assortment Notes"),
-    ("F4", "nina", "What happened with the damaged Halo lamps from Nordlys?", "40", "Ivy's Operations note"),
+    ("F3", "tanvi", "What was gross margin in Q2 FY27?", NONE, "Finance member: restricted"),
+    ("F3", "anand", "What was gross margin in Q2 FY27?", "47", "CFO: Q2 FY27 Results (PDF)"),
+    ("F3", "sana", "What is the Diwali paid media budget?", NONE, "Marketing member: restricted"),
+    ("F3", "rohan", "What is the Diwali paid media budget?", "1.6", "Marketing lead: Marketing Budget"),
+    ("F3", "priya", "What does BharatFleet charge per kg in Zone 1?", NONE, "Operations member: restricted"),
+    ("F3", "vikram", "What does BharatFleet charge per kg in Zone 1?", "16", "Operations lead: Carrier Contracts"),
+    ("F3", "neha", "What is the salary range for a support agent?", NONE, "Support agent: People data, restricted"),
+    ("F3", "farah", "What is the salary range for a support agent?", "3.6", "People lead: Compensation Bands"),
+    ("F3", "kabir", "What was Q2 FY27 revenue?", NONE, "Merchandiser: Finance restricted"),
+    ("F3", "meera", "What was Q2 FY27 revenue?", "11.9", "CEO: Q2 FY27 Results (PDF)"),
+    ("F3", "tanvi", "How much cash did we have at the end of September?", NONE, "Finance member: restricted"),
+    ("F3", "anand", "How much cash did we have at the end of September?", "14.6", "CFO: Q2 FY27 Results (PDF)"),
+    ("F3", "sana", "What was our customer acquisition cost in Q2 FY27?", NONE, "Marketing member: restricted"),
+    ("F3", "rohan", "What was our customer acquisition cost in Q2 FY27?", "640", "Marketing lead: Marketing Budget"),
+    ("F3", "arjun", "What is the FY2026-27 merit budget?", NONE, "Support lead: People restricted"),
+    ("F3", "farah", "What is the FY2026-27 merit budget?", "9", "People lead: Compensation Bands"),
+    # F4 Access between departments (Neha may read Operations, Rohan may read Merchandising)
+    ("F4", "neha", "Why are Delhivery parcels to Delhi NCR delayed?", "2 days", "Vikram's Operations note"),
+    ("F4", "sana", "Why are Delhivery parcels to Delhi NCR delayed?", NONE, "No access to Operations"),
+    ("F4", "neha", "What time is the same-day order cutoff?", "1", "Fulfillment SOP (Operations)"),
+    ("F4", "tanvi", "What time is the same-day order cutoff?", NONE, "No access to Operations"),
+    ("F4", "neha", "Is the Hoskote warehouse keeping the second shift?", "second shift", "Vikram's Operations note"),
+    ("F4", "arjun", "Is the Hoskote warehouse keeping the second shift?", NONE, "Support lead has no Operations grant"),
+    ("F4", "rohan", "When is the sheesham sofa back in stock?", "december", "Kabir's Merchandising note"),
+    ("F4", "sana", "When is the sheesham sofa back in stock?", NONE, "No access to Merchandising"),
+    ("F4", "rohan", "What is the margin floor for promotions?", "35", "Pricing and Discount Policy"),
+    ("F4", "sana", "What is the margin floor for promotions?", NONE, "No access to Merchandising"),
+    ("F4", "rohan", "Who makes our sheesham furniture?", "saharanpur woodcraft", "Assortment Notes"),
+    ("F4", "neha", "What happened with the damaged brass floor lamps from Noor Metalcraft?", "36", "Priya's Operations note"),
     # F5 Isolation between companies
-    ("F5", "karim", "How many days of annual leave do we get?", "20", "Brightpath handbook"),
-    ("F5", "maya", "How many days of annual leave do we get?", "25", "Lumen handbook"),
-    ("F5", "karim", "Where are our warehouses?", "dallas", "Brightpath notes"),
-    ("F5", "daniel", "Where are our warehouses?", "reno", "Lumen SOP"),
-    ("F5", "karim", "What is the order cutoff for same-day shipping?", "noon", "Brightpath notes"),
-    ("F5", "karim", "What is the free shipping threshold?", NONE, "Lumen data never visible"),
-    ("F5", "karim", "Who is Priya Shah?", NONE, "Lumen customer, never visible"),
-    ("F5", "karim", "What was Q3 revenue?", NONE, "Lumen finance, never visible"),
-    ("F5", "maya", "How many client brands does Brightpath serve?", NONE, "Brightpath data never visible"),
-    ("F5", "karim", "What is the hotel cap for a manager?", NONE, "Lumen handbook, never visible"),
+    ("F5", "karan", "How many days of earned leave do we get?", "15", "BharatFleet handbook"),
+    ("F5", "meera", "How many days of earned leave do we get?", "18", "Desi Living handbook"),
+    ("F5", "karan", "Where are our hubs?", "chakan", "BharatFleet notes"),
+    ("F5", "vikram", "Where are our warehouses?", "hoskote", "Desi Living SOP"),
+    ("F5", "karan", "What is the cutoff for same-day pickups?", "11", "BharatFleet notes"),
+    ("F5", "karan", "What is the free shipping threshold?", NONE, "Desi Living data never visible"),
+    ("F5", "karan", "Who is Ananya Reddy?", NONE, "Desi Living customer, never visible"),
+    ("F5", "karan", "What was Q2 FY27 revenue?", NONE, "Desi Living finance, never visible"),
+    ("F5", "meera", "How many client brands does BharatFleet serve?", NONE, "BharatFleet data never visible"),
+    ("F5", "karan", "What is the hotel cap for a manager?", NONE, "Desi Living handbook, never visible"),
     # F6 Reading PDF and Word documents
-    ("F6", "maya", "What is the hotel cap for directors?", "240", "Table in Employee Handbook (Word)"),
-    ("F6", "nina", "Do customers need to send back a damaged item?", "150", "Returns Policy (PDF)"),
-    ("F6", "nina", "Can holiday orders be returned in January?", "january 31", "Returns Policy (PDF)"),
-    ("F6", "nina", "Is store credit issued faster than a refund?", "instant", "Returns Policy (PDF)"),
-    ("F6", "daniel", "How are fragile items packed?", "double", "Fulfillment SOP (PDF)"),
-    ("F6", "leo", "When does the Black Friday sale run?", "november 27", "Holiday Campaign Plan (Word)"),
-    ("F6", "leo", "What is the holiday revenue target?", "5.6", "Holiday Campaign Plan (Word)"),
-    ("F6", "rachel", "What was the return rate in Q3?", "9.5", "Q3 Results (PDF)"),
-    ("F6", "maya", "Up to what value can we accept gifts from suppliers?", "75", "Employee Handbook (Word)"),
-    ("F6", "daniel", "Which carrier handles sofas and beds?", "hearth freight", "Fulfillment SOP (PDF)"),
+    ("F6", "meera", "What is the hotel cap for department heads?", "9,000", "Table in Employee Handbook (Word)"),
+    ("F6", "neha", "Do customers need to send back a damaged item?", "3,000", "Returns Policy (PDF)"),
+    ("F6", "neha", "Until when can Diwali festive orders be returned?", "30", "Returns Policy (PDF)"),
+    ("F6", "neha", "Is store credit issued faster than a refund?", "instant", "Returns Policy (PDF)"),
+    ("F6", "vikram", "How are fragile items packed?", "double", "Fulfillment SOP (PDF)"),
+    ("F6", "rohan", "When does the Festive Sale run?", "12", "Diwali Campaign Plan (Word)"),
+    ("F6", "rohan", "What is the festive revenue target?", "9.5", "Diwali Campaign Plan (Word)"),
+    ("F6", "anand", "What was the return rate in Q2 FY27?", "8.4", "Q2 FY27 Results (PDF)"),
+    ("F6", "meera", "Up to what value can we accept gifts from suppliers?", "2,000", "Employee Handbook (Word)"),
+    ("F6", "vikram", "Which carrier handles sofas and side tables?", "bharatfleet", "Fulfillment SOP (PDF)"),
 ]
 
 # F7 conversation: (person, first question, follow-up, expected in follow-up answer)
 FOLLOW_UPS = [
-    ("nina", "How many vacation days do I get?", "and can I carry any over?", "5"),
-    ("sofia", "What is the hotel cap for a manager?", "and for directors?", "240"),
-    ("leo", "When does the Black Friday sale start?", "and when does it end?", "december 1"),
-    ("nina", "How long do customers have to return items?", "what about holiday orders?", "january 31"),
-    ("tom", "Up to what amount can a manager approve purchases?", "and a director?", "10,000"),
-    ("daniel", "What time is the order cutoff for same-day shipping?", "and when is the express pickup?", "5"),
-    ("hana", "How much is the referral bonus?", "how long does the new hire have to stay?", "90"),
-    ("omar", "Who supplies our lighting?", "where are they based?", "denmark"),
-    ("rachel", "What was Q3 revenue?", "and gross margin?", "46"),
-    ("karim", "How many days of annual leave do we get?", "can we carry them over?", "no"),
+    ("neha", "How many days of earned leave do I get?", "and can I carry any over?", "10"),
+    ("sana", "What is the hotel cap for a manager?", "and for department heads?", "9,000"),
+    ("rohan", "When does the Festive Sale start?", "and when does it end?", "12"),
+    ("neha", "How long do customers have to return items?", "what about festive orders?", "30"),
+    ("tanvi", "Up to what amount can a manager approve purchases?", "and a department head?", "10 lakh"),
+    ("vikram", "What time is the order cutoff for same-day shipping?", "and when is the Blue Dart express pickup?", "6"),
+    ("farah", "How much is the referral bonus?", "how long does the new hire have to stay?", "90"),
+    ("kabir", "Who supplies our brass lamps?", "where are they based?", "moradabad"),
+    ("anand", "What was Q2 FY27 revenue?", "and gross margin?", "47"),
+    ("karan", "How many days of earned leave do we get?", "can we carry them over?", "no"),
 ]
 
 # F8 remember: (note, expected memory type); all saved by Arjun, then recalled
 NOTES = [
-    ("Met the Bluebird Stores buyer today, they want delivery before December 10", "episodic"),
-    ("The Bluebird buyer prefers WhatsApp over email", "user"),
+    ("Met the Kaveri Stores buyer today, they want delivery before 10 December", "episodic"),
+    ("The Kaveri Stores buyer prefers WhatsApp over email", "user"),
     ("Our standard payment terms for wholesale orders are net 45", "semantic"),
-    ("Called Zenith Hotels yesterday about a bulk order of 200 lamps", "episodic"),
-    ("Marco from Zenith Hotels is the procurement manager and decides by Friday", "user"),
+    ("Called Lotus Hotels yesterday about a bulk order of 200 lamps", "episodic"),
+    ("Rahul from Lotus Hotels is the procurement manager and decides by Friday", "user"),
     ("Wholesale orders over 100 units get a 12 percent volume discount", "semantic"),
     ("The team ran a training session on the new returns flow this morning", "episodic"),
-    ("Elena in the support team speaks Spanish and Portuguese", "user"),
-    ("Chat support hours extend to 9pm during December", "semantic"),
+    ("Divya in the support team speaks Tamil and Telugu", "user"),
+    ("WhatsApp support hours extend to 10pm during the wedding season", "semantic"),
     ("A customer threatened to post a negative review after a late delivery today", "episodic"),
 ]
 RECALL = [
-    ("arjun", "When does Bluebird need delivery?", "december 10"),
-    ("arjun", "How does the Bluebird buyer like to be contacted?", "whatsapp"),
+    ("arjun", "When does Kaveri Stores need delivery?", "december"),
+    ("arjun", "How does the Kaveri Stores buyer like to be contacted?", "whatsapp"),
     ("arjun", "What are our payment terms for wholesale orders?", "45"),
-    ("arjun", "Who decides on the Zenith Hotels order?", "marco"),
+    ("arjun", "Who decides on the Lotus Hotels order?", "rahul"),
     ("arjun", "What volume discount do wholesale orders get?", "12"),
-    ("arjun", "Which languages does Elena speak?", "spanish"),
-    ("arjun", "Until what time is chat support open in December?", "9"),
-    ("leo", "When does Bluebird need delivery?", NONE),  # Arjun's Support notes stay in Support
+    ("arjun", "Which languages does Divya speak?", "tamil"),
+    ("arjun", "Until what time is WhatsApp support open in the wedding season?", "10"),
+    ("rohan", "When does Kaveri Stores need delivery?", NONE),  # Arjun's Support notes stay in Support
 ]
 
 # F9 maintenance: (who writes the update, note, who asks, question, expected)
 UPDATES = [
-    ("arjun", "From today support agents can give goodwill credits up to 40 dollars without approval",
-     "nina", "How much goodwill credit can I give without approval?", "40"),
-    ("hana", "The referral bonus is increased to 2,000 dollars from December",
-     "hana", "How much is the referral bonus?", "2,000"),
-    ("daniel", "The same-day order cutoff moves to 3pm Pacific from next Monday",
-     "daniel", "What time is the same-day order cutoff?", "3"),
-    ("tom", "Month-end close now happens on the 3rd business day instead of the 4th",
-     "tom", "On which business day are the books closed?", "3"),
-    ("omar", "The maximum promotion discount is now 25 percent, except clearance",
-     "omar", "What is the maximum discount for a promotion?", "25"),
-    ("leo", "The holiday revenue target was raised to 6 million dollars",
-     "leo", "What is the holiday revenue target?", "6 million"),
-    ("arjun", "VIP status now starts at 1,500 dollars of lifetime spend",
-     "arjun", "Who counts as a VIP customer?", "1,500"),
-    ("daniel", "Fragile items like lamps are now triple boxed",
-     "daniel", "How are fragile items packed?", "triple"),
+    ("arjun", "From today support agents can give goodwill credits up to ₹1,000 without approval",
+     "neha", "How much goodwill credit can I give without approval?", "1,000"),
+    ("farah", "The referral bonus is increased to ₹50,000 from December",
+     "farah", "How much is the referral bonus?", "50,000"),
+    ("vikram", "The same-day order cutoff moves to 2pm IST from next Monday",
+     "vikram", "What time is the same-day order cutoff?", "2"),
+    ("tanvi", "Month-end close now happens on the 4th business day instead of the 5th",
+     "tanvi", "On which business day are the books closed?", "4"),
+    ("kabir", "The maximum promotion discount is now 25 percent, except clearance",
+     "kabir", "What is the maximum discount for a promotion?", "25"),
+    ("rohan", "The festive revenue target was raised to ₹10.5 crore",
+     "rohan", "What is the festive revenue target?", "10.5"),
+    ("arjun", "VIP status now starts at ₹40,000 of lifetime spend",
+     "arjun", "Who counts as a VIP customer?", "40,000"),
+    ("vikram", "Fragile items like lamps are now triple boxed",
+     "vikram", "How are fragile items packed?", "triple"),
 ]
 PRELOADED_UPDATES = [
-    ("nina", "What's the free shipping threshold right now?", "60", "Daniel's note replaced $75 (Nina may read Operations)"),
-    ("sofia", "What's the free shipping threshold right now?", "75", "Sofia can't see the Operations note, keeps the policy"),
-    ("leo", "When does loyalty early access for Black Friday start?", "november 23", "Leo's note replaced November 24"),
-    ("omar", "When is the Aria linen sofa back in stock?", "december 2", "Omar's note replaced 'on backorder'"),
+    ("neha", "What's the free shipping threshold right now?", "699", "Vikram's note replaced ₹999 (Neha may read Operations)"),
+    ("sana", "What's the free shipping threshold right now?", "999", "Sana can't see the Operations note, keeps the policy"),
+    ("rohan", "When does Ghar Club early access to the Wedding Edit start?", "12", "Rohan's note replaced 14 November"),
+    ("kabir", "When is the sheesham sofa back in stock?", "december", "Kabir's note replaced 'on backorder'"),
 ]
 
 
-LESSON_NAMES = ["lumen", "brightpath", "nina", "arjun", "priya", "shah", "nordlys", "casa forma", "hearth",
-                "aria", "halo", "portland", "reno", "daniel", "maya", "rachel", "zenith", "bluebird", "ups", "fedex"]
+LESSON_NAMES = ["desiliving", "desi living", "bharatfleet", "neha", "arjun", "ananya", "reddy", "noor", "metalcraft",
+                "saharanpur", "sanganer", "panipat", "khurja", "moradabad", "hoskote", "bhiwandi", "bengaluru",
+                "delhivery", "blue dart", "meera", "anand", "vikram", "kaveri", "lotus", "jiomart", "dmart"]
+DESI_LIVING_PEOPLE = {"meera", "arjun", "neha", "rohan", "sana", "vikram", "priya", "anand", "tanvi", "farah", "kabir"}
 
 
 def run_checks(http: httpx.Client) -> tuple[list[dict], list[str]]:
@@ -200,11 +203,11 @@ def run_checks(http: httpx.Client) -> tuple[list[dict], list[str]]:
     found = [n for n in LESSON_NAMES if any(re.search(rf"\b{n}\b", l.lower()) for l in lessons)]
     add("F10", "Lessons containing a company, person, customer, supplier, product or place name", "none", found or "none", not found)
     add("F10", "Lessons linked to the person or company they came from", "0", links, links == 0)
-    add("F10", "Brightpath sharing setting (contributes nothing)", "none", sharing.get("root.brightpath"), sharing.get("root.brightpath") == "none")
-    add("F10", "Lumen sharing setting", "patterns", sharing.get("root.lumen"), sharing.get("root.lumen") == "patterns")
-    http.post("/conversation/reset", headers={"X-User-Id": "nina"})
+    add("F10", "BharatFleet sharing setting (contributes nothing)", "none", sharing.get("root.bharatfleet"), sharing.get("root.bharatfleet") == "none")
+    add("F10", "Desi Living sharing setting", "patterns", sharing.get("root.desiliving"), sharing.get("root.desiliving") == "patterns")
+    http.post("/conversation/reset", headers={"X-User-Id": "neha"})
     answer = http.post("/ask", json={"question": "Should we lower the free-shipping threshold during peak season?"},
-                       headers={"X-User-Id": "nina"}).json()
+                       headers={"X-User-Id": "neha"}).json()
     from_root = [s_ for s_ in answer["sources"] if s_["brain"] == "root"]
     add("F10", "Company user's answer uses any root memory", "no", "yes" if from_root else "no", not from_root)
     status = http.post("/admin/learn").status_code
@@ -217,27 +220,27 @@ def run_checks(http: httpx.Client) -> tuple[list[dict], list[str]]:
     def memories(g):
         return [n for n in g["nodes"] if n["id"].startswith("memory:")]
 
-    rachel, sofia, karim, tom, leo = (graph(u) for u in ("rachel", "sofia", "karim", "tom", "leo"))
+    anand, sana, karan, tanvi, rohan = (graph(u) for u in ("anand", "sana", "karan", "tanvi", "rohan"))
     restricted = lambda g: [n for n in memories(g) if n["props"].get("sensitivity") == "restricted"]
-    add("F11", "Rachel (CFO): restricted memories in her graph", "more than 0", len(restricted(rachel)), restricted(rachel))
-    add("F11", "Sofia (content marketer): restricted memories in her graph", "0", len(restricted(sofia)), not restricted(sofia))
-    add("F11", "Sofia sees fewer memories than Rachel", "fewer", f"{len(memories(sofia))} vs {len(memories(rachel))}",
-        len(memories(sofia)) < len(memories(rachel)))
-    leo_restricted = sorted({n["props"]["brain"] for n in restricted(leo)})
-    add("F11", "Leo (lead) sees restricted memories only from Marketing", "root.lumen.marketing", leo_restricted,
-        leo_restricted == ["root.lumen.marketing"])
-    add("F11", "Karim's graph scope", "root.brightpath", karim["scope"], karim["scope"] == "root.brightpath")
-    leaked = [n for n in karim["nodes"] if "lumen" in json.dumps(n).lower()]
-    add("F11", "Lumen nodes in Karim's graph", "0", len(leaked), not leaked)
-    tom_brains = sorted({n["props"]["brain"] for n in memories(tom)})
-    add("F11", "Brains whose memories Tom sees", "company + Finance only", tom_brains,
-        set(tom_brains) <= {"root.lumen", "root.lumen.finance"})
+    add("F11", "Anand (CFO): restricted memories in his graph", "more than 0", len(restricted(anand)), restricted(anand))
+    add("F11", "Sana (content marketer): restricted memories in her graph", "0", len(restricted(sana)), not restricted(sana))
+    add("F11", "Sana sees fewer memories than Anand", "fewer", f"{len(memories(sana))} vs {len(memories(anand))}",
+        len(memories(sana)) < len(memories(anand)))
+    rohan_restricted = sorted({n["props"]["brain"] for n in restricted(rohan)})
+    add("F11", "Rohan (lead) sees restricted memories only from Marketing", "root.desiliving.marketing", rohan_restricted,
+        rohan_restricted == ["root.desiliving.marketing"])
+    add("F11", "Karan's graph scope", "root.bharatfleet", karan["scope"], karan["scope"] == "root.bharatfleet")
+    leaked = [n for n in karan["nodes"] if "desiliving" in json.dumps(n).lower()]
+    add("F11", "Desi Living nodes in Karan's graph", "0", len(leaked), not leaked)
+    tanvi_brains = sorted({n["props"]["brain"] for n in memories(tanvi)})
+    add("F11", "Brains whose memories Tanvi sees", "company + Finance only", tanvi_brains,
+        set(tanvi_brains) <= {"root.desiliving", "root.desiliving.finance"})
     status = http.get("/admin/graph").status_code
     add("F11", "Whole-SecondBrain view without the token", "refused (401)", status, status == 401)
     full = http.get("/admin/graph", headers=token).json()
     brains = {n["id"] for n in full["nodes"] if n["id"].startswith("brain:")}
     add("F11", "Whole view contains root, both companies and all departments", "10 brains", len(brains),
-        {"brain:root", "brain:root.lumen", "brain:root.brightpath"} <= brains and len(brains) == 10)
+        {"brain:root", "brain:root.desiliving", "brain:root.bharatfleet"} <= brains and len(brains) == 10)
     links_ = [e for e in full["edges"] if e["label"] in ("REPLACED_BY", "PARTLY_UPDATED_BY", "DUPLICATE_OF")]
     add("F11", "Update links (replaced / partly updated / duplicate) in the whole view", "at least 4", len(links_), len(links_) >= 4)
 
@@ -245,12 +248,12 @@ def run_checks(http: httpx.Client) -> tuple[list[dict], list[str]]:
     with psycopg.connect(settings.app_database_url) as conn:
         visible = conn.execute("SELECT count(*) FROM memories").fetchone()[0]
         add("F12", "App database login with no person set: memories visible", "0", visible, visible == 0)
-        conn.execute("SELECT set_config('app.user_id', 'sofia', true)")
+        conn.execute("SELECT set_config('app.user_id', 'sana', true)")
         paths = sorted(r[0] for r in conn.execute("SELECT DISTINCT brain_path::text FROM memories"))
-        add("F12", "Same login as Sofia: brains visible", "root.lumen, root.lumen.marketing", paths,
-            paths == ["root.lumen", "root.lumen.marketing"])
+        add("F12", "Same login as Sana: brains visible", "root.desiliving, root.desiliving.marketing", paths,
+            paths == ["root.desiliving", "root.desiliving.marketing"])
         hidden = conn.execute("SELECT count(*) FROM memories WHERE sensitivity = 2").fetchone()[0]
-        add("F12", "Same login as Sofia: restricted memories visible", "0", hidden, hidden == 0)
+        add("F12", "Same login as Sana: restricted memories visible", "0", hidden, hidden == 0)
         try:
             conn.execute("SELECT count(*) FROM grants")
             ok, got = False, "readable"
@@ -258,59 +261,62 @@ def run_checks(http: httpx.Client) -> tuple[list[dict], list[str]]:
             ok, got = True, "permission denied"
         add("F12", "App login reading everyone's permissions table", "permission denied", got, ok)
     with psycopg.connect(settings.app_database_url) as conn:
-        conn.execute("SELECT set_config('app.user_id', 'sofia', true)")
+        conn.execute("SELECT set_config('app.user_id', 'sana', true)")
         try:
             conn.execute(
                 "INSERT INTO memories (brain_path, memory_type, tier, sensitivity, content, embedding, embedding_model, created_by)"
-                f" VALUES ('root.lumen.finance', 'semantic', 'long_term', 1, 'x', array_fill(0.1, ARRAY[{settings.embedding_dim}])::vector, 'x', 'sofia')")
+                f" VALUES ('root.desiliving.finance', 'semantic', 'long_term', 1, 'x', array_fill(0.1, ARRAY[{settings.embedding_dim}])::vector, 'x', 'sana')")
             ok, got = False, "inserted"
         except psycopg.errors.InsufficientPrivilege:
             ok, got = True, "blocked by row-level security"
-        add("F12", "Sofia writing a memory into Finance", "blocked", got, ok)
+        add("F12", "Sana writing a memory into Finance", "blocked", got, ok)
     status = http.post("/ask", json={"question": "hi"}, headers={"X-User-Id": "nobody"}).status_code
     add("F12", "Unknown person asking a question", "refused (401)", status, status == 401)
 
     # F13 Relationships (FalkorDB)
     people = lambda body: [p["id"] for p in (body or {}).get("people", [])]
-    _, body = get("/experts", "nina", topic="Priya Shah")
-    add("F13", "Nina: who knows about customer Priya Shah?", "Nina", people(body), "nina" in people(body))
-    _, body = get("/experts", "sofia", topic="Priya Shah")
-    add("F13", "Sofia: who knows about Priya Shah? (Support is hidden from her)", "nobody", people(body) or "nobody", not people(body))
-    _, body = get("/experts", "maya", topic="Black Friday")
-    add("F13", "Maya (CEO): who knows about Black Friday?", "includes Leo", people(body), "leo" in people(body))
-    _, body = get("/experts", "tom", topic="Black Friday")
-    add("F13", "Tom: who knows about Black Friday? (the CFO's board note is restricted)", "not Rachel",
-        people(body) or "nobody", "rachel" not in people(body))
-    _, body = get("/experts", "karim", topic="Black Friday")
-    add("F13", "Karim (Brightpath): who knows about Black Friday?", "nobody", people(body) or "nobody", not people(body))
-    code, body = get("/entities/Nordlys", "omar")
-    add("F13", "Omar: what do we know about Nordlys?", "a supplier", (body or {}).get("kind", code), code == 200 and body["kind"] == "supplier")
-    code, _ = get("/entities/Nordlys", "karim")
-    add("F13", "Karim: what do we know about Nordlys? (other company)", "not found (404)", code, code == 404)
-    code, body = get("/entities/Aria linen sofa", "leo")
-    suppliers = [r["entity"]["name"] for r in (body or {}).get("relations", []) if "suppl" in r["relation"]]
-    add("F13", "Leo: who supplies the Aria linen sofa?", "Casa Forma", suppliers or code, any("casa forma" in s_.lower() for s_ in suppliers))
-    _, maya_hf = get("/entities/Hearth Freight", "maya")
-    _, nina_hf = get("/entities/Hearth Freight", "nina")
-    counts = ((maya_hf or {}).get("memory_count", 0), (nina_hf or {}).get("memory_count", 0))
-    add("F13", "Hearth Freight memories: Maya vs Nina (restricted contract hidden from Nina)", "Maya sees more",
+    _, body = get("/experts", "neha", topic="Ananya Reddy")
+    add("F13", "Neha: who knows about customer Ananya Reddy?", "Neha", people(body), "neha" in people(body))
+    _, body = get("/experts", "sana", topic="Ananya Reddy")
+    add("F13", "Sana: who knows about Ananya Reddy? (Support is hidden from her)", "nobody", people(body) or "nobody", not people(body))
+    _, body = get("/experts", "meera", topic="Diwali")
+    add("F13", "Meera (CEO): who knows about Diwali?", "includes Rohan", people(body), "rohan" in people(body))
+    _, body = get("/experts", "tanvi", topic="Diwali")
+    add("F13", "Tanvi: who knows about Diwali? (the CFO's board note is restricted)", "not Anand",
+        people(body) or "nobody", "anand" not in people(body))
+    _, body = get("/experts", "karan", topic="Diwali")
+    add("F13", "Karan (BharatFleet): Desi Living people who know about Diwali", "nobody",
+        sorted(set(people(body)) & DESI_LIVING_PEOPLE) or "nobody", not set(people(body)) & DESI_LIVING_PEOPLE)
+    code, body = get("/entities/Noor Metalcraft", "kabir")
+    add("F13", "Kabir: what do we know about Noor Metalcraft?", "a supplier", (body or {}).get("kind", code),
+        code == 200 and body["kind"] == "supplier")
+    code, _ = get("/entities/Noor Metalcraft", "karan")
+    add("F13", "Karan: what do we know about Noor Metalcraft? (other company)", "not found (404)", code, code == 404)
+    code, body = get("/entities/sheesham sofa", "rohan")
+    suppliers = [r["entity"]["name"] for r in (body or {}).get("relations", []) if "suppl" in r["relation"] or "make" in r["relation"]]
+    add("F13", "Rohan: who supplies the sheesham sofa?", "Saharanpur Woodcraft", suppliers or code,
+        any("saharanpur" in s_.lower() for s_ in suppliers))
+    _, meera_bf = get("/entities/BharatFleet Logistics", "meera")
+    _, neha_bf = get("/entities/BharatFleet Logistics", "neha")
+    counts = ((meera_bf or {}).get("memory_count", 0), (neha_bf or {}).get("memory_count", 0))
+    add("F13", "BharatFleet memories: Meera vs Neha (restricted contract hidden from Neha)", "Meera sees more",
         f"{counts[0]} vs {counts[1]}", counts[0] > counts[1] > 0)
-    code_r, _ = get("/entities/gross margin", "rachel")
-    code_t, _ = get("/entities/gross margin", "tom")
-    add("F13", "Entity 'gross margin': Rachel vs Tom (restricted Finance)", "200 vs 404", f"{code_r} vs {code_t}",
-        code_r == 200 and code_t == 404)
-    leaked_text = "carrier contract" in json.dumps(nina_hf or {}).lower() or "42 percent" in json.dumps(nina_hf or {}).lower()
-    add("F13", "Restricted contract text in Nina's Hearth Freight answer", "absent", "present" if leaked_text else "absent", not leaked_text)
+    code_a, _ = get("/entities/gross margin", "anand")
+    code_t, _ = get("/entities/gross margin", "tanvi")
+    add("F13", "Entity 'gross margin': Anand vs Tanvi (restricted Finance)", "200 vs 404", f"{code_a} vs {code_t}",
+        code_a == 200 and code_t == 404)
+    leaked_text = any(t in json.dumps(neha_bf or {}, ensure_ascii=False).lower() for t in ("carrier contract", "per kg"))
+    add("F13", "Restricted contract text in Neha's BharatFleet answer", "absent", "present" if leaked_text else "absent", not leaked_text)
     status = http.get("/experts", params={"topic": "x"}, headers={"X-User-Id": "nobody"}).status_code
     add("F13", "Unknown person asking who knows what", "refused (401)", status, status == 401)
 
     # F14 Forecasting
-    code, products = get("/forecast/products", "omar")
+    code, products = get("/forecast/products", "kabir")
     skus = [p["sku"] for p in products or []]
-    add("F14", "Omar: products with forecasts", "8", len(skus), len(skus) == 8)
-    code, fc = get("/forecast", "omar", product="halo-lamp", horizon=30)
+    add("F14", "Kabir: products with forecasts", "8", len(skus), len(skus) == 8)
+    code, fc = get("/forecast", "kabir", product="brass-floor-lamp", horizon=30)
     days = (fc or {}).get("forecast", [])
-    add("F14", "Halo lamp forecast for 30 days", "30 days", len(days), len(days) == 30)
+    add("F14", "Brass floor lamp forecast for 30 days", "30 days", len(days), len(days) == 30)
     ordered = all(d["lo95"] <= d["lo80"] <= d["forecast"] <= d["hi80"] <= d["hi95"] for d in days)
     add("F14", "Every day has 80% and 95% ranges around the forecast", "yes", "yes" if ordered else "no", days and ordered)
     backtest = (fc or {}).get("backtest", {})
@@ -321,15 +327,16 @@ def run_checks(http: httpx.Client) -> tuple[list[dict], list[str]]:
     add("F14", "Backtest includes the same weeks last year", "yes", sorted(windows), "same weeks last year" in windows)
     add("F14", "Forecast explains why the model was chosen", "mentions WAPE", (fc or {}).get("reason", "")[:90],
         "wape" in (fc or {}).get("reason", "").lower())
-    black_friday = [d["forecast"] for d in days if "2026-11-27" <= d["day"] <= "2026-12-01"]
-    early = [d["forecast"] for d in days if d["day"] < "2026-11-11"]
-    lift = (max(black_friday) / (sum(early) / len(early))) if black_friday and early else 0
-    add("F14", "Black Friday peak vs early November (Halo lamp)", "clearly higher", f"{lift:.1f}x", lift > 1.5)
-    for user in ("maya", "leo"):
-        code, _ = get("/forecast", user, product="halo-lamp", horizon=7)
+    # Brass is bought on Dhanteras itself (6 November 2026); the weeks after Diwali are a lull.
+    dhanteras = [d["forecast"] for d in days if "2026-11-06" <= d["day"] <= "2026-11-07"]
+    after = [d["forecast"] for d in days if "2026-11-15" <= d["day"] <= "2026-11-30"]
+    lift = (max(dhanteras) / (sum(after) / len(after))) if dhanteras and after else 0
+    add("F14", "Dhanteras peak vs the second half of November (brass floor lamp)", "clearly higher", f"{lift:.1f}x", lift > 1.5)
+    for user in ("meera", "rohan"):
+        code, _ = get("/forecast", user, product="brass-floor-lamp", horizon=7)
         add("F14", f"{user.capitalize()} can see forecasts (Merchandising access)", "200", code, code == 200)
-    for user in ("nina", "sofia", "karim"):
-        code, _ = get("/forecast", user, product="halo-lamp", horizon=7)
+    for user in ("neha", "sana", "karan"):
+        code, _ = get("/forecast", user, product="brass-floor-lamp", horizon=7)
         add("F14", f"{user.capitalize()} asking for a forecast (no access)", "not found (404)", code, code == 404)
 
     return checks, lessons

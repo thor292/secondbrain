@@ -42,7 +42,8 @@ MIN_OUTCOMES = 5
 PROMPT_DAYS = 2  # "acted on promptly": within two days of the warning
 LONG_LEAD_DAYS = 14
 # Generic business acronyms that don't identify anyone.
-ACRONYMS_OK = {"VIP", "SLA", "CSAT", "CAC", "ROAS", "MAP", "SKU", "KPI", "SMS", "FAQ", "ETA", "WISMO", "EBITDA", "CEO", "CFO"}
+ACRONYMS_OK = {"VIP", "SLA", "CSAT", "CAC", "ROAS", "MAP", "SKU", "KPI", "SMS", "FAQ", "ETA", "WISMO", "EBITDA", "CEO", "CFO",
+               "GST", "COD", "RTO", "UPI", "EMI", "D2C"}
 
 LEARN_SYSTEM = f"""You turn one company's internal knowledge into general, reusable business lessons
 for a network of many companies. Write at most {MAX_PATTERNS} lessons that would help OTHER companies.
@@ -74,8 +75,8 @@ def _forbidden_terms(conn: psycopg.Connection, company: str, contents: list[str]
         names = [r[0] for r in cur.execute("SELECT name FROM brains WHERE path <@ %s::ltree", (company,))]
         people = [r[0] for r in cur.execute("SELECT name FROM users WHERE home_brain <@ %s::ltree", (company,))]
         # Products and suppliers name the business as surely as its own name
-        # does; their capitalized words are the names ("Halo" in "Halo brass
-        # floor lamp"), the rest describe ("floor lamp") and stay usable.
+        # does; their capitalized words are the names ("Moradabad" in "Moradabad
+        # brass floor lamp"), the rest describe ("floor lamp") and stay usable.
         labels = [r[0] for r in cur.execute(
             """SELECT name FROM products WHERE brain_path <@ %s::ltree
                UNION SELECT supplier FROM inventory WHERE brain_path <@ %s::ltree""", (company, company))]
@@ -88,7 +89,9 @@ def _forbidden_terms(conn: psycopg.Connection, company: str, contents: list[str]
         terms |= {w.lower() for w in re.findall(r"[A-Za-z]+", name.split("(")[0]) if len(w) > 2}
     common = {"the", "and", "for", "our", "we", "from", "with", "this", "that", "every", "each",
               "customer", "customers", "support", "marketing", "finance", "operations", "people",
-              "merchandising", "black", "friday", "holiday", "christmas", "home", "team", "board"}
+              "merchandising", "home", "team", "board", "holiday", "festive", "festival", "season",
+              "sale", "diwali", "dhanteras", "holi", "rakhi", "raksha", "bandhan", "independence",
+              "republic", "wedding", "navratri", "dussehra", "christmas", "pincode", "pincodes"}
     for text in contents:
         body = [line for line in text.splitlines() if "›" not in line and not line.startswith("(Source:")]
         for sentence in re.split(r"(?<=[.!?])\s+|\n+", " ".join(body)):

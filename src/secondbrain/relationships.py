@@ -2,8 +2,8 @@
 
 When memories become long-term (consolidation, document import), the model
 extracts what they mention (people, customers, suppliers, products, carriers,
-places, organizations, topics) and how those relate ("Nordlys supplies the
-Halo floor lamp"). Results are stored in PostgreSQL first, the source of
+places, organizations, topics) and how those relate ("Noor Metalcraft supplies
+the Moradabad brass floor lamp"). Results are stored in PostgreSQL first, the source of
 truth, then synced to one FalkorDB graph per company, which can always be
 rebuilt from PostgreSQL.
 
@@ -17,7 +17,7 @@ FalkorDB has no row-level security, so:
   again, as that person.
 
     uv run python -m secondbrain.relationships            # extract new memories, rebuild graphs
-    uv run python -m secondbrain.relationships --company root.lumen
+    uv run python -m secondbrain.relationships --company root.desiliving
 """
 
 import argparse
@@ -57,7 +57,7 @@ Reply with JSON only:
 Rules:
 - When the memory refers to one of the company's people listed below, even by first name, use their full name.
 - A customer who is a person has kind "customer". "person" is for the company's people and other individuals.
-- Use a product's most specific name as written, like "Halo floor lamp".
+- Use a product's most specific name as written, like "Moradabad brass floor lamp".
 - A relation links two entities from your list, with a short lowercase verb phrase, like "supplies",
   "handled complaint from" or "delayed shipments to".
 - Leave out generic words (customer, team, company), dates, amounts, and the company itself.
@@ -78,13 +78,13 @@ def _words(text: str) -> list[str]:
 
 
 def matches(topic: str, key: str) -> bool:
-    """Every word of the topic starts a word of the entity's name ("lamps" finds "halo floor lamp")."""
+    """Every word of the topic starts a word of the entity's name ("lamps" finds "moradabad brass floor lamp")."""
     wanted, have = _words(topic), _words(key)
     return bool(wanted) and all(any(h.startswith(w) for h in have) for w in wanted)
 
 
 def person_name(display_name: str) -> str:
-    """ "Nina Alvarez (Support agent)" -> "Nina Alvarez"."""
+    """ "Neha Kulkarni (Support agent)" -> "Neha Kulkarni"."""
     return re.sub(r"\s*\(.*\)\s*$", "", display_name).strip()
 
 
@@ -511,7 +511,7 @@ def main() -> None:
     from secondbrain.schema import ensure_relationship_schema
 
     parser = argparse.ArgumentParser(description="Extract entities from new memories and rebuild company graphs")
-    parser.add_argument("--company", help="only this company, e.g. root.lumen")
+    parser.add_argument("--company", help="only this company, e.g. root.desiliving")
     args = parser.parse_args()
     settings = get_settings()
     if ensure_relationship_schema(settings):

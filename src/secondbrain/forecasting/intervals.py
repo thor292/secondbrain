@@ -7,7 +7,7 @@ Split conformal prediction, adapted to daily sales:
   square root of the forecast), a busy day's mostly relative error. So each
   backtest error is divided by ``sigma(f) = sqrt(a*f + b*f^2)``, with ``a`` and
   ``b`` fitted to the product's own squared errors (Papadopoulos et al.'s
-  normalised conformal scores). Intervals then fit Black Friday and a quiet
+  normalised conformal scores). Intervals then fit Dhanteras and a quiet
   Tuesday alike.
 - **By horizon.** Quantiles of those scores are taken separately for days
   1-7, 8-28, 29-56 and later, when there are enough of them, and never get

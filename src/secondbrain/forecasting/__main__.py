@@ -3,7 +3,7 @@
 A system job on the admin connection, meant to run on a schedule (nightly):
 
     uv run python -m secondbrain.forecasting
-    uv run python -m secondbrain.forecasting --under root.lumen --horizon 56
+    uv run python -m secondbrain.forecasting --under root.desiliving --horizon 56
 """
 
 import argparse
@@ -48,7 +48,7 @@ def _cell(wape: float | None) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--under", default="root", help="only brains in this subtree, e.g. root.lumen")
+    parser.add_argument("--under", default="root", help="only brains in this subtree, e.g. root.desiliving")
     parser.add_argument("--horizon", type=int, default=backtest.DEFAULT_HORIZON, help="days to forecast")
     args = parser.parse_args()
     print_scores(run(get_settings().admin_database_url, args.under, args.horizon))

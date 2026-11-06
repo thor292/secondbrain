@@ -139,7 +139,7 @@ RELATIONSHIP_SQL = """
 CREATE TABLE entities (
     id       uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     company  ltree NOT NULL REFERENCES brains(path),
-    key      text NOT NULL,  -- normalized name, so "Nordlys" and "nordlys" are one entity
+    key      text NOT NULL,  -- normalized name, so "Noor Metalcraft" and "noor metalcraft" are one entity
     name     text NOT NULL,
     kind     text NOT NULL CHECK (kind IN ('person', 'customer', 'supplier', 'product', 'carrier',
                                            'place', 'organization', 'topic')),

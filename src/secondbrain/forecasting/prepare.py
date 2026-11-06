@@ -11,8 +11,8 @@ Real feeds are messy, and every model would otherwise have to cope on its own:
 - **Out of stock** (``in_stock`` false). Sales that day are a floor on demand,
   not demand: the day is censored, never a zero.
 - **Outliers.** A one-off bulk order (500 units of a lamp that sells 30 a
-  day) is real revenue but not repeatable demand. Unless a promotion or Black
-  Friday explains it, it is set aside like a censored day.
+  day) is real revenue but not repeatable demand. Unless a promotion or the
+  Dhanteras-Diwali rush explains it, it is set aside like a censored day.
 
 Unknown days are filled from the same weekday in the weeks around them (the
 same idea as before), so models see an unbroken series but never learn a
@@ -94,7 +94,8 @@ def _outliers(df: pd.DataFrame) -> pd.Series:
 
     The bar is four times the 90th percentile of the surrounding eight weeks
     (and at least 10 units above it), so a busy weekend or a steady climb never
-    counts. Promotion days and Black Friday to Cyber Monday are never outliers:
+    counts. Promotion days and the Diwali peak (the week before Dhanteras through the
+    day after Diwali) are never outliers:
     those spikes are demand the models should learn.
     """
     flagged = pd.Series(False, index=df.index)
@@ -107,8 +108,8 @@ def _outliers(df: pd.DataFrame) -> pd.Series:
         if not spike.any():
             continue
         days = rows["day"].dt.date
-        bf = days.map(lambda d: 0 <= calendar.days_to_black_friday(d) <= 4)
-        flagged.loc[rows.index] = (spike & (rows["discount"] == 0) & ~bf).to_numpy()
+        peak = days.map(calendar.in_diwali_peak).astype(bool)
+        flagged.loc[rows.index] = (spike & (rows["discount"] == 0) & ~peak).to_numpy()
     return flagged
 
 
@@ -198,7 +199,7 @@ def _level_shift(known: pd.DataFrame, cutoff: pd.Timestamp) -> float | None:
     """Recent 4 weeks against the 8 before, when sales moved far more than seasons do.
 
     With a year of history, the same comparison a year earlier is divided out,
-    so an autumn ramp-up that happens every year isn't a shift. Both halves of
+    so the festive ramp-up that happens every year isn't a shift. Both halves of
     the recent 4 weeks must agree, so one big week isn't one either.
     """
     def ratio(end: pd.Timestamp) -> tuple[float, list[float]] | None:
@@ -215,7 +216,8 @@ def _level_shift(known: pd.DataFrame, cutoff: pd.Timestamp) -> float | None:
     now = ratio(cutoff)
     if now is None or len(now[1]) < 2:
         return None
-    seasonal = ratio(cutoff - pd.Timedelta(days=364))
+    # A year earlier at the same point of the season: around Diwali, the same distance from last Diwali.
+    seasonal = ratio(pd.Timestamp(calendar.same_day_last_year(cutoff.date())))
     if seasonal is not None and seasonal[0] > 0:
         r, halves = now[0] / seasonal[0], [h / seasonal[0] for h in now[1]]
         up, down = (1.5, 1.3), (0.67, 0.77)

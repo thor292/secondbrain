@@ -55,13 +55,14 @@ from psycopg.rows import dict_row
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT)]
 
-from scripts.generate_lumen_sales import PRODUCTS, generate  # noqa: E402
+from scripts.generate_sales import END, PRODUCTS, generate  # noqa: E402
 from secondbrain import admin, evolution  # noqa: E402
 from secondbrain import signals as signals_module  # noqa: E402
 from secondbrain.config import Settings  # noqa: E402
 from secondbrain.forecasting import store  # noqa: E402
 from secondbrain.forecasting.__main__ import run as run_forecasts  # noqa: E402
 from secondbrain.models import build_models  # noqa: E402
+from secondbrain.money import inr  # noqa: E402
 from secondbrain.schema import create_schema  # noqa: E402
 from secondbrain.sensitivity import Sensitivity  # noqa: E402
 
@@ -79,8 +80,8 @@ APP_SERVER = "postgresql://secondbrain_app:dev_app_password@localhost:55432"
 PREFIX = "secondbrain_test_signals_eval"
 TEMPLATE = f"{PREFIX}_base"
 COMPANY, BRAIN = "root.acme", "root.acme.sales"
-SKUS = ["halo-lamp", "cloud-throw", "aria-sofa"]  # the tests' fixture
-START = date(2026, 11, 4)
+SKUS = ["brass-floor-lamp", "kantha-throw", "sheesham-sofa"]  # a lamp, a throw and a sofa
+START = END + timedelta(days=1)  # the first day after the sales history
 
 STEP_DAYS = 7  # people look at their signals once a week
 WINDOW_DAYS = 84  # long enough for a 28-day lead time plus a month after arrival
@@ -450,9 +451,9 @@ def report(summary: dict, title: str = "") -> str:
                       f"median {num(o['median_buffer_days_at_arrival'])} days of stock left at arrival, "
                       f"{num(o['median_cover_left_days'])} days 30 days later"]
     for policy, m in summary["money"].items():
-        extra = "".join(f", {k.replace('_', ' ')} ${m[k]:,.0f}" for k in ("saved_vs_nothing", "saved_vs_reorder_point") if k in m)
-        lines += [f"Money, {policy}: lost margin ${m['lost_margin']:,.0f} + holding ${m['holding']:,.0f} = "
-                  f"${m['cost']:,.0f}; overstock tied up at the end ${m['excess_tied_up']:,.0f}{extra}"]
+        extra = "".join(f", {k.replace('_', ' ')} {inr(m[k])}" for k in ("saved_vs_nothing", "saved_vs_reorder_point") if k in m)
+        lines += [f"Money, {policy}: lost margin {inr(m['lost_margin'])} + holding {inr(m['holding'])} = "
+                  f"{inr(m['cost'])}; overstock tied up at the end {inr(m['excess_tied_up'])}{extra}"]
     return "\n".join(lines)
 
 

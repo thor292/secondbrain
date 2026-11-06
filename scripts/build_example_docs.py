@@ -9,14 +9,37 @@ examples/<company>/docs/<brain>/<sensitivity>/<Name>.<pdf|docx>.
 """
 
 from pathlib import Path
+from xml.sax.saxutils import escape
 
 from docx import Document
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import LETTER
+from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 EXAMPLES = Path(__file__).parent.parent / "examples"
+
+# The standard PDF fonts have no rupee sign (₹), so embed a TrueType font that has one.
+# Without any of these, the PDFs fall back to Helvetica and "Rs." instead of "₹".
+UNICODE_FONTS = [
+    "/System/Library/Fonts/Geneva.ttf",  # macOS
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # Debian, Ubuntu
+    "/usr/share/fonts/dejavu/DejaVuSans.ttf",  # Fedora
+    "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+]
+
+
+def pdf_font() -> str | None:
+    """Register and return the name of a font with the rupee sign, if one is installed."""
+    for path in UNICODE_FONTS:
+        if Path(path).exists():
+            font = TTFont("Unicode", path)
+            if ord("₹") in font.face.charToGlyph:
+                pdfmetrics.registerFont(font)
+                return "Unicode"
+    return None
 
 
 def parse(markdown: str) -> list[tuple[str, object]]:
@@ -59,30 +82,46 @@ def write_docx(blocks, out: Path) -> None:
     doc.save(out)
 
 
-def write_pdf(blocks, out: Path) -> None:
+def write_pdf(blocks, out: Path, font: str | None) -> None:
     styles = getSampleStyleSheet()
+    if font:
+        for name in ("Title", "Heading2", "BodyText"):
+            styles[name].fontName = font
+
+    def text(value: str) -> str:
+        return escape(value if font else value.replace("₹", "Rs. "))
+
+    width = A4[0] - 2 * 72  # page width inside the default margins
     story = []
     for kind, value in blocks:
         if kind == "title":
-            story += [Paragraph(value, styles["Title"]), Spacer(1, 6)]
+            story += [Paragraph(text(value), styles["Title"]), Spacer(1, 6)]
         elif kind == "heading":
-            story.append(Paragraph(value, styles["Heading2"]))
+            story.append(Paragraph(text(value), styles["Heading2"]))
         elif kind == "paragraph":
-            story.append(Paragraph(value, styles["BodyText"]))
+            story.append(Paragraph(text(value), styles["BodyText"]))
         else:
-            table = Table(value)
-            table.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.5, colors.grey)]))
+            rows = [[Paragraph(text(cell), styles["BodyText"]) for cell in row] for row in value]
+            table = Table(rows, colWidths=[width / len(value[0])] * len(value[0]))
+            table.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                                       ("VALIGN", (0, 0), (-1, -1), "TOP")]))
             story += [table, Spacer(1, 6)]
-    SimpleDocTemplate(str(out), pagesize=LETTER, title=blocks[0][1] if blocks else "").build(story)
+    SimpleDocTemplate(str(out), pagesize=A4, title=blocks[0][1] if blocks else "").build(story)
 
 
 def main() -> None:
+    font = pdf_font()
+    if font is None:
+        print("no font with the rupee sign found; PDFs will say Rs. instead of ₹")
     for source in sorted(EXAMPLES.glob("*/source/*.md")):
         brain, sensitivity, filename = source.name.removesuffix(".md").split("__")
         out = source.parent.parent / "docs" / brain / sensitivity / filename
         out.parent.mkdir(parents=True, exist_ok=True)
         blocks = parse(source.read_text())
-        (write_pdf if out.suffix == ".pdf" else write_docx)(blocks, out)
+        if out.suffix == ".pdf":
+            write_pdf(blocks, out, font)
+        else:
+            write_docx(blocks, out)
         print(f"built {out.relative_to(EXAMPLES)}")
 
 

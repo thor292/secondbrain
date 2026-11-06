@@ -31,6 +31,7 @@ from psycopg.types.json import Jsonb
 
 from secondbrain import live
 from secondbrain.config import Settings, get_settings
+from secondbrain.money import inr_short
 from secondbrain.sensitivity import Sensitivity
 from secondbrain.models import LLM
 
@@ -44,7 +45,7 @@ CREATE TABLE signals (
     action         text NOT NULL,
     reason         text NOT NULL,
     impact         text NOT NULL,
-    impact_value   numeric(14, 2),  -- dollars at stake, when it can be estimated
+    impact_value   numeric(14, 2),  -- rupees at stake, when it can be estimated
     urgency        text NOT NULL CHECK (urgency IN ('high', 'medium', 'low')),
     confidence     real NOT NULL CHECK (confidence BETWEEN 0 AND 1),
     due            date,
@@ -69,7 +70,7 @@ CREATE TABLE signal_outcomes (
     signal_id    uuid PRIMARY KEY REFERENCES signals(id) ON DELETE CASCADE,
     result       text NOT NULL CHECK (result IN ('prevented', 'happened', 'happened_anyway', 'false_alarm')),
     detail       text NOT NULL,
-    value        numeric(14, 2),  -- dollars saved or lost
+    value        numeric(14, 2),  -- rupees saved or lost
     evaluated_on date NOT NULL,
     memory_id    uuid REFERENCES memories(id) ON DELETE SET NULL
 );
@@ -460,7 +461,7 @@ def stock_signals(conn: psycopg.Connection, company: str, records: dict[str, Rec
                        f"~{lost_units:,.0f} customers expected before then aren't lost.",
                 reason=f"Nothing on hand; {r['on_order']:,} units from {r['supplier']} arrive {_fmt(r['order_eta'])}. "
                        f"The forecast expects about {lost_units:,.0f} orders before that.",
-                impact=f"About ${lost:,.0f} in sales at risk", impact_value=round(lost, 2),
+                impact=f"About {inr_short(lost)} in sales at risk", impact_value=round(lost, 2),
                 urgency="high", confidence=confidence, due=today, evidence=evidence, details=base), records)
             out += [signal] if signal else []
             continue
@@ -499,7 +500,7 @@ def stock_signals(conn: psycopg.Connection, company: str, records: dict[str, Rec
                     action=f"Order {quantity:,} units from {r['supplier']} today; they arrive about "
                            f"{_fmt(today + timedelta(days=r['lead_time_days']))} ({r['lead_time_days']}-day lead time).",
                     reason=f"Nothing on hand or on order. The forecast expects about {daily:.0f} orders a day.",
-                    impact=f"About ${at_risk:,.0f} in sales lost before new stock can arrive", impact_value=round(at_risk, 2),
+                    impact=f"About {inr_short(at_risk)} in sales lost before new stock can arrive", impact_value=round(at_risk, 2),
                     urgency="high", confidence=0.97, due=today, evidence=evidence,
                     details={**details, "runs_out": today.isoformat(), "order_by": today.isoformat(), "already_out": True}),
                     records)
@@ -519,7 +520,7 @@ def stock_signals(conn: psycopg.Connection, company: str, records: dict[str, Rec
                 action=action,
                 reason=f"{r['on_hand']:,} units on hand cover the forecast until {_fmt(runout)}. "
                        f"Demand peaks at about {peak['forecast']:.0f} a day on {_fmt(_day(peak['day']))}.",
-                impact=f"About ${at_risk:,.0f} in lost sales if it runs out before new stock arrives" +
+                impact=f"About {inr_short(at_risk)} in lost sales if it runs out before new stock arrives" +
                        (f"; ~{lost_units:,.0f} units lost even if ordered today" if lost_units else ""),
                 impact_value=round(at_risk, 2),
                 urgency="high" if days_left <= 7 else "medium" if days_left <= 21 else "low",
@@ -545,7 +546,7 @@ def stock_signals(conn: psycopg.Connection, company: str, records: dict[str, Rec
                 title = f"{r['name']}: no sales expected, {r['on_hand']:,} units on hand"
                 action = (f"Stop reorders from {r['supplier']} and clear the {r['on_hand']:,} units "
                           f"(return to the supplier, discount or bundle).")
-                reason = f"The forecast expects no sales; {r['on_hand']:,} units on hand, ${tied_up:,.0f} tied up."
+                reason = f"The forecast expects no sales; {r['on_hand']:,} units on hand, {inr_short(tied_up)} tied up."
             else:
                 title = f"{r['name']} has {cover:,.0f} days of stock"
                 action = (f"Pause reorders from {r['supplier']} and consider a promotion to sell about "
@@ -554,7 +555,7 @@ def stock_signals(conn: psycopg.Connection, company: str, records: dict[str, Rec
             signal = learn(Signal(
                 kind="excess_stock", fingerprint=f"excess:{r['sku']}",
                 title=title, action=action, reason=reason,
-                impact=f"About ${tied_up:,.0f} of cash tied up in stock", impact_value=round(tied_up, 2),
+                impact=f"About {inr_short(tied_up)} of cash tied up in stock", impact_value=round(tied_up, 2),
                 urgency="low", confidence=confidence, due=None, evidence=evidence, details=base), records)
             out += [signal] if signal else []
     return out
@@ -570,6 +571,7 @@ Rules, all mandatory:
 - The action is specific: who should do what, by when if a date is known.
 - Skip stock and reordering; those are handled separately.
 - Prefer fewer, stronger signals over many weak ones.
+- Write money the way the notes do, in their currency and digit grouping (e.g. ₹1,20,000 or ₹4.2 lakh).
 - Never mention the ids (N1, L2, ...) in the title, action, reason or impact; put them only in "notes" and "lessons".
 - Learn from the feedback section: don't propose again what people dismissed (respect their reasons) unless
   something new changes the case, and favour the kinds of action they acted on. Use outcomes as evidence.
@@ -585,7 +587,8 @@ Reply with JSON only:
 # also be one number as a share of, or change from, another. Two kinds of
 # number are advice rather than facts and are always fine: a deadline in the
 # coming months ("by November 21") and a short duration ("within 48 hours").
-NUMBER = re.compile(r"(?<![\w.])[$€£]?(\d[\d,]*(?:\.\d+)?)(?:\s*(k|m|thousand|million)\b)?(\s*(?:%|percent\b))?",
+NUMBER = re.compile(r"(?<![\w.])(?:[$€£₹]|Rs\.?\s?|INR\s?)?(\d[\d,]*(?:\.\d+)?)"
+                    r"(?:\s*(k|m|thousand|million|lakhs?|lacs?|crores?|cr)\b)?(\s*(?:%|percent\b))?",
                     re.IGNORECASE)
 DURATION = re.compile(r"^(?:st|nd|rd|th)?\s*(?:-\s*)?(?:business |working )?(?:day|week|month|hour|minute|quarter)s?\b",
                       re.IGNORECASE)
@@ -595,7 +598,8 @@ _MONTH = r"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?"
 DATES = re.compile(rf"\b{_MONTH}\s+(\d{{1,2}})(?:st|nd|rd|th)?\b(?:,?\s+(\d{{4}}))?|\b(\d{{1,2}})(?:st|nd|rd|th)?\s+(?:of\s+)?{_MONTH}\b"
                    rf"(?:,?\s+(\d{{4}}))?|\b(\d{{4}})-(\d{{2}})-(\d{{2}})\b", re.IGNORECASE)
 DEADLINE_DAYS = 120  # dates this far ahead (or a week back) read as deadlines
-SCALE = {"k": 1e3, "thousand": 1e3, "m": 1e6, "million": 1e6}
+SCALE = {"k": 1e3, "thousand": 1e3, "m": 1e6, "million": 1e6,
+         "lakh": 1e5, "lakhs": 1e5, "lac": 1e5, "lacs": 1e5, "crore": 1e7, "crores": 1e7, "cr": 1e7}
 TOLERANCE = 0.02  # rounding: "about 1,200" for 1,187
 
 
@@ -901,7 +905,7 @@ def quality(conn: psycopg.Connection) -> dict:
     if out["warnings_judged"]:
         parts.append(f"{came_true} of {came_true + false_alarms} ignored run-out warnings came true")
     if out["acted_judged"]:
-        parts.append(f"acting prevented the run-out {prevented} of {prevented + anyway} times (${out['saved']:,.0f} saved)")
+        parts.append(f"acting prevented the run-out {prevented} of {prevented + anyway} times ({inr_short(out['saved'])} saved)")
     if reasons:
         top, n = next(iter(out["dismissal_reasons"].items()))
         parts.append(f"most dismissals: {top} ({n})")

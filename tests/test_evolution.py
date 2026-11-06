@@ -9,7 +9,7 @@ import pytest
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
-from scripts.generate_lumen_sales import PRODUCTS
+from scripts.generate_sales import PRODUCTS
 from secondbrain import evolution
 from secondbrain.forecasting import metrics, store
 from secondbrain.forecasting.__main__ import run as run_forecasts
@@ -75,50 +75,50 @@ def add_warning(conn, sku: str, status: str, as_of: date, runs_out: date, create
 
 def test_judges_from_recorded_sales_once_the_data_covers_the_window(client, settings, history):  # noqa: F811
     """No simulation: real-looking sales rows decide the outcomes."""
-    load_acme_sales(settings, history)  # through Nov 3
+    load_acme_sales(settings, history)  # through Nov 5
     run_forecasts(settings.admin_database_url, under="root.acme", horizon=56)
     _, embedder = build_models(settings)
-    t0 = datetime(2026, 11, 4, 9, tzinfo=timezone.utc)
+    t0 = datetime(2026, 11, 6, 9, tzinfo=timezone.utc)
     with psycopg.connect(settings.admin_database_url) as conn:
-        acted = add_warning(conn, "halo-lamp", "acted", date(2026, 11, 4), date(2026, 11, 10), t0)
+        acted = add_warning(conn, "brass-floor-lamp", "acted", date(2026, 11, 6), date(2026, 11, 12), t0)
         # Nobody answered, and the same run-out was warned about again two days later: one story.
-        first = add_warning(conn, "cloud-throw", "expired", date(2026, 11, 4), date(2026, 11, 10), t0)
-        again = add_warning(conn, "cloud-throw", "expired", date(2026, 11, 6), date(2026, 11, 11), t0 + timedelta(days=2))
-        stopped = add_warning(conn, "aria-sofa", "dismissed", date(2026, 11, 4), date(2026, 11, 8), t0)
-        add_sales(conn, "halo-lamp", date(2026, 11, 4), date(2026, 11, 12), 5)
-        add_sales(conn, "cloud-throw", date(2026, 11, 4), date(2026, 11, 12), 0, in_stock=lambda d: d < date(2026, 11, 9))
-        add_sales(conn, "aria-sofa", date(2026, 11, 4), date(2026, 11, 5), 1)  # then its data stops
+        first = add_warning(conn, "kantha-throw", "expired", date(2026, 11, 6), date(2026, 11, 12), t0)
+        again = add_warning(conn, "kantha-throw", "expired", date(2026, 11, 8), date(2026, 11, 13), t0 + timedelta(days=2))
+        stopped = add_warning(conn, "sheesham-sofa", "dismissed", date(2026, 11, 6), date(2026, 11, 10), t0)
+        add_sales(conn, "brass-floor-lamp", date(2026, 11, 6), date(2026, 11, 14), 5)
+        add_sales(conn, "kantha-throw", date(2026, 11, 6), date(2026, 11, 14), 0, in_stock=lambda d: d < date(2026, 11, 11))
+        add_sales(conn, "sheesham-sofa", date(2026, 11, 6), date(2026, 11, 7), 1)  # then its data stops
 
     def judge():
         with psycopg.connect(settings.admin_database_url, row_factory=dict_row) as conn:
             return evolution.judge(conn, embedder, settings, "root.acme")
 
-    # Data through Nov 12 doesn't cover a week past the Nov 10 run-out yet: nothing is judged,
-    # even though cloud-throw is visibly out of stock already.
+    # Data through Nov 14 doesn't cover a week past the Nov 12 run-out yet: nothing is judged,
+    # even though kantha-throw is visibly out of stock already.
     early = judge()
     assert early["outcomes"] == [] and early["waiting"] == []
 
     with psycopg.connect(settings.admin_database_url) as conn:
-        add_sales(conn, "halo-lamp", date(2026, 11, 13), date(2026, 11, 18), 5)
-        add_sales(conn, "cloud-throw", date(2026, 11, 13), date(2026, 11, 18), 0, in_stock=False)
+        add_sales(conn, "brass-floor-lamp", date(2026, 11, 15), date(2026, 11, 20), 5)
+        add_sales(conn, "kantha-throw", date(2026, 11, 15), date(2026, 11, 20), 0, in_stock=False)
     judged = judge()
     assert {o["title"].split(" runs out")[0]: o["result"] for o in judged["outcomes"]} == {
-        NAMES["halo-lamp"]: "prevented", NAMES["cloud-throw"]: "happened"}
-    assert judged["waiting"] == [f"{NAMES['aria-sofa']}: no sales data after Nov 5, so the warning for Nov 8 can't be judged yet"]
+        NAMES["brass-floor-lamp"]: "prevented", NAMES["kantha-throw"]: "happened"}
+    assert judged["waiting"] == [f"{NAMES['sheesham-sofa']}: no sales data after Nov 7, so the warning for Nov 10 can't be judged yet"]
 
     with psycopg.connect(settings.admin_database_url, row_factory=dict_row) as conn:
         outcomes = {r["signal_id"]: r for r in conn.execute(
             "SELECT signal_id::text, result, value::float, evaluated_on, detail FROM signal_outcomes")}
-        points = {p["day"]: p["forecast"] for p in store.latest_forecast(conn, BRAIN, "cloud-throw")["points"]}
+        points = {p["day"]: p["forecast"] for p in store.latest_forecast(conn, BRAIN, "kantha-throw")["points"]}
         remembered = conn.execute("SELECT count(*) AS n FROM memories WHERE source = 'signal outcome' "
                                   "AND brain_path = %s::ltree", (BRAIN,)).fetchone()["n"]
     assert set(outcomes) == {acted, again}  # the earlier, superseded warning isn't counted twice
     assert first not in outcomes and stopped not in outcomes
-    assert outcomes[acted]["value"] == 1000 and outcomes[acted]["evaluated_on"] == date(2026, 11, 18)
-    # Lost sales come from the forecast on the out-of-stock days (Nov 9-18), nothing having sold.
-    lost = round(sum(points[(date(2026, 11, 9) + timedelta(days=i)).isoformat()] for i in range(10)))
-    assert outcomes[again]["value"] == pytest.approx(-lost * PRICES["cloud-throw"])
-    assert f"ran out on Nov 9, as predicted for Nov 11; about {lost:,} sales lost" in outcomes[again]["detail"]
+    assert outcomes[acted]["value"] == 1000 and outcomes[acted]["evaluated_on"] == date(2026, 11, 20)
+    # Lost sales come from the forecast on the out-of-stock days (Nov 11-20), nothing having sold.
+    lost = round(sum(points[(date(2026, 11, 11) + timedelta(days=i)).isoformat()] for i in range(10)))
+    assert outcomes[again]["value"] == pytest.approx(-lost * PRICES["kantha-throw"])
+    assert f"ran out on Nov 11, as predicted for Nov 13; about {lost:,} sales lost" in outcomes[again]["detail"]
     assert remembered == 2
 
     # Judged once: running it again adds nothing.
@@ -130,34 +130,34 @@ def test_refresh_grades_forecasts_and_is_idempotent(client, settings, history): 
     run_forecasts(settings.admin_database_url, under="root.acme", horizon=56)
     llm, embedder = build_models(settings)
     with psycopg.connect(settings.admin_database_url, row_factory=dict_row) as conn:
-        forecast = {p["day"]: p for p in store.latest_forecast(conn, BRAIN, "halo-lamp")["points"]}
+        forecast = {p["day"]: p for p in store.latest_forecast(conn, BRAIN, "brass-floor-lamp")["points"]}
         store.save_inventory(conn, BRAIN, [
-            {"sku": "halo-lamp", "as_of": date(2026, 11, 14), "on_hand": 400, "on_order": 0, "order_eta": None,
+            {"sku": "brass-floor-lamp", "as_of": date(2026, 11, 16), "on_hand": 400, "on_order": 0, "order_eta": None,
              "supplier": "Lampworks", "lead_time_days": 14, "unit_cost": 150}])
-        # Ten days of "real" sales; halo-lamp was out of stock on two of them.
-        days = [date(2026, 11, 4) + timedelta(days=i) for i in range(10)]
+        # Ten days of "real" sales; brass-floor-lamp was out of stock on two of them.
+        days = [date(2026, 11, 6) + timedelta(days=i) for i in range(10)]
         units = {d: max(0, int(forecast[d.isoformat()]["forecast"]) + (3 if d.day % 2 else -2)) for d in days}
-        out = {date(2026, 11, 8), date(2026, 11, 9)}
-        add_sales(conn, "halo-lamp", days[0], days[-1], units, in_stock=lambda d: d not in out)
-        for sku in ("cloud-throw", "aria-sofa"):
+        out = {date(2026, 11, 10), date(2026, 11, 11)}
+        add_sales(conn, "brass-floor-lamp", days[0], days[-1], units, in_stock=lambda d: d not in out)
+        for sku in ("kantha-throw", "sheesham-sofa"):
             add_sales(conn, sku, days[0], days[-1], 2)
 
     first = evolution.refresh(settings, llm, embedder, "root.acme")
-    assert first["data_through"] == "2026-11-13" and first["forecasted"] == [BRAIN]
+    assert first["data_through"] == "2026-11-15" and first["forecasted"] == [BRAIN]
     assert first["scored"] == 3 and first["signals_recalculated"]
     assert first["accuracy_text"].startswith("Forecasts were off by ")
 
     with psycopg.connect(settings.admin_database_url, row_factory=dict_row) as conn:
         row = conn.execute("""SELECT a.* FROM forecast_accuracy a JOIN forecasts f ON f.id = a.forecast_id
-                              WHERE a.sku = 'halo-lamp' AND f.cutoff = '2026-11-03'""").fetchone()
+                              WHERE a.sku = 'brass-floor-lamp' AND f.cutoff = '2026-11-05'""").fetchone()
         graded = [d for d in days if d not in out]
         actual = np.array([units[d] for d in graded], dtype=float)
         predicted = np.array([forecast[d.isoformat()]["forecast"] for d in graded])
         assert (row["days"], row["censored_days"], row["complete"]) == (8, 2, False)
-        assert row["scored_through"] == date(2026, 11, 13)
+        assert row["scored_through"] == date(2026, 11, 15)
         assert row["wape"] == pytest.approx(metrics.wape(actual, predicted), rel=1e-5)
         assert row["bias"] == pytest.approx(metrics.bias(actual, predicted), rel=1e-5)
-        accuracy = evolution.realized_accuracy(conn, BRAIN, "halo-lamp")
+        accuracy = evolution.realized_accuracy(conn, BRAIN, "brass-floor-lamp")
         assert accuracy["days"] == 8 and accuracy["wape"] == pytest.approx(row["wape"], rel=1e-5)
         assert evolution.realized_accuracy(conn, BRAIN, "no-such-sku") is None
 
@@ -196,11 +196,11 @@ def _acme_with_stock(settings, history):  # noqa: F811
     run_forecasts(settings.admin_database_url, under="root.acme", horizon=56)
     with psycopg.connect(settings.admin_database_url) as conn:
         daily = {sku: sum(p["forecast"] for p in store.latest_forecast(conn, "root.acme.sales", sku)["points"]) / 56
-                 for sku in ("halo-lamp", "cloud-throw")}
+                 for sku in ("brass-floor-lamp", "kantha-throw")}
         store.save_inventory(conn, "root.acme.sales", [
-            {"sku": "halo-lamp", "as_of": date(2026, 11, 4), "on_hand": int(daily["halo-lamp"] * 30), "on_order": 0,
+            {"sku": "brass-floor-lamp", "as_of": date(2026, 11, 6), "on_hand": int(daily["brass-floor-lamp"] * 30), "on_order": 0,
              "order_eta": None, "supplier": "Lampworks", "lead_time_days": 14, "unit_cost": 150},
-            {"sku": "cloud-throw", "as_of": date(2026, 11, 4), "on_hand": int(daily["cloud-throw"] * 25), "on_order": 0,
+            {"sku": "kantha-throw", "as_of": date(2026, 11, 6), "on_hand": int(daily["kantha-throw"] * 25), "on_order": 0,
              "order_eta": None, "supplier": "Weavers", "lead_time_days": 14, "unit_cost": 46},
         ])
 
@@ -217,7 +217,7 @@ def test_following_the_brain_beats_ignoring_it_from_the_same_start(client, setti
     ignored = evolution.advance(settings, llm, embedder, "root.acme", days=56, policy="ignore")
     with psycopg.connect(settings.admin_database_url, row_factory=dict_row) as conn:
         restored = demo.restore(conn)
-        assert restored["today"] == "2026-11-04" and restored["outcome_memories_removed"] > 0
+        assert restored["today"] == "2026-11-06" and restored["outcome_memories_removed"] > 0
         assert conn.execute("SELECT count(*) AS n FROM signal_outcomes").fetchone()["n"] == 0
     followed = evolution.advance(settings, llm, embedder, "root.acme", days=56, policy="follow")
 
@@ -225,9 +225,9 @@ def test_following_the_brain_beats_ignoring_it_from_the_same_start(client, setti
     assert ignored["after"]["came_true"] >= 1 and ignored["after"]["lost"] > 0 and ignored["acted"] == 0
     assert followed["acted"] >= 2 and followed["after"]["prevented"] >= 1
     assert followed["after"]["lost"] < ignored["after"]["lost"]
-    lamp = followed["products"]["halo-lamp"]
+    lamp = followed["products"]["brass-floor-lamp"]
     assert len(lamp["days"]) == len(lamp["stock"]) == len(lamp["demand"]) == 56 and lamp["arrived_on"]
-    assert ignored["products"]["halo-lamp"]["out_of_stock_days"] > lamp["out_of_stock_days"]
+    assert ignored["products"]["brass-floor-lamp"]["out_of_stock_days"] > lamp["out_of_stock_days"]
 
 
 def test_simulate_endpoint_takes_a_policy_and_reset_needs_a_snapshot(client):

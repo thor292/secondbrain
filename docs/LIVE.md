@@ -15,7 +15,7 @@ Two brokers, two jobs:
 - The broker's logins and ACL are **generated from the `grants` table**
   (`python -m secondbrain.live sync`), never written by hand. Onboarding a company resyncs automatically.
 - Topics mirror the brain tree, with sensitivity last:
-  `sb/root/lumen/signals/internal`, `sb/root/lumen/support/memories/internal`, `sb/users/<id>/inbox`.
+  `sb/root/desiliving/signals/internal`, `sb/root/desiliving/support/memories/internal`, `sb/users/<id>/inbox`.
   The broker never delivers a topic outside someone's grants.
 - Messages carry **ids only, never content**. The page reloads from the API, which checks permissions again.
 - Notices are sent **after the database commit**, so a rolled-back write is never announced.

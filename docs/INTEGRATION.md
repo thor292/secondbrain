@@ -11,15 +11,15 @@ and promotions. Everything below is how to send them.
 
 ## 1. Addressing
 
-A business is a **company** (`lumen`), with **brains** for its departments
+A business is a **company** (`desiliving`), with **brains** for its departments
 (`merchandising`). Data belongs to one brain and is visible only to people
 with access to that brain. Products, sales and stock usually go to one
-department, e.g. `lumen/merchandising`.
+department, e.g. `desiliving/merchandising`.
 
-- `company`: the company id (`lumen`); `root.lumen` also works.
+- `company`: the company id (`desiliving`); `root.desiliving` also works.
 - `brain`: a department id (`merchandising`), a deeper path with dots
   (`sales.emea`), `_` for the company brain itself, or a full path
-  (`root.lumen.merchandising`). It must already exist (created at onboarding).
+  (`root.desiliving.merchandising`). It must already exist (created at onboarding).
 
 ## 2. Two ways in
 
@@ -44,7 +44,7 @@ department, e.g. `lumen/merchandising`.
 - The topic's company and brain must match the payload's, or the message is
   rejected.
 - Errors are published to `sb/v1/{company}/_errors` (see section 6).
-- Example: `sb/v1/lumen/merchandising/sale`.
+- Example: `sb/v1/desiliving/merchandising/sale`.
 
 ### HTTP
 
@@ -68,9 +68,9 @@ Every message, on either channel:
 {
   "schema_version": 1,
   "event_id": "shopify-line-5531207-1",
-  "company": "lumen",
+  "company": "desiliving",
   "brain": "merchandising",
-  "sent_at": "2026-11-05T14:03:12-05:00",
+  "sent_at": "2026-11-05T14:03:12+05:30",
   "data": { ... }
 }
 ```
@@ -86,7 +86,7 @@ Every message, on either channel:
 Unknown fields are rejected, so typos don't pass silently.
 
 **Times and days.** Timestamps are ISO 8601 **with a UTC offset**
-(`2026-11-05T14:03:12-05:00`); timestamps without one are rejected. Daily
+(`2026-11-05T14:03:12+05:30`); timestamps without one are rejected. Daily
 figures belong to the **business's local day**: a record's day is the date of
 its timestamp *in the offset you send*. So send local time with its offset
 (not UTC `Z`), or set the optional `day` field explicitly. Dates are
@@ -103,8 +103,8 @@ dead-lettered. Simplest: send `product` messages first.
 ### product
 
 ```json
-{"sku": "halo-lamp", "name": "Halo brass floor lamp", "category": "lighting",
- "price": 289.00, "sensitivity": "internal"}
+{"sku": "brass-floor-lamp", "name": "Moradabad brass floor lamp", "category": "lighting",
+ "price": 7490.00, "sensitivity": "internal"}
 ```
 
 `price`: list price. `sensitivity` (default `internal`): `public`,
@@ -114,8 +114,8 @@ people with restricted access to the brain. Resending updates the product.
 ### sale — one order line
 
 ```json
-{"order_id": "5531207", "line_id": "1", "sku": "halo-lamp", "quantity": 2,
- "unit_price": 289.00, "discount": 0.1, "ts": "2026-11-05T14:03:12-05:00"}
+{"order_id": "5531207", "line_id": "1", "sku": "brass-floor-lamp", "quantity": 2,
+ "unit_price": 7490.00, "discount": 0.1, "ts": "2026-11-05T14:03:12+05:30"}
 ```
 
 | Field | Required | Notes |
@@ -124,7 +124,7 @@ people with restricted access to the brain. Resending updates the product.
 | `sku`, `quantity` | yes | Quantity ≠ 0; negative means a return |
 | `unit_price` | yes | List price per unit, before the line's discount |
 | `discount` | no | Share off the line, 0 ≤ x < 1 (default 0) |
-| `discount_amount` | no | Or: total off the line in currency; converted to `discount` |
+| `discount_amount` | no | Or: total off the line in rupees (the company's currency); converted to `discount` |
 | `ts` | yes | When the order was placed |
 | `day` | no | Business day, if not the date of `ts` |
 | `kind` | no | `sale` (default) or `return` |
@@ -136,7 +136,7 @@ ordered. Use `kind: "return"` with the original `order_id`/`line_id`.
 ### daily_sales — a day's totals, instead of order lines
 
 ```json
-{"sku": "halo-lamp", "day": "2026-11-05", "units": 41, "revenue": 10671.30,
+{"sku": "brass-floor-lamp", "day": "2026-11-05", "units": 41, "revenue": 276381.00,
  "discount": 0.1, "in_stock": true}
 ```
 
@@ -150,9 +150,9 @@ added on top of it.
 ### inventory — stock snapshot
 
 ```json
-{"sku": "halo-lamp", "as_of": "2026-11-05T23:45:00-05:00", "on_hand": 120,
+{"sku": "brass-floor-lamp", "as_of": "2026-11-05T23:45:00+05:30", "on_hand": 120,
  "on_order": 400, "order_eta": "2026-12-03",
- "supplier": "Nordlys", "lead_time_days": 28, "unit_cost": 150.28}
+ "supplier": "Noor Metalcraft", "lead_time_days": 28, "unit_cost": 3895.00}
 ```
 
 | Field | Required | Notes |
@@ -169,7 +169,7 @@ ideally at close of business or on every change.
 ### stockout — optional, for exact out-of-stock days
 
 ```json
-{"sku": "candle-trio", "state": "out", "at": "2026-11-05T15:20:00-05:00"}
+{"sku": "diya-candle-set", "state": "out", "at": "2026-11-05T15:20:00+05:30"}
 ```
 
 `state`: `out` (default) or `back_in_stock`.
@@ -183,8 +183,8 @@ back, and the day it comes back.
 ### purchase_order
 
 ```json
-{"po_id": "PO-88412", "sku": "halo-lamp", "quantity": 400, "supplier": "Nordlys",
- "ordered_at": "2026-11-05T16:00:00-05:00", "eta": "2026-12-03", "status": "placed"}
+{"po_id": "PO-88412", "sku": "brass-floor-lamp", "quantity": 400, "supplier": "Noor Metalcraft",
+ "ordered_at": "2026-11-05T16:00:00+05:30", "eta": "2026-12-03", "status": "placed"}
 ```
 
 `status`: `placed` (default) or `cancelled`. Resend with the same `po_id` to
@@ -194,8 +194,8 @@ the open quantity to `on_order`.
 ### goods_receipt
 
 ```json
-{"po_id": "PO-88412", "sku": "halo-lamp", "quantity": 400,
- "received_at": "2026-12-02T09:30:00-05:00"}
+{"po_id": "PO-88412", "sku": "brass-floor-lamp", "quantity": 400,
+ "received_at": "2026-12-02T09:30:00+05:30"}
 ```
 
 Moves units from `on_order` to `on_hand`. `po_id` optional.
@@ -207,8 +207,8 @@ are authoritative: the next one corrects any drift.
 ### promotion
 
 ```json
-{"promo_id": "bf-2026", "name": "Black Friday", "sku": null,
- "starts": "2026-11-27", "ends": "2026-11-30", "discount": 0.25}
+{"promo_id": "wedding-2026", "name": "Wedding season sale", "sku": null,
+ "starts": "2026-11-16", "ends": "2026-11-23", "discount": 0.15}
 ```
 
 `sku: null` = sitewide. Resend with the same `promo_id` to change it;
@@ -235,9 +235,9 @@ A message that can't be applied (invalid fields, unknown SKU without
 
 - listed in the HTTP response under `rejected`;
 - published on MQTT to `sb/v1/{company}/_errors`:
-  `{"topic": "...", "event_id": "...", "error": "unknown sku 'x' in root.lumen.merchandising: send a product message first, ..."}`;
-- visible to SecondBrain admins: `GET /admin/ingest/errors?company=lumen`
-  (`X-Admin-Token`) or `uv run python -m secondbrain.ingest errors lumen`.
+  `{"topic": "...", "event_id": "...", "error": "unknown sku 'x' in root.desiliving.merchandising: send a product message first, ..."}`;
+- visible to SecondBrain admins: `GET /admin/ingest/errors?company=desiliving`
+  (`X-Admin-Token`) or `uv run python -m secondbrain.ingest errors desiliving`.
 
 **Fix and resend with the same `event_id`**: a rejected event is processed
 normally when it comes again. Database outages are not dead-lettered: over
@@ -260,12 +260,12 @@ curl -H "Authorization: Bearer $KEY" -F brain=merchandising -F file=@inventory.c
 
 ```csv
 sku,day,units,revenue,discount,in_stock
-halo-lamp,2024-09-01,31,8959.00,0,true
+brass-floor-lamp,2024-09-01,34,254660.00,0,true
 ```
 
 Any kind works as CSV (order lines too). Rows with times are applied oldest
 first. Max 50 MB per file. The same works offline:
-`uv run python -m secondbrain.ingest csv lumen merchandising daily_sales file.csv`.
+`uv run python -m secondbrain.ingest csv desiliving merchandising daily_sales file.csv`.
 
 Forecasts need history: with the default 120-day horizon, **at least 480
 days** of daily sales per brain (two years is better: last year's season is a
@@ -278,12 +278,12 @@ A SecondBrain admin creates one key per client system; it's shown once.
 
 ```bash
 curl -X POST https://<sb>/admin/ingest/keys -H "X-Admin-Token: $SB_ADMIN_TOKEN" \
-  -H 'Content-Type: application/json' -d '{"company": "lumen", "name": "Lumen ERP"}'
+  -H 'Content-Type: application/json' -d '{"company": "desiliving", "name": "Desi Living ERP"}'
 # optional "scope": "merchandising" limits the key to that department's subtree
-uv run python -m secondbrain.ingest key create lumen "Lumen ERP" [--scope merchandising]
+uv run python -m secondbrain.ingest key create desiliving "Desi Living ERP" [--scope merchandising]
 ```
 
-List: `GET /admin/ingest/keys?company=lumen`. Revoke:
+List: `GET /admin/ingest/keys?company=desiliving`. Revoke:
 `DELETE /admin/ingest/keys/{id}` or `... key revoke <id>`. A key writes only
 to its own company (and scope); only a hash is stored.
 
@@ -316,7 +316,7 @@ Development: `docker compose up -d mosquitto` runs a plain broker on
 
 ```bash
 SB_MQTT_PORT=51883 SB_MQTT_TLS=false uv run python -m secondbrain.ingest.mqtt
-uv run python scripts/publish_sample_events.py      # a day of Lumen events
+uv run python scripts/publish_sample_events.py      # a day of Desi Living events
 ```
 
 ## 10. After data arrives
@@ -330,4 +330,4 @@ in the API and bridge processes, coordinated through Redis; data arriving
 during the quiet period is included in the next refresh.
 `SB_INGEST_AUTO_REFRESH=false` turns it off. On demand:
 `POST /ingest/refresh` with the company's key, or
-`uv run python -m secondbrain.ingest refresh lumen`.
+`uv run python -m secondbrain.ingest refresh desiliving`.

@@ -12,7 +12,7 @@ hypermarkets named by area. Customers belong to one home merchant, with their ow
 repurchase interval, and some of them lapse during the run (what win-back signals catch).
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import numpy as np
 
 from . import contract
@@ -404,9 +404,13 @@ def _store_area(rng: np.random.Generator, city: str, taken: set[str], brand: str
     return name
 
 
+# The demo's own company (docs/INDIA_WORLD.md) is the first Shopify merchant on the wall.
+FLAGSHIP = {"name": "Desi Living", "city": "Bengaluru", "category": "Home Decor", "kind": "home"}
+
+
 def _merchants(rng: np.random.Generator, total: int) -> list[Merchant]:
     out: list[Merchant] = []
-    used: set[str] = set()
+    used: set[str] = {FLAGSHIP["name"]}
     all_cities = list(CITIES)
     for platform, n_platform in zip(PLATFORM_SHARE, _split(total, list(PLATFORM_SHARE.values()))):
         types = [t for t in MERCHANT_TYPES if t.platform == platform]
@@ -436,6 +440,13 @@ def _merchants(rng: np.random.Generator, total: int) -> list[Merchant]:
                     id=f"{platform}-{counter:04d}", platform=platform, name=name, city=city,
                     category=mtype.category, kind=mtype.label, x=round(x, 4), y=round(y, 4),
                     size=float(rng.lognormal(0, 0.4)) * mtype.footfall, basket=mtype.basket))
+    first = next((i for i, m in enumerate(out) if m.platform == "shopify"), None)
+    if first is not None:  # a well-known brand: at least 1.5x a typical D2C store's footfall
+        home = next(t for t in MERCHANT_TYPES if t.platform == "shopify" and t.label == FLAGSHIP["kind"])
+        x, y = map_xy(*CITIES[FLAGSHIP["city"]][:2])
+        out[first] = replace(out[first], name=FLAGSHIP["name"], city=FLAGSHIP["city"], category=FLAGSHIP["category"],
+                             kind=FLAGSHIP["kind"], x=round(x, 4), y=round(y, 4),
+                             size=max(out[first].size, 1.5 * home.footfall), basket=home.basket)
     return out
 
 

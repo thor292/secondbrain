@@ -1,12 +1,12 @@
 """Ingestion admin commands (admin connection).
 
     uv run python -m secondbrain.ingest schema                      # add the ingest tables to an existing database
-    uv run python -m secondbrain.ingest key create lumen "Lumen ERP" [--scope merchandising]
-    uv run python -m secondbrain.ingest key list [lumen]
+    uv run python -m secondbrain.ingest key create desiliving "Desi Living ERP" [--scope merchandising]
+    uv run python -m secondbrain.ingest key list [desiliving]
     uv run python -m secondbrain.ingest key revoke <key id>
-    uv run python -m secondbrain.ingest csv lumen merchandising daily_sales history.csv
-    uv run python -m secondbrain.ingest errors [lumen]
-    uv run python -m secondbrain.ingest refresh lumen               # recalculate forecasts and signals now
+    uv run python -m secondbrain.ingest csv desiliving merchandising daily_sales history.csv
+    uv run python -m secondbrain.ingest errors [desiliving]
+    uv run python -m secondbrain.ingest refresh desiliving            # recalculate forecasts and signals now
 """
 
 import argparse

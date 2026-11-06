@@ -3,8 +3,8 @@
 The chosen model (e.g. gradient boosting) doesn't hand back a neat breakdown,
 so instead of pretending to decompose it, this measures the same patterns the
 models use, directly from past sales: the recent level, growth, the weekday
-rhythm, last year's same weeks, how promotions moved sales, and the Black
-Friday effect. Each driver says what was measured and what it means.
+rhythm, last year's same weeks, how promotions moved sales, and the Diwali
+effect. Each driver says what was measured and what it means.
 
 Only days that reflect demand count: out-of-stock days, gaps in the feed and
 one-off bulk orders are left out (the same cleaning the models get, see
@@ -81,13 +81,18 @@ def drivers(sales: list[dict], promotions: list[dict], cutoff: date, points: lis
         out.append({"name": "Promotions", "value": f"{_avg(lifts):+.0%} during past promotions",
                     "explanation": f"Sales during {len(lifts)} past promotions compared with the 3 weeks before each{planned}."})
 
-    bf = calendar.black_friday(cutoff.year - 1)
-    peak = window(bf, calendar.cyber_monday(cutoff.year - 1))
-    base = window(bf - timedelta(days=35), bf - timedelta(days=8))
-    if len(peak) >= 3 and len(base) >= 14 and _avg(base):
-        out.append({"name": "Black Friday effect", "value": f"{_avg(peak) / _avg(base):.1f}x normal sales",
-                    "explanation": f"Last year's Black Friday to Cyber Monday ({_fmt(bf)}–{_fmt(calendar.cyber_monday(bf.year))}) against "
-                                   f"the weeks before. This year Black Friday is {_fmt(calendar.black_friday(cutoff.year))}."})
+    # The last Diwali the data covers (this year's once it is over, else last year's).
+    year = calendar.last_diwali(cutoff).year
+    dhanteras, diwali = calendar.dhanteras(year), calendar.diwali(year)
+    peak = window(dhanteras, diwali)
+    base = window(dhanteras - timedelta(days=35), dhanteras - timedelta(days=8))
+    if len(peak) >= 2 and len(base) >= 14 and _avg(base):
+        coming = calendar.next_diwali(cutoff + timedelta(days=1))
+        out.append({"name": "Diwali effect", "value": f"{_avg(peak) / _avg(base):.1f}x normal sales",
+                    "explanation": f"Dhanteras to Diwali {year} ({_fmt(dhanteras)}–{_fmt(diwali)}) against the "
+                                   f"weeks before. {'This' if coming.year == cutoff.year else 'Next'} year Dhanteras is "
+                                   f"{_fmt(calendar.dhanteras(coming.year))} "
+                                   f"and Diwali {_fmt(coming)}."})
     return out
 
 

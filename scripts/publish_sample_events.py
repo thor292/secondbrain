@@ -1,4 +1,4 @@
-"""Publish a realistic day of Lumen Home's business events, to demo live data arriving.
+"""Publish a realistic day of Desi Living's business events, to demo live data arriving.
 
 Plays one business day in Merchandising, in order: a planned promotion,
 customer orders through the day (one to three lines each, the bestsellers
@@ -28,14 +28,15 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import psycopg
 
-from generate_lumen_sales import PRODUCTS
+from generate_sales import PRODUCTS
 from secondbrain.config import get_settings
 
-COMPANY_SPEC = Path(__file__).parent.parent / "examples" / "lumen" / "company.json"
+COMPANY_SPEC = Path(__file__).parent.parent / "examples" / "desiliving" / "company.json"
 DEPARTMENT = "merchandising"
+REORDER = "brass-floor-lamp"  # the day's purchase order
 
 
-def lumen() -> tuple[str, str]:
+def company_brain() -> tuple[str, str]:
     spec = json.loads(COMPANY_SPEC.read_text())
     if DEPARTMENT not in {d["id"] for d in spec["departments"]}:
         raise SystemExit(f"{COMPANY_SPEC} has no {DEPARTMENT} department")
@@ -92,9 +93,9 @@ def events(company: str, day: date, orders: int, run: str, tz: ZoneInfo, product
     def at(hour: float) -> str:
         return datetime.combine(day, clock(0), tz).replace(hour=int(hour), minute=int(hour % 1 * 60)).isoformat()
 
-    out = [message("promotion", {"promo_id": f"bf-early-{day.year}", "name": "Black Friday early access",
-                                 "starts": str(day + timedelta(days=19)), "ends": str(day + timedelta(days=24)),
-                                 "discount": 0.2})]
+    out = [message("promotion", {"promo_id": f"wedding-{day.year}", "name": "Wedding season sale",
+                                 "starts": str(day + timedelta(days=10)), "ends": str(day + timedelta(days=17)),
+                                 "discount": 0.15})]
     skus = [p.sku for p in PRODUCTS if p.sku in products]
     weights = np.array([p.daily_units for p in PRODUCTS if p.sku in products])
     on_hand = {sku: stock[sku][0] if sku in stock else 60 for sku in skus}
@@ -124,19 +125,19 @@ def events(company: str, day: date, orders: int, run: str, tz: ZoneInfo, product
             continue
         qty = int(min(on_hand[sku], wanted))
         on_hand[sku] -= qty
-        out.append(message("sale", {"order_id": f"LH-{run}-{i + 1:04d}", "line_id": str(line + 1), "sku": sku,
+        out.append(message("sale", {"order_id": f"DL-{run}-{i + 1:04d}", "line_id": str(line + 1), "sku": sku,
                                     "quantity": qty, "unit_price": products[sku][1], "ts": at(hour)}))
         if on_hand[sku] == 0 and sku in stock:
             sold_out.add(sku)
             out.append(message("stockout", {"sku": sku, "state": "out", "at": at(hour)}))
     first_sale = next(m for k, m in out if k == "sale")["data"]
     out.append(message("sale", {**first_sale, "quantity": 1, "kind": "return", "ts": at(21)}))
-    if "halo-lamp" in stock:
+    if REORDER in stock:
         eta = day + timedelta(days=28)
-        qty, current_eta = on_order["halo-lamp"]
-        on_order["halo-lamp"] = (qty + 400, min(current_eta, eta) if qty and current_eta else eta)
-        out.append(message("purchase_order", {"po_id": f"PO-{run}-1", "sku": "halo-lamp", "quantity": 400,
-                                              "supplier": stock["halo-lamp"][1], "ordered_at": at(16),
+        qty, current_eta = on_order[REORDER]
+        on_order[REORDER] = (qty + 400, min(current_eta, eta) if qty and current_eta else eta)
+        out.append(message("purchase_order", {"po_id": f"PO-{run}-1", "sku": REORDER, "quantity": 400,
+                                              "supplier": stock[REORDER][1], "ordered_at": at(16),
                                               "eta": str(day + timedelta(days=28))}))
     for sku in skus:
         if sku in stock:  # the first count of an untracked product would also need supplier and costs
@@ -150,7 +151,7 @@ def send_mqtt(args, items: list[tuple[str, dict]]) -> None:
     import paho.mqtt.client as mqtt
     from paho.mqtt.enums import CallbackAPIVersion
 
-    client = mqtt.Client(CallbackAPIVersion.VERSION2, client_id=f"lumen-demo-{time.time_ns()}")
+    client = mqtt.Client(CallbackAPIVersion.VERSION2, client_id=f"desiliving-demo-{time.time_ns()}")
     if args.username:
         client.username_pw_set(args.username, args.password)
     if args.tls:
@@ -186,7 +187,7 @@ def main() -> None:
     parser.add_argument("--orders-only", action="store_true", help="send --orders orders, ignoring the forecast")
     parser.add_argument("--delay", type=float, default=0.01, help="seconds between messages")
     parser.add_argument("--run", help="event id prefix (default: the day); reuse it to replay")
-    parser.add_argument("--tz", default="America/New_York", help="the business's time zone")
+    parser.add_argument("--tz", default="Asia/Kolkata", help="the business's time zone")
     parser.add_argument("--seed", type=int, default=11)
     parser.add_argument("--host", default="localhost")
     parser.add_argument("--port", type=int, default=51883)
@@ -199,7 +200,7 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
-    company, brain = lumen()
+    company, brain = company_brain()
     products, stock, last = current_state(brain)
     day = args.day or (last + timedelta(days=1) if last else date.today())
     expected = {} if args.orders_only else expected_units(brain, day)
@@ -210,7 +211,7 @@ def main() -> None:
             print(kind, json.dumps(m))
     elif args.http:
         if not args.key:
-            raise SystemExit("--http needs --key (create one: uv run python -m secondbrain.ingest key create lumen demo)")
+            raise SystemExit("--http needs --key (create one: uv run python -m secondbrain.ingest key create desiliving demo)")
         send_http(args, items)
     else:
         send_mqtt(args, items)

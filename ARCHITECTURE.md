@@ -50,7 +50,7 @@ a memory is about), so every memory has one of each.
 | Type     | Short-term (working)            | Long-term (consolidated) |
 |----------|---------------------------------|--------------------------|
 | Episodic | "Meeting with vendor today"     | "Q3 vendor dispute and how it was resolved" |
-| Semantic | "Someone said price is $40"     | "Standard price is $40 (verified)" |
+| Semantic | "Someone said price is ₹4,000"   | "Standard price is ₹4,000 (verified)" |
 | User     | "Ravi seems to prefer email"    | "Ravi: CFO, prefers email, approves budgets" |
 
 ### 2.3 Data flows up
@@ -308,7 +308,7 @@ and `GET /entities/{name}`. Tests prove no entity, person or relationship
 leaks across permissions or companies, and that the leak tests fail if the
 permission filter is removed.
 
-On the Lumen demo data, extraction takes about 30 seconds and finds about 200
+On the Desi Living demo data, extraction takes about 30 seconds and finds about 200
 entities (suppliers, carriers, products, customers, places, topics).
 
 Not done yet:
@@ -350,7 +350,7 @@ offers at checkout**, each decision carrying a reason.
 | Episodic memory | Events: product views, add-to-cart, checkout started, abandoned, purchased |
 | Semantic memory | Catalog, prices, margins, discount rules |
 | User memory | Customer profiles: history, preferences, price sensitivity |
-| Root brain | Anonymized patterns across merchants (e.g. "for carts under $50, free shipping converts better than 10% off") |
+| Root brain | Anonymized patterns across merchants (e.g. "for carts under ₹999, free shipping converts better than 10% off") |
 
 Cross-merchant patterns at the root give a new merchant useful behaviour on
 day one (cold start), without any merchant's raw data being shared.

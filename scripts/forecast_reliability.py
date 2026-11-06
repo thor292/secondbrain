@@ -4,12 +4,13 @@ Every number here is measured on days the forecaster never saw: history is
 cut at a date, the whole pipeline runs (preparation, backtest, model choice,
 calibrated ranges), and the forecast is compared with what happened next.
 
-(a) **Lumen** (the synthetic demo shop): the demo's own setting (cut on
-    3 Nov 2026, 120 days ahead; the generator is run four months further, so
-    this history is a different random draw of the same shop), then the demo
-    data cut on 6 Jul 2026 (120 days) and on 3 Nov 2025 (56 days: a holiday
-    season with only one earlier holiday to learn from).
-(b) **A messy shop**: three regular Lumen-like products next to products with
+(a) **Desi Living** (the synthetic demo shop): the demo's own setting (cut on
+    5 Nov 2026, the day before Dhanteras, 120 days ahead; the generator is run
+    four months further, so this history is a different random draw of the
+    same shop), then the demo data cut on 6 Jul 2026 (120 days) and on 15 Oct
+    2025 (56 days, three days before Dhanteras: a Diwali with only one earlier
+    Diwali to learn from).
+(b) **A messy shop**: three regular Desi Living-like products next to products with
     the problems real feeds have: launched 3 weeks / 3 months / 9 months ago,
     sporadic sales, frequent stockouts, 500-unit bulk orders, gaps in the
     feed, a jump in the sales level, a discontinued product (still reported
@@ -18,7 +19,8 @@ calibrated ranges), and the forecast is compared with what happened next.
     against demand rather than against censored sales.
 
 For each product: the chosen model, its grade, and per model the WAPE, bias
-and how often the 80% and 95% ranges held. Then sanity assertions; the script
+and how often the 80% and 95% ranges held; then the median WAPE per product
+against repeating last week (seasonal naive). Then sanity assertions; the script
 exits non-zero if one fails.
 
     uv run python scripts/forecast_reliability.py
@@ -31,12 +33,12 @@ from datetime import date, timedelta
 
 import numpy as np
 
-from scripts.generate_lumen_sales import (PRODUCTS, WEEKLY, Product, discount_on, expected_units, generate,
-                                          promotions)
+from scripts.generate_sales import (PRODUCTS, WEEKLY, Product, discount_on, expected_units, generate,
+                                    promotions)
 from secondbrain.forecasting import backtest, metrics
 
 SEED = 11
-CUTOFF = date(2026, 10, 10)  # messy shop: the forecast reaches past Black Friday
+CUTOFF = date(2026, 10, 10)  # messy shop: the forecast reaches past Dhanteras and Diwali
 HORIZON = 56
 SHOP_START = date(2024, 9, 1)
 
@@ -74,30 +76,31 @@ def messy_shop(seed: int = SEED) -> tuple[list[dict], list[dict], dict[str, dict
              for d in (SHOP_START + timedelta(days=21 * k + 9) for k in range(60)) if d <= end]
     promo_rows = [vars(p) for p in promos] + heavy
 
-    def lumen_like(sku: str, base: Product, scale: float = 1.0):
+    def like(sku: str, base: Product, scale: float = 1.0):
         return lambda day, disc: scale * expected_units(base, day, disc)
 
-    lamp, duvet, table = (next(p for p in PRODUCTS if p.sku == s) for s in ("halo-lamp", "linen-duvet", "oak-side-table"))
+    lamp, sheet, table = (next(p for p in PRODUCTS if p.sku == s)
+                          for s in ("brass-floor-lamp", "blockprint-bedsheet", "sheesham-side-table"))
     shift_day = CUTOFF - timedelta(days=35)
     stop_day = CUTOFF - timedelta(days=60)
     products = {
         # sku: (demand(day, discount), first day, what it tests)
-        "halo-lamp": (lumen_like("halo-lamp", lamp), SHOP_START, "regular"),
-        "linen-duvet": (lumen_like("linen-duvet", duvet), SHOP_START, "regular"),
-        "oak-side-table": (lumen_like("oak-side-table", table), SHOP_START, "regular"),
-        "new-3w": (lumen_like("new-3w", lamp, 0.6), CUTOFF - timedelta(days=20), "launched 3 weeks ago"),
-        "new-3m": (lumen_like("new-3m", duvet, 0.8), CUTOFF - timedelta(days=89), "launched 3 months ago"),
-        "new-9m": (lumen_like("new-9m", lamp, 0.5), CUTOFF - timedelta(days=269), "launched 9 months ago"),
+        "brass-floor-lamp": (like("brass-floor-lamp", lamp), SHOP_START, "regular"),
+        "blockprint-bedsheet": (like("blockprint-bedsheet", sheet), SHOP_START, "regular"),
+        "sheesham-side-table": (like("sheesham-side-table", table), SHOP_START, "regular"),
+        "new-3w": (like("new-3w", lamp, 0.6), CUTOFF - timedelta(days=20), "launched 3 weeks ago"),
+        "new-3m": (like("new-3m", sheet, 0.8), CUTOFF - timedelta(days=89), "launched 3 months ago"),
+        "new-9m": (like("new-9m", lamp, 0.5), CUTOFF - timedelta(days=269), "launched 9 months ago"),
         "slow-mover": (lambda day, disc: 0.12 * WEEKLY[day.weekday()] * (1 - disc) ** -2, SHOP_START,
                        "sporadic sales (about 1 day in 8)"),
-        "stockouts": (lumen_like("stockouts", duvet, 0.7), SHOP_START, "out of stock ~25% of days, incl. the last 9"),
-        "bulk-orders": (lumen_like("bulk-orders", table, 3.0), SHOP_START, "three one-off 500-unit orders"),
-        "feed-gaps": (lumen_like("feed-gaps", duvet, 0.6), SHOP_START, "8% of days missing, plus a shop-wide outage"),
+        "stockouts": (like("stockouts", sheet, 0.7), SHOP_START, "out of stock ~25% of days, incl. the last 9"),
+        "bulk-orders": (like("bulk-orders", table, 3.0), SHOP_START, "three one-off 500-unit orders"),
+        "feed-gaps": (like("feed-gaps", sheet, 0.6), SHOP_START, "8% of days missing, plus a shop-wide outage"),
         "level-shift": (lambda day, disc: expected_units(table, day, disc) * (2.0 if day >= shift_day else 1.0),
                         SHOP_START, "sales doubled 5 weeks ago"),
         "discontinued": (lambda day, disc: 0.0 if day >= stop_day else expected_units(table, day, disc),
                          SHOP_START, "stopped selling 60 days ago (zero rows)"),
-        "left-feed": (lambda day, disc: 0.0 if day >= stop_day else expected_units(duvet, day, disc) * 0.5,
+        "left-feed": (lambda day, disc: 0.0 if day >= stop_day else expected_units(sheet, day, disc) * 0.5,
                       SHOP_START, "stopped 60 days ago and left the feed"),
         "promo-heavy": (lambda day, disc: 12 * WEEKLY[day.weekday()] * (1 - disc) ** -3.0, SHOP_START,
                         "a 20-40% sale every 3 weeks"),
@@ -146,7 +149,9 @@ def report(title: str, results: list, truth: dict[str, dict[date, float]], tests
     for r in results:
         _check(r.points)
         chosen = _score(r.points, truth[r.sku])
-        out[r.sku] = {"result": r, "chosen": chosen}
+        naive = r.candidates.get("seasonal_naive")
+        out[r.sku] = {"result": r, "chosen": chosen,
+                      "naive": _score(naive["points"], truth[r.sku]) if naive else chosen}
         rows = [(r.model, chosen)] + [(name, _score(c["points"], truth[r.sku]))
                                       for name, c in r.candidates.items() if name != r.model]
         for i, (name, s) in enumerate(rows):
@@ -180,10 +185,10 @@ def main() -> int:
         if not ok:
             failures.append(what)
 
-    lumen = {}
-    demo, longer = generate(), generate(end=date(2027, 3, 3))
-    for (rows, promos), cutoff, horizon in ((longer, date(2026, 11, 3), 120), (demo, date(2026, 7, 6), 120),
-                                            (demo, date(2025, 11, 3), 56)):
+    desi = {}
+    demo, longer = generate(), generate(end=date(2027, 3, 5))
+    for (rows, promos), cutoff, horizon in ((longer, date(2026, 11, 5), 120), (demo, date(2026, 7, 6), 120),
+                                            (demo, date(2025, 10, 15), 56)):
         promo_rows = [vars(p) for p in promos]
         history = [r for r in rows if r["day"] <= cutoff]
         truth = {}
@@ -193,7 +198,7 @@ def main() -> int:
         start = time.perf_counter()
         results = backtest.run(history, promo_rows, horizon, candidates=True)
         took = time.perf_counter() - start
-        lumen[cutoff] = report(f"Lumen, cut {cutoff}, next {horizon} days ({took:.0f} s)", results, truth)
+        desi[cutoff] = report(f"Desi Living, cut {cutoff}, next {horizon} days ({took:.0f} s)", results, truth)
 
     start = time.perf_counter()
     shop_rows, shop_promos, shop_truth, tests = messy_shop()
@@ -202,22 +207,24 @@ def main() -> int:
     shop = report(f"Messy shop, cut {CUTOFF}, next {HORIZON} days ({took:.0f} s)", results, shop_truth, tests)
 
     print("\n## Summary (chosen model, averaged over products)\n")
-    for cutoff, res in lumen.items():
-        print(f"  Lumen cut {cutoff}: {pooled([v['chosen'] for v in res.values()])}")
+    for cutoff, res in desi.items():
+        print(f"  Desi Living cut {cutoff}: {pooled([v['chosen'] for v in res.values()])}")
+        print(f"    median WAPE per product: chosen {np.median([v['chosen']['wape'] for v in res.values()]):.1%}, "
+              f"seasonal naive {np.median([v['naive']['wape'] for v in res.values()]):.1%}")
     regular = [v["chosen"] for k, v in shop.items() if shop[k]["result"].model not in ("discontinued", "no_sales")]
     print(f"  Messy shop (all forecast products): {pooled(regular)}")
 
     print("\n## Sanity checks\n")
-    every = [v for res in lumen.values() for v in res.values()] + list(shop.values())
+    every = [v for res in desi.values() for v in res.values()] + list(shop.values())
     check(all(math.isfinite(p["forecast"]) for v in every for p in v["result"].points),
           "no NaN/inf/negative points, ranges ordered lo95<=lo80<=forecast<=hi80<=hi95")
-    demo_res = lumen[date(2026, 11, 3)]
+    demo_res = desi[date(2026, 11, 5)]
     cov80 = np.mean([v["chosen"]["cov80"] for v in demo_res.values()])
     cov95 = np.mean([v["chosen"]["cov95"] for v in demo_res.values()])
-    check(0.7 <= cov80 <= 0.9, f"Lumen (demo setting) 80% ranges held {cov80:.0%} of days out of sample (target 80%)")
-    check(0.88 <= cov95 <= 0.99, f"Lumen (demo setting) 95% ranges held {cov95:.0%} of days out of sample (target 95%)")
+    check(0.7 <= cov80 <= 0.9, f"Desi Living (demo setting) 80% ranges held {cov80:.0%} of days out of sample (target 80%)")
+    check(0.88 <= cov95 <= 0.99, f"Desi Living (demo setting) 95% ranges held {cov95:.0%} of days out of sample (target 95%)")
     wape = np.mean([v["chosen"]["wape"] for v in demo_res.values()])
-    check(wape < 0.4, f"Lumen (demo setting) average WAPE {wape:.1%} out of sample")
+    check(wape < 0.4, f"Desi Living (demo setting) average WAPE {wape:.1%} out of sample")
     s = {k: v["chosen"] for k, v in shop.items()}
     r = {k: v["result"] for k, v in shop.items()}
     check(r["new-3w"].model == "cold_start" and r["new-3w"].quality["grade"] == "weak",

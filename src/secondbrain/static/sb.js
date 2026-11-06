@@ -21,17 +21,33 @@ const SB = (() => {
     return n;
   }
 
-  const money = (v) => (v < 0 ? "−$" : "$") + Math.abs(Math.round(v || 0)).toLocaleString();
+  // Rupees the Indian way: ₹12,34,567 exact; ₹45,600 / ₹4.2 L / ₹1.3 Cr for headlines.
+  const inGroup = (n) => Math.round(n).toLocaleString("en-IN");
+  const money = (v) => (v < 0 ? "−₹" : "₹") + inGroup(Math.abs(v || 0));
   const shortMoney = (v) => {
-    const a = Math.abs(v || 0), s = v < 0 ? "−$" : "$";
-    return a >= 1e6 ? s + (a / 1e6).toFixed(a >= 1e7 ? 0 : 1) + "M" : a >= 1e3 ? s + Math.round(a / 1e3) + "k" : s + Math.round(a);
+    const a = Math.abs(v || 0), s = v < 0 ? "−₹" : "₹";
+    if (a >= 1e7) return s + (a / 1e7).toFixed(a >= 1e9 ? 0 : 1).replace(/\.0$/, "") + " Cr";
+    if (a >= 1e5) return s + (a / 1e5).toFixed(a >= 1e6 ? 0 : 1).replace(/\.0$/, "") + " L";
+    return s + inGroup(a >= 1e4 ? Math.round(a / 100) * 100 : a);
   };
   const pct = (v) => (v == null ? "—" : Math.round(v * 100) + "%");
-  const fmtDay = (iso) => (iso ? new Date(String(iso).slice(0, 10) + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "—");
+  const fmtDay = (iso) => (iso ? new Date(String(iso).slice(0, 10) + "T00:00:00").toLocaleDateString("en-IN", { month: "short", day: "numeric" }) : "—");
+  // The festivals that move Indian retail (they follow the lunar calendar, so dates are listed).
+  const FESTIVALS = [["2024-10-29", "Dhanteras"], ["2024-11-01", "Diwali"], ["2025-03-14", "Holi"], ["2025-10-18", "Dhanteras"],
+    ["2025-10-20", "Diwali"], ["2026-03-04", "Holi"], ["2026-11-06", "Dhanteras"], ["2026-11-08", "Diwali"], ["2027-10-29", "Diwali"]];
+  const festivalsBetween = (from, to) => FESTIVALS.filter(([d]) => d >= from && d <= to).map(([day, name]) => ({ day, name }));
+  // "Dhanteras today · Diwali in 2 days" for a brain's date; empty when nothing is near.
+  function festivalNote(iso, within = 45) {
+    if (!iso) return "";
+    const t = new Date(String(iso).slice(0, 10) + "T00:00:00");
+    return FESTIVALS.map(([d, name]) => [name, Math.round((new Date(d + "T00:00:00") - t) / 864e5)])
+      .filter(([, n]) => n >= 0 && n <= within)
+      .map(([name, n]) => (n === 0 ? `${name} today` : n === 1 ? `${name} tomorrow` : `${name} in ${n} days`)).join(" · ");
+  }
   const addDays = (iso, n) => { const d = new Date(iso + "T00:00:00"); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
 
   // Numbers count up when they appear: the page feels alive.
-  function countUp(node, to, format = (x) => Math.round(x).toLocaleString(), ms = 1100, from = 0) {
+  function countUp(node, to, format = (x) => Math.round(x).toLocaleString("en-IN"), ms = 1100, from = 0) {
     if (matchMedia("(prefers-reduced-motion: reduce)").matches || !isFinite(to)) { node.textContent = format(to); return; }
     const start = performance.now();
     const tick = (now) => {
@@ -137,5 +153,5 @@ const SB = (() => {
     set(k, v) { try { v == null ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, JSON.stringify(v)); } catch {} },
   };
 
-  return { el, svg, money, shortMoney, pct, fmtDay, addDays, countUp, kpi, sparkline, nav, store, LOGO, live, toast, batcher };
+  return { el, svg, money, shortMoney, pct, fmtDay, addDays, festivalNote, festivalsBetween, countUp, kpi, sparkline, nav, store, LOGO, live, toast, batcher };
 })();

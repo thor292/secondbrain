@@ -43,7 +43,7 @@ NOTES = [
     ("root.acme.sales", "asha", "Bluebird Stores wants a bulk order of 400 Cloud throws before December 12, at 15 percent off list"),
     ("root.acme.sales", "asha", "Storm in the Midwest: the carrier delayed ground shipments to Chicago and Detroit by 2 days this week"),
     ("root.acme.sales", "vikram", "Where-is-my-order tickets are up 35 percent since the carrier delays started"),
-    ("root.acme.sales", "vikram", "Loyalty early access for Black Friday moves from November 24 to November 23"),
+    ("root.acme.sales", "vikram", "Loyalty early access for the festive sale moves from November 24 to November 23"),
     ("root.acme.sales", "asha", "Received 40 damaged Halo floor lamps from Lampworks today; quarantined and reported"),
     ("root.acme.finance", "meera", "October close finished on the 4th business day as planned"),
     ("root.acme.finance", "meera", "Lampworks will credit us for the 40 damaged Halo lamps on the next invoice"),

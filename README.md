@@ -6,7 +6,7 @@ five memory types. See [ARCHITECTURE.md](ARCHITECTURE.md) for the design.
 ## What works now
 
 - **Tree of brains**: company and department brains, stored as ltree paths
-  (`root.lumen.support`).
+  (`root.desiliving.support`).
 - **Permissions enforced by PostgreSQL**: row-level security decides what each
   person sees. Departments can't read each other without an explicit grant,
   and restricted memories need a high enough grant.
@@ -36,11 +36,11 @@ five memory types. See [ARCHITECTURE.md](ARCHITECTURE.md) for the design.
 - **Relationships ("who knows what")**: when memories become long-term
   (documents imported, notes saved), the model extracts the people, customers,
   suppliers, products, carriers, places and topics they mention, and how those
-  relate ("Casa Forma supplies the Aria linen sofa"). The results are stored in
+  relate ("Saharanpur Woodcraft supplies the sheesham sofa"). The results are stored in
   PostgreSQL and synced to one **FalkorDB** graph per company.
-  - `GET /experts?topic=Black Friday`: who wrote or is mentioned in memories
+  - `GET /experts?topic=Diwali`: who wrote or is mentioned in memories
     about a topic, and which brains hold them.
-  - `GET /entities/Hearth Freight`: what we know about a customer, supplier,
+  - `GET /entities/BharatFleet Logistics`: what we know about a customer, supplier,
     product, person or topic: relationships, related entities, people, memories.
   - Both only count memories the asking person may read. FalkorDB has no
     permissions of its own, so every graph query is limited to memory ids that
@@ -71,39 +71,47 @@ uv run uvicorn secondbrain.api:app --port 8765
 
 ## Example companies
 
-- **Lumen Home** (`examples/lumen`): an online home decor and furniture brand.
-  6 departments, 11 people, 18 documents (handbook and campaign plan in Word,
-  returns policy, fulfillment SOP and Q3 results in PDF, the rest Markdown),
-  some restricted, plus notes from its people that update older facts.
-  Shares patterns with the root.
-- **Brightpath Logistics** (`examples/brightpath`): a small logistics company
-  that does not share anything, used to show isolation.
+The demo world is Indian commerce, in rupees; the shared spec is
+[docs/INDIA_WORLD.md](docs/INDIA_WORLD.md). The demo's today is Friday
+6 November 2026 (Dhanteras); Diwali is on Sunday 8 November.
 
-The PDF and Word files are generated from `examples/lumen/source/` with
+- **Desi Living** (`examples/desiliving`): a Bengaluru D2C home decor brand
+  (brass, block print, dhurries, sheesham wood) selling on its own Shopify
+  store, on JioMart and on DMart shelves. 6 departments, 11 people, documents
+  (handbook and Diwali campaign plan in Word, returns policy, fulfillment SOP
+  and Q2 FY27 results in PDF, the rest Markdown), some restricted, plus notes
+  from its people that update older facts. Shares patterns with the root.
+- **BharatFleet Logistics** (`examples/bharatfleet`): the Pune logistics
+  partner that delivers Desi Living's furniture. It does not share anything,
+  used to show isolation.
+
+The PDF and Word files are generated from `examples/desiliving/source/` with
 `uv run python scripts/build_example_docs.py`.
 
 ### Demo questions
 
 | Person | Ask | Shows |
 |--------|-----|-------|
-| Nina (Support) | Can I give a customer a 50 dollar credit without asking anyone? | Department policy: no, agents can give up to $25 |
-| Nina (Support) | How many vacation days do I get? → *and can I carry any over?* | Company fallback, then a follow-up understood from the conversation |
-| Nina (Support) | What's the free shipping threshold right now? | $60: an Operations note replaced the $75 policy (Nina may read Operations) |
-| Sofia (Marketing) | What's the free shipping threshold right now? | $75: she can't see the Operations note, so she keeps the official policy |
-| Leo (Marketing) | When does loyalty early access for Black Friday start? | November 23, the newer date wins over the plan's November 24 |
-| Tom (Finance) | What was gross margin in Q3? | Not found: restricted |
-| Rachel (CFO) | What was gross margin in Q3? | 46 percent, from the restricted PDF |
-| Sofia (Marketing) | What is the hotel cap for a manager? | $190, from a table in the Word handbook |
-| Karim (Brightpath) | How many days of annual leave do we get? | 20 days, never Lumen's 25 |
+| Neha (Support) | Can I give a customer a ₹2,000 credit without asking anyone? | Department policy: no, agents can give up to ₹500 |
+| Neha (Support) | How many days of earned leave do I get? → *and can I carry any over?* | Company fallback, then a follow-up understood from the conversation |
+| Neha (Support) | What's the free shipping threshold right now? | ₹699: an Operations note replaced the ₹999 policy for Diwali (Neha may read Operations) |
+| Sana (Marketing) | What's the free shipping threshold right now? | ₹999: she can't see the Operations note, so she keeps the official policy |
+| Neha (Support) | What's the last day to order for delivery before Diwali? | The Diwali shipping cutoff from the shipping policy |
+| Rohan (Marketing) | When does Ghar Club early access to the Wedding Edit start? | 12 November, the newer date wins over the plan's 14 November |
+| Tanvi (Finance) | What was revenue in Q2 FY27? | Not found: restricted |
+| Anand (CFO) | What was revenue in Q2 FY27? | ₹11.9 crore, up 21 percent, from the restricted PDF |
+| Vikram (Operations) | What does BharatFleet charge to deliver a sofa? | From the restricted carrier contract |
+| Sana (Marketing) | What is the hotel cap for a manager? | ₹6,500, from a table in the Word handbook |
+| Karan (BharatFleet) | How many days of earned leave do we get? | 15 days, never Desi Living's 18 |
 
 ## Demoing with a real company
 
-1. Write `company.json` in the shape of `examples/lumen/company.json`
+1. Write `company.json` in the shape of `examples/desiliving/company.json`
    (departments, users, roles `member` / `lead` / `executive`, extra grants,
    `sharing`: `none` or `patterns`).
 2. Put its documents in `docs/<brain>/<sensitivity>/`, where `<brain>` is
    `company` or a department id and `<sensitivity>` is `public`, `internal` or
-   `restricted`, like `examples/lumen/docs`.
+   `restricted`, like `examples/desiliving/docs`.
 3. Put the folder under `examples/` and run `uv run python scripts/load_examples.py`,
    or load it piece by piece:
 
@@ -146,7 +154,7 @@ Admin API: `POST /admin/maintain` and `POST /admin/learn`.
 - **Sales forecast**: what is forecast (units sold per day), the stock outlook
   and the decision it leads to, how the forecast is made in four steps, what
   drives it (recent level, growth, weekday rhythm, last year's same weeks,
-  promotions, Black Friday, measured from the product's own sales), the chart
+  promotions, Diwali and the festive season, measured from the product's own sales), the chart
   with 80% and 95% ranges, and every model's backtest scores. Any horizon from
   7 to 120 days.
 - **Who knows what**: a search drawn as a graph in the style of FalkorDB's own
@@ -222,13 +230,13 @@ uv run python -m secondbrain.signals
 ```
 
 Admin API: `POST /admin/signals/generate`. Stock data is sample data from
-`scripts/generate_lumen_inventory.py`, set against the forecasts.
+`scripts/generate_inventory.py`, set against the forecasts.
 
 ## Relationships (FalkorDB)
 
 FalkorDB runs in `docker compose` on port 56380. Its own **FalkorDB Browser**
 is on `http://localhost:53000` (log in with host `localhost`, port `6379`,
-then pick the graph `sb_lumen`). It is an admin tool: it shows a company's
+then pick the graph `sb_desiliving`). It is an admin tool: it shows a company's
 whole graph without per-person permissions, so never show it to a client with
 another company's data loaded. Entity extraction runs by
 itself after "Save to long-term" in the chat and after a document upload or
@@ -236,13 +244,13 @@ itself after "Save to long-term" in the chat and after a document upload or
 
 ```bash
 uv run python -m secondbrain.relationships                      # every company
-uv run python -m secondbrain.relationships --company root.lumen # one company
+uv run python -m secondbrain.relationships --company root.desiliving # one company
 ```
 
 On a database created before this feature, the same command first adds the
 new tables (`entities`, `memory_entities`, `entity_relations`,
 `entity_extractions`). Existing tables and rows are not changed. With the
-LiteLLM models it takes about 30 seconds for the Lumen demo data.
+LiteLLM models it takes about 30 seconds for the Desi Living demo data.
 
 PostgreSQL is the source of truth and the graphs are rebuilt from it, so
 FalkorDB keeps no volume: a company graph that is missing (for example after
@@ -250,27 +258,28 @@ a restart) is rebuilt automatically on the first query.
 
 ## Forecasting
 
-Lumen's sales history is synthetic: two years of daily sales for eight
-products, with seasons, Black Friday, promotions and a stockout. Both steps
+Desi Living's sales history is synthetic: daily sales for eight products from
+September 2024 to yesterday (5 November 2026), with seasons, Dhanteras and
+Diwali, the festive sale, wedding seasons, promotions and a stockout. Both steps
 also run at the end of `load_examples.sh`.
 
 ```bash
-uv run python scripts/generate_lumen_sales.py         # load history and promotions into root.lumen.merchandising
+uv run python scripts/generate_sales.py               # load history and promotions into root.desiliving.merchandising
 uv run python -m secondbrain.forecasting              # backtest, choose a model per product, store forecasts
-uv run python scripts/generate_lumen_sales.py --csv data/lumen_sales.csv --no-db   # CSV only
+uv run python scripts/generate_sales.py --csv data/desiliving_sales.csv --no-db   # CSV only
 ```
 
 The forecasting job prints each model's backtest error (WAPE) per product and
 is meant to run nightly. Then, as someone allowed to see Merchandising's data:
 
 ```bash
-curl -H 'X-User-Id: omar' 'localhost:8765/forecast?product=halo-lamp&horizon=28'
-curl -H 'X-User-Id: omar' localhost:8765/forecast/products
+curl -H 'X-User-Id: kabir' 'localhost:8765/forecast?product=brass-floor-lamp&horizon=28'
+curl -H 'X-User-Id: kabir' localhost:8765/forecast/products
 ```
 
 The answer has the forecast with ranges, the chosen model and why, every
 model's backtest scores, recent sales, and a nowcast adjustment when sales
-since the last run differ from the forecast. Nina (Support) gets a 404: she
+since the last run differ from the forecast. Neha (Support) gets a 404: she
 can't see Merchandising.
 
 `sales_daily` becomes a TimescaleDB hypertable when the extension is there.
@@ -288,10 +297,10 @@ The contract and setup are in [docs/INTEGRATION.md](docs/INTEGRATION.md).
 
 ```bash
 uv run python -m secondbrain.ingest schema                  # once, on a database created before ingestion
-uv run python -m secondbrain.ingest key create lumen "Lumen ERP"
+uv run python -m secondbrain.ingest key create desiliving "Desi Living ERP"
 docker compose up -d mosquitto                              # dev broker on 51883
 SB_MQTT_PORT=51883 SB_MQTT_TLS=false uv run python -m secondbrain.ingest.mqtt
-uv run python scripts/publish_sample_events.py              # a live day of Lumen events
+uv run python scripts/publish_sample_events.py              # a live day of Desi Living events
 ```
 
 ## Connecting the company models

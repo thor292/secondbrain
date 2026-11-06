@@ -19,16 +19,16 @@ def setup_acme(client, settings, history):  # noqa: F811
     run_forecasts(settings.admin_database_url, under="root.acme", horizon=56)
     with psycopg.connect(settings.admin_database_url) as conn:
         daily = {}
-        for sku in ("halo-lamp", "cloud-throw"):
+        for sku in ("brass-floor-lamp", "kantha-throw"):
             points = store.latest_forecast(conn, "root.acme.sales", sku)["points"]
             daily[sku] = sum(p["forecast"] for p in points) / len(points)
         store.save_inventory(conn, "root.acme.sales", [
             # Runs out within days, long lead time: must be ordered at once.
-            {"sku": "halo-lamp", "as_of": date(2026, 11, 4), "on_hand": int(daily["halo-lamp"] * 5), "on_order": 0,
+            {"sku": "brass-floor-lamp", "as_of": date(2026, 11, 6), "on_hand": int(daily["brass-floor-lamp"] * 5), "on_order": 0,
              "order_eta": None, "supplier": "Lampworks", "lead_time_days": 28, "unit_cost": 150},
-            {"sku": "aria-sofa", "as_of": date(2026, 11, 4), "on_hand": 0, "on_order": 50,
+            {"sku": "sheesham-sofa", "as_of": date(2026, 11, 6), "on_hand": 0, "on_order": 50,
              "order_eta": date(2026, 12, 2), "supplier": "Sofa Co", "lead_time_days": 42, "unit_cost": 980},
-            {"sku": "cloud-throw", "as_of": date(2026, 11, 4), "on_hand": int(daily["cloud-throw"] * 400), "on_order": 0,
+            {"sku": "kantha-throw", "as_of": date(2026, 11, 6), "on_hand": int(daily["kantha-throw"] * 400), "on_order": 0,
              "order_eta": None, "supplier": "Weavers", "lead_time_days": 21, "unit_cost": 46},
         ])
     # A note in Sales for the business signals to cite.
@@ -54,12 +54,12 @@ def test_stock_and_business_signals_with_permissions_and_feedback(client, settin
     assert set(asha) == {"stockout", "backorder", "excess_stock", "business"}
 
     stockout = asha["stockout"]
-    assert stockout["title"].startswith("Halo brass floor lamp runs out on")
+    assert stockout["title"].startswith("Moradabad brass floor lamp runs out on")
     assert "today and ask them to expedite" in stockout["action"]  # 5 days of stock, 28-day lead time
-    assert stockout["urgency"] == "high" and stockout["impact_value"] > 0
-    assert stockout["evidence"]["products"] == [{"brain": "root.acme.sales", "sku": "halo-lamp"}]
+    assert stockout["urgency"] == "high" and stockout["impact_value"] > 0 and stockout["impact"].startswith("About ₹")
+    assert stockout["evidence"]["products"] == [{"brain": "root.acme.sales", "sku": "brass-floor-lamp"}]
 
-    assert asha["backorder"]["title"] == "Aria linen sofa is out of stock until Dec 2"
+    assert asha["backorder"]["title"] == "Sheesham & linen 3-seater sofa is out of stock until Dec 2"
     assert "pre-orders" in asha["backorder"]["action"]
     assert "days of stock" in asha["excess_stock"]["title"] and asha["excess_stock"]["urgency"] == "low"
 
@@ -107,31 +107,31 @@ def test_time_passing_judges_outcomes_and_the_brain_remembers(client, settings, 
     run_forecasts(settings.admin_database_url, under="root.acme", horizon=56)
     with psycopg.connect(settings.admin_database_url) as conn:
         daily = {sku: sum(p["forecast"] for p in store.latest_forecast(conn, "root.acme.sales", sku)["points"]) / 56
-                 for sku in ("halo-lamp", "cloud-throw")}
+                 for sku in ("brass-floor-lamp", "kantha-throw")}
         store.save_inventory(conn, "root.acme.sales", [
             # Runs out in ~40 days; a 14-day lead time leaves time to reorder.
-            {"sku": "halo-lamp", "as_of": date(2026, 11, 4), "on_hand": int(daily["halo-lamp"] * 40), "on_order": 0,
+            {"sku": "brass-floor-lamp", "as_of": date(2026, 11, 6), "on_hand": int(daily["brass-floor-lamp"] * 40), "on_order": 0,
              "order_eta": None, "supplier": "Lampworks", "lead_time_days": 14, "unit_cost": 150},
             # Runs out in ~20 days and will be ignored.
-            {"sku": "cloud-throw", "as_of": date(2026, 11, 4), "on_hand": int(daily["cloud-throw"] * 20), "on_order": 0,
+            {"sku": "kantha-throw", "as_of": date(2026, 11, 6), "on_hand": int(daily["kantha-throw"] * 20), "on_order": 0,
              "order_eta": None, "supplier": "Weavers", "lead_time_days": 21, "unit_cost": 46},
         ])
     llm, embedder = build_models(settings)
     signals.run(settings, llm, "root.acme")
     by_sku = {s["evidence"]["products"][0]["sku"]: s for s in get_signals(client, "ravi") if s["kind"] == "stockout"}
-    client.post(f"/signals/{by_sku['halo-lamp']['id']}/feedback", json={"status": "acted"}, headers={"X-User-Id": "ravi"})
-    client.post(f"/signals/{by_sku['cloud-throw']['id']}/feedback", json={"status": "dismissed", "note": "not a priority"},
+    client.post(f"/signals/{by_sku['brass-floor-lamp']['id']}/feedback", json={"status": "acted"}, headers={"X-User-Id": "ravi"})
+    client.post(f"/signals/{by_sku['kantha-throw']['id']}/feedback", json={"status": "dismissed", "note": "not a priority"},
                 headers={"X-User-Id": "ravi"})
 
     result = evolution.advance(settings, llm, embedder, "root.acme", days=56)
     outcomes = {o["title"].split(" runs out")[0]: o["result"] for o in result["outcomes"]}
-    assert outcomes == {"Halo brass floor lamp": "prevented", "Cloud waffle throw": "happened"}
-    assert any("on order arrived" in a for a in result["products"]["halo-lamp"]["arrivals"])
-    assert result["products"]["cloud-throw"]["out_of_stock_days"] > 0
+    assert outcomes == {"Moradabad brass floor lamp": "prevented", "Kantha cotton throw": "happened"}
+    assert any("on order arrived" in a for a in result["products"]["brass-floor-lamp"]["arrivals"])
+    assert result["products"]["kantha-throw"]["out_of_stock_days"] > 0
 
     closed = {s["evidence"]["products"][0]["sku"]: s for s in get_signals(client, "ravi", include_closed=True)
               if s["kind"] == "stockout" and s["status"] != "open"}
-    assert closed["halo-lamp"]["outcome"] == "prevented" and closed["cloud-throw"]["outcome"] == "happened"
+    assert closed["brass-floor-lamp"]["outcome"] == "prevented" and closed["kantha-throw"]["outcome"] == "happened"
 
     # The brain remembers what happened, visible to the people who can see the product.
     with psycopg.connect(settings.admin_database_url) as conn:
@@ -139,10 +139,10 @@ def test_time_passing_judges_outcomes_and_the_brain_remembers(client, settings, 
             "SELECT content FROM memories WHERE source = 'signal outcome' AND brain_path = 'root.acme.sales'")]
         as_of = conn.execute("SELECT max(as_of) FROM inventory WHERE brain_path = 'root.acme.sales'").fetchone()[0]
     assert len(remembered) == 2 and all(m.startswith("Outcome: ") for m in remembered)
-    assert as_of == date(2026, 11, 4) + timedelta(days=56)
+    assert as_of == date(2026, 11, 6) + timedelta(days=56)
     # The order Ravi's action placed arrived once and isn't counted again.
     with psycopg.connect(settings.admin_database_url) as conn:
-        on_order = conn.execute("SELECT on_order FROM inventory WHERE sku = 'halo-lamp' AND brain_path = 'root.acme.sales'").fetchone()[0]
+        on_order = conn.execute("SELECT on_order FROM inventory WHERE sku = 'brass-floor-lamp' AND brain_path = 'root.acme.sales'").fetchone()[0]
     assert on_order == 0
 
     # New signals carry the track record: the one ignored warning came true.

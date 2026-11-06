@@ -116,7 +116,7 @@ class StubLLM:
             name = titles[0] if titles else "Acme"
             return json.dumps({"patterns": [
                 {"pattern": "Escalating larger customer credits to a lead keeps goodwill spending consistent.", "topic": "support"},
-                {"pattern": "Free shipping above 60 dollars lifts conversion.", "topic": "pricing"},
+                {"pattern": "Free shipping above 499 rupees lifts conversion.", "topic": "pricing"},
                 {"pattern": f"Teams at {name} prefer short briefs.", "topic": "process"},
             ]})
         if "maintain a company's memory" in system.lower():

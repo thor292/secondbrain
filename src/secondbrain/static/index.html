@@ -113,15 +113,18 @@ const COLORS = ["#8b7bff", "#33d6f2", "#f472b6", "#fb923c", "#34d399", "#fbbf24"
 const colorFor = (id) => COLORS[[...id].reduce((t, c) => t + c.charCodeAt(0), 0) % COLORS.length];
 // Questions that show the brain at its best, per person in the example companies.
 const SUGGEST = {
-  nina: [["Can I give a customer a 50 dollar credit without asking anyone?", "Department policy"], ["How many vacation days do I get?", "Falls back to the company brain"], ["What's the free shipping threshold right now?", "The newest note wins"]],
-  sofia: [["What's the free shipping threshold right now?", "She can't see Operations' note"], ["What is the hotel cap for a manager?", "From a table in a Word handbook"]],
-  leo: [["When does loyalty early access for Black Friday start?", "The newer date wins"]],
-  tom: [["What was gross margin in Q3?", "Restricted: not visible"]],
-  rachel: [["What was gross margin in Q3?", "From the restricted PDF"]],
-  karim: [["How many days of annual leave do we get?", "Brightpath's own policy, never Lumen's"]],
-  maya: [["What are our biggest risks before Black Friday?", "Across the whole company"], ["What did we agree with Nordlys?", "Supplier history"], ["How is Priya Shah's case going?", "A VIP customer"]],
+  neha: [["What is our Diwali shipping cutoff?", "Shipping policy"], ["Can I give a customer a ₹2,000 credit without asking anyone?", "Department policy"], ["What's the free shipping threshold right now?", "The newest note wins"], ["How does Ananya Reddy like to be contacted?", "A VIP customer"]],
+  sana: [["What's the free shipping threshold right now?", "She can't see Operations' note"], ["What is the hotel cap for a manager?", "From a table in a Word handbook"]],
+  rohan: [["When does Ghar Club early access to the Wedding Edit start?", "The newer date wins"], ["What's the theme of the Diwali campaign?", "From the Word campaign plan"]],
+  vikram: [["Which carrier handles sofas and what does it cost?", "Restricted carrier contract"], ["Who handles damaged brass lamps?", "Process across teams"]],
+  priya: [["Who handles damaged brass lamps?", "Process across teams"]],
+  kabir: [["What happened with the damaged brass lamps from Noor Metalcraft?", "Supplier history"]],
+  tanvi: [["What was Q2 revenue?", "Restricted: not visible"]],
+  anand: [["What was Q2 revenue?", "From the restricted PDF"], ["What was gross margin in Q2 FY27?", "From the restricted PDF"]],
+  karan: [["How many days of earned leave do we get?", "BharatFleet's own policy, never Desi Living's"], ["Who is Ananya Reddy?", "Another company's customer: nothing"]],
+  meera: [["What are our biggest risks before Diwali?", "Across the whole company"], ["What was Q2 revenue?", "Finance, seen by the CEO"], ["Which carrier handles sofas and what does it cost?", "Carrier contract"], ["What happened with the damaged brass lamps from Noor Metalcraft?", "Supplier history"]],
 };
-const GENERIC = [["What should I know about Black Friday?", "Plans and dates"], ["Who is our lamp supplier and how reliable are they?", "Supplier history"], ["What changed recently?", "Newest notes"]];
+const GENERIC = [["What is our Diwali shipping cutoff?", "Plans and dates"], ["Who handles damaged brass lamps?", "Process across teams"], ["What changed recently?", "Newest notes"]];
 
 async function api(path, options = {}) {
   const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
@@ -154,7 +157,7 @@ async function loadUsers() {
     const box = $("people"), groups = {};
     for (const u of state.users) (groups[u.home_brain.split(".")[1]] ||= []).push(u);
     box.replaceChildren(...Object.entries(groups).flatMap(([co, users]) => [
-      el("div", { class: "co" }, co === "lumen" ? "Lumen Home" : co === "brightpath" ? "Brightpath Logistics" : co),
+      el("div", { class: "co" }, co === "desiliving" ? "Desi Living" : co === "bharatfleet" ? "BharatFleet Logistics" : co),
       ...users.map((u) => el("button", { class: "who", "data-id": u.id, onclick: () => pick(u) }, avatar(u), el("div", {}, el("b", {}, short(u)), el("small", {}, role(u))))),
     ]));
     const wanted = new URLSearchParams(location.search).get("user");

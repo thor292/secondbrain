@@ -19,8 +19,8 @@ PREFIX = "sbk_"
 @dataclass(frozen=True)
 class IngestKey:
     id: str
-    company: str  # root.lumen
-    scope: str  # root.lumen or root.lumen.merchandising
+    company: str  # root.desiliving
+    scope: str  # root.desiliving or root.desiliving.merchandising
 
     def allows(self, brain: str) -> bool:
         return brain == self.scope or brain.startswith(self.scope + ".")

@@ -3,7 +3,7 @@
 Each backtest window pretends it is an earlier day: models see only the
 history up to then and forecast the next ``horizon`` days, which we already
 know. Windows are the most recent periods plus the same weeks last year, so a
-model that misses the holiday season can't win on quiet October weeks alone.
+model that misses the festive season can't win on quiet monsoon weeks alone.
 
 Real catalogues are uneven, so every product gets the test its history allows:
 
@@ -12,8 +12,7 @@ Real catalogues are uneven, so every product gets the test its history allows:
   only the models that can work on it compete (no year-over-year without a
   last year);
 - a product too new for any test gets a **cold start**: its recent average,
-  shaped by the rest of the shop's forecast (weekdays, promotions, Black
-  Friday), with wide ranges;
+  shaped by the rest of the shop's forecast (weekdays, promotions, Diwali), with wide ranges;
 - a product that stopped selling (or never sold) is forecast at zero rather
   than at its old average forever.
 
@@ -35,10 +34,10 @@ from datetime import date, timedelta
 import numpy as np
 import pandas as pd
 
-from secondbrain.forecasting import intervals, metrics, prepare, quality
+from secondbrain.forecasting import calendar, intervals, metrics, prepare, quality
 from secondbrain.forecasting.models import YEAR, Model, default_models
 
-DEFAULT_HORIZON = 56  # eight weeks: from early November it reaches past Christmas
+DEFAULT_HORIZON = 56  # eight weeks: from the festive sale it reaches past Diwali into the wedding season
 RECENT_WINDOWS = 3
 LEVELS = intervals.LEVELS
 MIN_TRAIN = 28  # days of history a model needs at the start of a window
@@ -66,15 +65,24 @@ class ProductForecast:
 
 
 def windows(cutoff: date, start: date, horizon: int) -> list[Window]:
-    """The most recent periods, and the same weeks a year ago when history allows."""
+    """The most recent periods, and the same weeks a year ago when history allows.
+
+    "The same weeks a year ago" are aligned on Diwali when the cutoff is in the
+    festive season (``calendar.same_day_last_year``): a forecast made three days
+    before Dhanteras is tested on the days from three days before last year's
+    Dhanteras, so the models are judged on the peak they are about to forecast.
+    A long horizon makes that window overlap the oldest recent one; the year-ago
+    window then takes its place.
+    """
     found = [Window(cutoff - timedelta(days=k * horizon), horizon, f"recent {k}")
              for k in range(1, RECENT_WINDOWS + 1)]
-    last_year = cutoff - timedelta(days=YEAR)
-    overlaps = any(abs((last_year - w.origin).days) < horizon for w in found)
-    if not overlaps:
-        found.append(Window(last_year, horizon, "same weeks last year"))
+    last_year = calendar.same_day_last_year(cutoff, YEAR)
     # Models need at least a few months to learn from.
-    return [w for w in found if (w.origin - start).days >= 3 * horizon]
+    enough = lambda origin: (origin - start).days >= 3 * horizon
+    if enough(last_year):
+        found = [w for w in found if abs((last_year - w.origin).days) >= horizon]
+        found.append(Window(last_year, horizon, "same weeks last year"))
+    return [w for w in found if enough(w.origin)]
 
 
 def plan_for(cutoff: date, start: date, horizon: int) -> list[Window]:
@@ -269,7 +277,7 @@ def _cold_start(p: prepare.Profile, rows: pd.DataFrame, days: pd.DatetimeIndex, 
     level = p.recent_level or (float(known["units"].mean()) if len(known) else 0.0)
     if shape is not None:
         forecast = level * shape
-        how = "shaped by the forecast for the shop's other products (weekdays, promotions, holidays)"
+        how = "shaped by the forecast for the shop's other products (weekdays, promotions, festivals)"
     else:
         forecast = np.full(horizon, level)
         how = "flat"

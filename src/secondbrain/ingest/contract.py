@@ -2,7 +2,7 @@
 
 Every message is an envelope around one record:
 
-    {"schema_version": 1, "event_id": "...", "company": "lumen",
+    {"schema_version": 1, "event_id": "...", "company": "desiliving",
      "brain": "merchandising", "data": {...}}
 
 The record's kind (``sale``, ``inventory``, ...) comes from the MQTT topic or
@@ -188,7 +188,7 @@ _LABEL = re.compile(r"^[A-Za-z0-9_]+$")
 class Envelope(Strict):
     schema_version: Literal[1]
     event_id: Annotated[str, Field(min_length=1, max_length=200)]
-    company: Text  # company id ("lumen") or path ("root.lumen")
+    company: Text  # company id ("desiliving") or path ("root.desiliving")
     brain: Text  # department id ("merchandising"), a deeper path ("sales.emea"), "_" for the company itself, or a full path
     sent_at: AwareDatetime | None = None
     data: dict
@@ -199,16 +199,16 @@ class Message:
     kind: str
     envelope: Envelope
     record: BaseModel
-    company: str  # root.lumen
-    brain: str  # root.lumen.merchandising
+    company: str  # root.desiliving
+    brain: str  # root.desiliving.merchandising
 
 
 def company_path(company: str) -> str:
-    """``lumen`` or ``root.lumen`` → ``root.lumen``."""
+    """``desiliving`` or ``root.desiliving`` → ``root.desiliving``."""
     path = company if company.startswith("root.") else f"root.{company}"
     labels = path.split(".")
     if len(labels) != 2 or not _LABEL.match(labels[1]):
-        raise ValueError(f"company must be a company id like 'lumen', not {company!r}")
+        raise ValueError(f"company must be a company id like 'desiliving', not {company!r}")
     return path
 
 

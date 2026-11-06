@@ -14,20 +14,20 @@ from secondbrain.signals import Record, Signal
 from tests.conftest import ADMIN_TOKEN
 from tests.test_forecasting import history, load_acme_sales  # noqa: F401  (fixture)
 
-TODAY = date(2026, 11, 4)
+TODAY = date(2026, 11, 6)
 
 
 def stockout(urgency="medium", due_in=14) -> Signal:
-    return Signal(kind="stockout", fingerprint="stockout:halo-lamp", title="Halo runs out", action="Order",
+    return Signal(kind="stockout", fingerprint="stockout:brass-floor-lamp", title="Halo runs out", action="Order",
                   reason="", impact="", urgency=urgency, confidence=0.5, due=TODAY + timedelta(days=due_in),
                   evidence={"facts": []},
-                  details={"sku": "halo-lamp", "as_of": TODAY.isoformat(),
+                  details={"sku": "brass-floor-lamp", "as_of": TODAY.isoformat(),
                            "runs_out": (TODAY + timedelta(days=due_in + 21)).isoformat()})
 
 
 def record(*events) -> dict[str, Record]:
     """Records from (status, note, outcome) events for the halo lamp's run-out warnings."""
-    records = {"stockout:halo-lamp": Record(), "kind:stockout": Record()}
+    records = {"stockout:brass-floor-lamp": Record(), "kind:stockout": Record()}
     for status, note, result in events:
         for r in records.values():
             r.add(status, note, result)
@@ -181,10 +181,10 @@ def test_learning_changes_live_signals_and_track_record(client, settings, histor
     load_acme_sales(settings, history)
     run_forecasts(settings.admin_database_url, under="root.acme", horizon=56)
     with psycopg.connect(settings.admin_database_url) as conn:
-        daily = sum(p["forecast"] for p in store.latest_forecast(conn, "root.acme.sales", "halo-lamp")["points"]) / 56
+        daily = sum(p["forecast"] for p in store.latest_forecast(conn, "root.acme.sales", "brass-floor-lamp")["points"]) / 56
         store.save_inventory(conn, "root.acme.sales", [
             # Order-by date three weeks out: low urgency, an early warning.
-            {"sku": "halo-lamp", "as_of": TODAY, "on_hand": int(daily * 50), "on_order": 0, "order_eta": None,
+            {"sku": "brass-floor-lamp", "as_of": TODAY, "on_hand": int(daily * 50), "on_order": 0, "order_eta": None,
              "supplier": "Lampworks", "lead_time_days": 21, "unit_cost": 150},
         ])
     llm = ScriptedLLM([])
@@ -195,7 +195,7 @@ def test_learning_changes_live_signals_and_track_record(client, settings, histor
     base = by_kind()["stockout"]
     assert base.urgency in ("low", "medium") and (base.due - TODAY).days > signals.SAFETY_DAYS
     with psycopg.connect(settings.admin_database_url) as conn:
-        add_history(conn, "root.acme", "halo-lamp", [
+        add_history(conn, "root.acme", "brass-floor-lamp", [
             ("dismissed", "We have a second warehouse", "false_alarm", 60),
             ("dismissed", "stock is in the other warehouse", "false_alarm", 60),
         ])
@@ -204,7 +204,7 @@ def test_learning_changes_live_signals_and_track_record(client, settings, histor
 
     # People acted later and still ran out: the pattern resets and urgency goes up.
     with psycopg.connect(settings.admin_database_url) as conn:
-        add_history(conn, "root.acme", "halo-lamp", [("acted", None, "happened_anyway", 120)])
+        add_history(conn, "root.acme", "brass-floor-lamp", [("acted", None, "happened_anyway", 120)])
     warning = by_kind()["stockout"]
     facts = " ".join(warning.evidence["facts"])
     assert warning.urgency == signals.HIGHER[base.urgency] and "even though someone acted" in facts and "Why " in facts
@@ -221,25 +221,25 @@ def test_learning_changes_live_signals_and_track_record(client, settings, histor
 
     # A discontinued product (an all-zero forecast) is excess stock with no sales expected, not "inf days".
     with psycopg.connect(settings.admin_database_url) as conn:
-        f = store.latest_forecast(conn, "root.acme.sales", "halo-lamp")
+        f = store.latest_forecast(conn, "root.acme.sales", "brass-floor-lamp")
         zero = [{**p, **{k: 0.0 for k in ("forecast", "lo80", "hi80", "lo95", "hi95") if k in p}} for p in f["points"]]
-        store.save_forecast(conn, "root.acme.sales", "halo-lamp", f["cutoff"], f["model"], f["reason"], zero, f["backtest"])
+        store.save_forecast(conn, "root.acme.sales", "brass-floor-lamp", f["cutoff"], f["model"], f["reason"], zero, f["backtest"])
         conn.commit()
     gone = by_kind()
     assert "stockout" not in gone
-    assert gone["excess_stock"].title.startswith("Halo brass floor lamp: no sales expected")
+    assert gone["excess_stock"].title.startswith("Moradabad brass floor lamp: no sales expected")
     assert "inf" not in gone["excess_stock"].title + gone["excess_stock"].reason
 
     # Product and supplier names count as identifying for root learning; their plain words don't.
     with psycopg.connect(settings.admin_database_url) as conn:
         forbidden = learning._forbidden_terms(conn, "root.acme", [])
-    assert {"halo", "lampworks"} <= forbidden and "lamp" not in forbidden
+    assert {"moradabad", "lampworks"} <= forbidden and "lamp" not in forbidden
 
 
 def test_outcome_lessons_reach_the_root_anonymously(client, settings):
     with psycopg.connect(settings.admin_database_url) as conn:
         # Acme shares patterns; Globex doesn't, so its outcomes never count.
-        add_history(conn, "root.acme", "halo-lamp",
+        add_history(conn, "root.acme", "brass-floor-lamp",
                     [("acted", None, "prevented", 30)] * 9 + [("acted", None, "happened_anyway", 30)]
                     + [("dismissed", "not a priority", "happened", 60)] * 4 + [("expired", None, "happened", 0)] * 3
                     + [("dismissed", "we have a second warehouse", "false_alarm", 60)], lead=21)
@@ -260,7 +260,7 @@ def test_outcome_lessons_reach_the_root_anonymously(client, settings):
     # Nothing new, nothing stored twice; new outcomes replace a lesson rather than add one.
     assert client.post("/admin/learn", headers={"X-Admin-Token": ADMIN_TOKEN}).json()["outcome_lessons"] == []
     with psycopg.connect(settings.admin_database_url) as conn:
-        add_history(conn, "root.acme", "halo-lamp", [("acted", None, "happened_anyway", 30)] * 5)
+        add_history(conn, "root.acme", "brass-floor-lamp", [("acted", None, "happened_anyway", 30)] * 5)
     again = client.post("/admin/learn", headers={"X-Admin-Token": ADMIN_TOKEN}).json()["outcome_lessons"]
     assert "Run-out warnings acted on within two days were prevented about six times in ten." in again
     with psycopg.connect(settings.admin_database_url) as conn:

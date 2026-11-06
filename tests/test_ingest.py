@@ -276,13 +276,13 @@ def test_refresh_is_debounced_per_company():
 
 
 def test_refresh_company_forecasts_and_signals_from_ingested_stock(api, db, settings):
-    from scripts.generate_lumen_sales import generate
+    from scripts.generate_sales import generate
     from secondbrain.ingest.pipeline import refresh_company
     from secondbrain.models import build_models
 
     key = new_key(api)
     rows, _ = generate()
-    lamp = [r for r in rows if r["sku"] == "halo-lamp"]
+    lamp = [r for r in rows if r["sku"] == "brass-floor-lamp"]  # sent as halo-lamp below
     text = "sku,day,units,revenue,discount,in_stock\n" + "\n".join(
         f"halo-lamp,{r['day']},{r['units']},{r['revenue']},{r['discount']},{str(r['in_stock']).lower()}" for r in lamp)
     post(api, key, "product", msg("p1", {"sku": "halo-lamp", **LAMP}))

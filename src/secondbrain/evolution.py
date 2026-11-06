@@ -45,6 +45,7 @@ from secondbrain.config import Settings, get_settings
 from secondbrain.forecasting import store
 from secondbrain.forecasting.__main__ import run as run_forecasts
 from secondbrain.memory.store import vector_literal
+from secondbrain.money import inr_short
 from secondbrain.models import LLM, Embedder
 
 FORECAST_HORIZON = 120
@@ -455,12 +456,12 @@ def judge(conn: psycopg.Connection, embedder: Embedder, settings: Settings, comp
         elif acted:
             outcome = "happened_anyway"
             detail = (f"{d['name']}: acted on the warning, but it still ran out on {_fmt(out_days[0])} "
-                      f"before the order arrived; about {lost:,} sales lost (${lost_value:,.0f}).")
+                      f"before the order arrived; about {lost:,} sales lost ({inr_short(lost_value)}).")
             value = -lost_value
         elif out_days:
             outcome = "happened"
             detail = (f"{d['name']}: the warning was not acted on and it ran out on {_fmt(out_days[0])}, as predicted "
-                      f"for {_fmt(predicted)}; about {lost:,} sales lost (${lost_value:,.0f}).")
+                      f"for {_fmt(predicted)}; about {lost:,} sales lost ({inr_short(lost_value)}).")
             value = -lost_value
         else:
             outcome = "false_alarm"
@@ -701,7 +702,7 @@ def main() -> None:
     from secondbrain.models import build_models
 
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--company", default="root.lumen")
+    parser.add_argument("--company", default="root.desiliving")
     parser.add_argument("--days", type=int, default=28)
     parser.add_argument("--refresh-only", action="store_true", help="no simulated sales: grade, judge and recalculate")
     args = parser.parse_args()

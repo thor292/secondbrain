@@ -131,7 +131,7 @@
 <body>
 <main class="page">
   <div class="head">
-    <div><div class="eyebrow" id="who-eyebrow">Lumen Home</div><h1>Explore the brain</h1></div>
+    <div><div class="eyebrow" id="who-eyebrow">Desi Living</div><h1>Explore the brain</h1></div>
     <div class="tabs" id="tabs">
       <button type="button" data-tab="signals" class="on">⚡ Decision signals</button>
       <button type="button" data-tab="forecast">📈 Sales forecast</button>
@@ -161,7 +161,7 @@
 <script>
 const { el, svg, money, shortMoney, pct, fmtDay, countUp, kpi } = SB;
 const $ = (id) => document.getElementById(id);
-const EXAMPLES = ["Priya Shah", "Nordlys", "Aria linen sofa", "Hearth Freight", "Black Friday", "Casa Forma", "UPS", "gross margin"];
+const EXAMPLES = ["Ananya Reddy", "Noor Metalcraft", "Sheesham & linen 3-seater sofa", "BharatFleet Logistics", "Diwali", "Saharanpur Woodcraft", "Delhivery", "gross margin"];
 const state = { user: null, filter: "all" };
 const userSelect = el("select", { id: "user" });
 SB.nav("explore", el("span", { class: "persona" }, "Viewing as", userSelect));
@@ -259,10 +259,10 @@ async function loadProducts() {
   const select = $("product");
   select.replaceChildren();
   if (status !== 200 || !body.length) {
-    for (const [sku, name] of [["halo-lamp", "Halo brass floor lamp"], ["aria-sofa", "Aria linen sofa"]]) select.append(el("option", { value: sku }, name));
+    for (const [sku, name] of [["brass-floor-lamp", "Moradabad brass floor lamp"], ["sheesham-sofa", "Sheesham & linen 3-seater sofa"]]) select.append(el("option", { value: sku }, name));
   } else {
     for (const p of body) select.append(el("option", { value: p.sku }, p.name));
-    select.value = body.some((p) => p.sku === "halo-lamp") ? "halo-lamp" : body[0].sku;
+    select.value = body.some((p) => p.sku === "brass-floor-lamp") ? "brass-floor-lamp" : body[0].sku;
   }
   loadForecast();
 }
@@ -270,7 +270,9 @@ async function loadProducts() {
 const LABELS = { seasonal_naive: "Repeat last week", year_over_year: "Last year × growth", ets: "ETS (statistical)", gradient_boosting: "Gradient boosting",
   croston: "Croston (sporadic)", tsb: "TSB (sporadic)", adida: "ADIDA (sporadic)", cold_start: "Recent average (new)", discontinued: "Zero (stopped)", no_sales: "Zero (no sales yet)" };
 const label = (m) => LABELS[m] || m;
-const DRIVER_ICON = { "Recent level": "📍", Growth: "🚀", "Weekday rhythm": "📅", "Same weeks last year": "🔁", Promotions: "🏷️", "Black Friday effect": "🛍️" };
+// Diwali moves every year (lunar calendar); the chart marks it.
+const DIWALI = new Set(["2024-11-01", "2025-10-20", "2026-11-08", "2027-10-29"]);
+const DRIVER_ICON = { "Recent level": "📍", Growth: "🚀", "Weekday rhythm": "📅", "Same weeks last year": "🔁", Promotions: "🏷️", "Diwali effect": "🪔", "Festive season effect": "🪔", "Festive effect": "🪔" };
 
 async function loadForecast() {
   const out = $("forecast-out");
@@ -287,9 +289,9 @@ async function loadForecast() {
 
   const top = el("div", { class: "fc-top" },
     el("div", { class: "kpi glow rise" }, el("div", { class: "k" }, `${product} · next ${days.length} days`),
-      (() => { const v = el("div", { class: "big" }); countUp(v, total, (x) => Math.round(x).toLocaleString()); return v; })(),
+      (() => { const v = el("div", { class: "big" }); countUp(v, total, (x) => Math.round(x).toLocaleString("en-IN")); return v; })(),
       el("div", { class: "d" }, `units expected, ${fmtDay(days[0].day)} – ${fmtDay(days[days.length - 1].day)}`)),
-    kpi("Busiest day", `${fmtDay(peak.day)}`, { d: `~${Math.round(peak.forecast).toLocaleString()} units`, delay: 70 }),
+    kpi("Busiest day", `${fmtDay(peak.day)}`, { d: `~${Math.round(peak.forecast).toLocaleString("en-IN")} units`, delay: 70 }),
     kpi("Accuracy on past data", wape == null ? "—" : (1 - wape) * 100, { format: (x) => Math.round(x) + "%", d: "tested on periods it never saw", delay: 140, glow: "glow-good" }),
     kpi("Forecast quality", q.grade ? q.grade[0].toUpperCase() + q.grade.slice(1) : "—", { cls: gradeCls, d: q.pattern ? q.pattern + " sales" : "", tip: q.summary, delay: 210 }));
 
@@ -313,7 +315,7 @@ async function loadForecast() {
   const drivers = el("div", { class: "card section" }, el("div", { class: "section-head" }, el("div", {}, el("h2", {}, "What drives it"),
     el("p", {}, "Patterns measured from this product's own sales."))),
     el("div", { class: "drivers" }, body.drivers.map((d, i) => el("div", { class: "driver rise", style: { animationDelay: i * 60 + "ms" } },
-      el("div", { class: "n" }, (DRIVER_ICON[d.name] || "•") + "  " + d.name), el("div", { class: "v" }, d.value), el("div", { class: "e" }, d.explanation)))));
+      el("div", { class: "n" }, (DRIVER_ICON[d.name] || (/diwali|festive|dhanteras/i.test(d.name) ? "🪔" : "•")) + "  " + d.name), el("div", { class: "v" }, d.value), el("div", { class: "e" }, d.explanation)))));
 
   out.replaceChildren(top, body.stock ? stockCard(body) : "", chartCard, pipeline, drivers, backtestCard(body));
 }
@@ -352,8 +354,8 @@ function forecastChart(hist, days) {
     svg("text", { x: x(off) + 6, y: P.t + 10, style: "fill: var(--cyan); font-weight: 700" }, "TODAY"));
   series.forEach((p, i) => {
     if (p.day.endsWith("-01")) g.append(svg("text", { x: x(i), y: H - 8, "text-anchor": "middle" }, fmtDay(p.day)));
-    if (p.day.endsWith("-11-27")) g.append(svg("line", { x1: x(i), x2: x(i), y1: P.t, y2: H - P.b, stroke: "var(--pink)", "stroke-dasharray": "2 4" }),
-      svg("text", { x: x(i) + 5, y: P.t + 26, style: "fill: var(--pink); font-weight: 700" }, "Black Friday"));
+    if (DIWALI.has(p.day)) g.append(svg("line", { x1: x(i), x2: x(i), y1: P.t, y2: H - P.b, stroke: "var(--pink)", "stroke-dasharray": "2 4" }),
+      svg("text", { x: x(i) + 5, y: P.t + 26, style: "fill: var(--pink); font-weight: 700" }, "Diwali"));
   });
   // Hover: a crosshair and the day's numbers.
   const cross = svg("line", { y1: P.t, y2: H - P.b, stroke: "var(--border-hi)", opacity: 0 });
@@ -368,9 +370,9 @@ function forecastChart(hist, days) {
     const i = Math.max(0, Math.min(n - 1, Math.round(((sx - P.l) / (W - P.l - P.r)) * (n - 1)))), p = series[i];
     cross.setAttribute("x1", x(i)); cross.setAttribute("x2", x(i)); cross.setAttribute("opacity", 1);
     dot.setAttribute("cx", x(i)); dot.setAttribute("cy", y(p.v)); dot.setAttribute("opacity", 1);
-    tip.replaceChildren(el("b", {}, new Date(p.day + "T00:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })),
-      ...(p.past ? [el("div", {}, `Sold ${p.v.toLocaleString()} units`)]
-        : [el("div", {}, `Expected ${Math.round(p.v).toLocaleString()} units`), el("div", { class: "muted" }, `80% range ${Math.round(p.lo80)}–${Math.round(p.hi80)}`)]));
+    tip.replaceChildren(el("b", {}, new Date(p.day + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", month: "short", day: "numeric" })),
+      ...(p.past ? [el("div", {}, `Sold ${p.v.toLocaleString("en-IN")} units`)]
+        : [el("div", {}, `Expected ${Math.round(p.v).toLocaleString("en-IN")} units`), el("div", { class: "muted" }, `80% range ${Math.round(p.lo80)}–${Math.round(p.hi80)}`)]));
     const px = (x(i) / W) * r.width;
     tip.style.left = Math.min(r.width - 170, px + 14) + "px"; tip.style.top = (y(p.v) / H) * r.height - 30 + "px"; tip.style.opacity = 1;
   });
@@ -391,7 +393,7 @@ function stockCard(body) {
     svg("polyline", { points: pts, fill: "none", stroke: "var(--good)", "stroke-width": 2.6, class: "draw" }),
     svg("line", { x1: P.l, x2: W - P.r, y1: y(0), y2: y(0), stroke: "var(--bad)", "stroke-dasharray": "5 5" }),
     svg("text", { x: P.l - 8, y: y(0) + 4, "text-anchor": "end" }, "0"),
-    svg("text", { x: P.l - 8, y: y(max) + 10, "text-anchor": "end" }, Math.round(max).toLocaleString()),
+    svg("text", { x: P.l - 8, y: y(max) + 10, "text-anchor": "end" }, Math.round(max).toLocaleString("en-IN")),
     outAt >= 0 ? [svg("circle", { cx: x(outAt), cy: y(0), r: 7, fill: "var(--bad)", class: "pop" }),
       svg("text", { x: x(outAt), y: y(0) - 14, "text-anchor": "middle", style: "fill: var(--bad); font-weight: 800" }, "Runs out " + fmtDay(proj[outAt].day))] : null,
     proj.map((p, i) => (p.day.endsWith("-01") ? svg("text", { x: x(i), y: H - 6, "text-anchor": "middle" }, fmtDay(p.day)) : null)));
@@ -662,9 +664,9 @@ async function init() {
   const users = res.ok ? await res.json() : [];
   for (const u of users) userSelect.append(el("option", { value: u.id }, u.name));
   const params = new URLSearchParams(location.search), wanted = params.get("user");
-  userSelect.value = users.some((u) => u.id === wanted) ? wanted : (users.find((u) => u.id === "omar") || users[0]).id;
+  userSelect.value = users.some((u) => u.id === wanted) ? wanted : (users.find((u) => u.id === "kabir") || users[0]).id;
   state.user = userSelect.value;
-  $("who-eyebrow").textContent = "Lumen Home · " + who();
+  $("who-eyebrow").textContent = "Desi Living · " + who();
   $("examples").replaceChildren(...EXAMPLES.map((q) => el("button", { type: "button", class: "chip", onclick: () => search(q) }, q)));
   const tab = params.get("tab");
   if (["experts", "forecast", "evolution"].includes(tab)) showTab(tab);
@@ -692,7 +694,7 @@ function goLive() {
 userSelect.onchange = () => {
   state.user = userSelect.value;
   goLive();
-  $("who-eyebrow").textContent = "Lumen Home · " + who();
+  $("who-eyebrow").textContent = "Desi Living · " + who();
   const url = new URL(location); url.searchParams.set("user", state.user); history.replaceState(null, "", url);
   loadSignals(); loadProducts();
   if (!$("tab-evolution").classList.contains("hidden")) loadEvolution();

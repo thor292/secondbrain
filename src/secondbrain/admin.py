@@ -3,8 +3,8 @@
 These run as the admin role, outside row-level security, so they are only
 reachable from the CLI or the token-protected admin API.
 
-    uv run python -m secondbrain.admin onboard examples/lumen/company.json
-    uv run python -m secondbrain.admin import root.lumen.support examples/lumen/docs/support --sensitivity internal
+    uv run python -m secondbrain.admin onboard examples/desiliving/company.json
+    uv run python -m secondbrain.admin import root.desiliving.support examples/desiliving/docs/support --sensitivity internal
 """
 
 import argparse

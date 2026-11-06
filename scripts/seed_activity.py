@@ -1,9 +1,10 @@
-"""Add realistic notes from Lumen Home's people through the normal remember -> consolidate flow.
+"""Add realistic notes from Desi Living's people through the normal remember -> consolidate flow.
 
 Gives the demo episodic and person memories, not only imported documents.
 A few notes deliberately update facts from the documents (free shipping
-threshold, early access date) or repeat earlier notes, so memory maintenance
-has something to resolve. Run after scripts/load_examples.py.
+threshold, Ghar Club early access date, sofa restock) or repeat earlier notes
+(a VIP customer's contact preference, said twice in different words), so
+memory maintenance has something to resolve. Run after scripts/load_examples.py.
 """
 
 from secondbrain import learning, maintenance
@@ -15,44 +16,45 @@ from secondbrain.sensitivity import Sensitivity
 from secondbrain.service import SecondBrain
 
 NOTES = {
-    "daniel": [
-        ("Storm in the Midwest: UPS delayed ground shipments to Chicago and Detroit by 2 days this week", "internal"),
-        ("From November 1 the free shipping threshold drops from 75 dollars to 60 dollars for the holiday season", "internal"),
-        ("Reno warehouse adds a second shift from November 15 to December 20 to handle holiday volume", "internal"),
+    "vikram": [
+        ("Festival rush: Delhivery delayed parcels to Delhi NCR and Kolkata pincodes by 2 days this week; Blue Dart express is on time", "internal"),
+        ("From Dhanteras (6 November) to 15 November the free shipping threshold drops from ₹999 to ₹699 for Diwali and the start of the wedding season", "internal"),
+        ("Hoskote warehouse keeps the second shift and Sunday working until 15 November to clear Diwali and wedding season volume", "internal"),
     ],
-    "ivy": [
-        ("Received 40 damaged Halo floor lamps from Nordlys today, quarantined in aisle Q and reported to Merchandising", "internal"),
-        ("Daniel prefers incident updates in the #ops-alerts Slack channel, not email", "internal"),
+    "priya": [
+        ("Received 36 damaged Moradabad brass floor lamps from Noor Metalcraft today with dented bases, quarantined in bay Q at Hoskote and reported to Kabir in Merchandising", "internal"),
+        ("Vikram prefers incident updates in the #ops-alerts Slack channel, not email", "internal"),
     ],
-    "nina": [
-        ("Customer Priya Shah reported a second damaged Aria lamp today; sent a replacement and a 25 dollar goodwill credit", "internal"),
-        ("Priya Shah is a VIP customer and prefers order updates by SMS", "internal"),
-        ("Priya Shah wants updates by text message rather than email", "internal"),
+    "neha": [
+        ("Customer Ananya Reddy from Bengaluru reported a second damaged brass floor lamp today; sent a replacement and a ₹500 goodwill credit", "internal"),
+        ("Ananya Reddy is a VIP customer and prefers order updates on WhatsApp", "internal"),
+        ("Ananya Reddy wants updates as WhatsApp messages rather than phone calls or email", "internal"),
     ],
     "arjun": [
-        ("Weekly support review today: where-is-my-order tickets up 35 percent after the UPS delays in the Midwest", "internal"),
-        ("Approved a 120 dollar credit for a customer whose Aria sofa delivery was missed twice by Hearth Freight", "internal"),
+        ("Weekly support review today: where-is-my-order tickets up 40 percent after the Delhivery festival delays in Delhi NCR", "internal"),
+        ("Approved a ₹2,500 credit for a customer in Pune whose sheesham sofa delivery slot was missed twice by BharatFleet", "internal"),
     ],
-    "leo": [
-        ("Creator partnership with @homebyjules confirmed for Black Friday: 3 Instagram posts and 1 reel", "internal"),
-        ("Loyalty early access for Black Friday moves from November 24 to November 23 to get ahead of competitors", "internal"),
+    "rohan": [
+        ("Creator partnership with @ghar.by.tara confirmed for Diwali: 3 Instagram posts and 1 reel featuring the brass diya & sandalwood candle set", "internal"),
+        ("Second Diwali creator, @chai.and.decor, posts a Hindi reel on the kantha throw and brass floor lamp on Dhanteras", "internal"),
+        ("Ghar Club early access to the Wedding Edit moves from 14 November to 12 November to get ahead of competing marketplace sales", "internal"),
     ],
-    "sofia": [
-        ("Leo prefers campaign briefs as one page Notion documents with the offer in the first line", "internal"),
-        ("Gift guide email draft for December 7 is ready for review, featuring lighting under 100 dollars", "internal"),
+    "sana": [
+        ("Rohan prefers campaign briefs as one page Notion documents with the offer in the first line", "internal"),
+        ("Wedding gifting email draft for 16 November is ready for review, featuring brass and textiles under ₹5,000", "internal"),
     ],
-    "omar": [
-        ("Casa Forma confirmed the Aria linen sofa is back in stock on December 2; lead time shortened to 6 weeks", "internal"),
-        ("Nordlys will credit us for the 40 damaged Halo lamps on the next invoice", "internal"),
+    "kabir": [
+        ("Saharanpur Woodcraft confirmed the sheesham sofa is back in stock on 30 November; lead time shortened to 5 weeks", "internal"),
+        ("Noor Metalcraft will issue a credit note for the 36 damaged brass floor lamps on the next invoice and will add corner protectors to the cartons", "internal"),
     ],
-    "tom": [
-        ("October month-end close finished on the 4th business day as planned", "internal"),
+    "tanvi": [
+        ("October month-end close finished on the 5th business day as planned, despite the festive volume", "internal"),
     ],
-    "rachel": [
-        ("Board meeting today: keep Black Friday discount depth at 20 percent to protect the 45 percent gross margin floor", "restricted"),
+    "anand": [
+        ("Board meeting today: keep the Diwali discount depth at 20 percent to protect the 45 percent gross margin", "restricted"),
     ],
-    "hana": [
-        ("Two open roles approved: Support agent (2 hires before December) and Performance marketer", "internal"),
+    "farah": [
+        ("Two open roles approved: Support agent speaking Hindi and Kannada (2 hires before the wedding season) and Performance marketer", "internal"),
         ("Arjun is the hiring manager for the two Support agent roles", "internal"),
     ],
 }

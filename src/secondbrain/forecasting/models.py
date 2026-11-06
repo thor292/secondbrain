@@ -88,7 +88,12 @@ class SeasonalNaive:
 
 
 class YearOverYear:
-    """Same weekday last year, scaled by recent growth. How merchants often plan."""
+    """Same weekday last year, scaled by recent growth. How merchants often plan.
+
+    Around Diwali "last year" is the same distance from last year's Diwali
+    (``calendar.same_day_last_year``): Diwali moves by up to three weeks, and a
+    merchant compares Diwali week with last Diwali week, not with the same dates.
+    """
 
     name = "year_over_year"
     description = "last year's same weeks, scaled by growth over the last 4 weeks"
@@ -110,12 +115,37 @@ class YearOverYear:
             if (cutoff - series.index.min()).days < YEAR + self.recent or (rows["day"].max() - cutoff).days > YEAR:
                 continue
             now = series.iloc[-self.recent:].sum()
-            year_ago = series.reindex(series.index[-self.recent:] - pd.Timedelta(days=YEAR)).sum()
+            year_ago = series.reindex(_last_year(series.index[-self.recent:])).sum()
             # A product that barely sold a year ago would otherwise get a wild growth factor.
             growth = float(np.clip(now / year_ago, 0.25, 4.0)) if year_ago > 0 else 1.0
-            last_year = series.reindex(rows["day"] - pd.Timedelta(days=YEAR)).to_numpy()
+            ago = _last_year(rows["day"])
+            plain = pd.DatetimeIndex(rows["day"] - pd.Timedelta(days=YEAR))
+            ago = ago.where(ago <= cutoff, plain)  # aligning on Diwali must not reach past the cutoff
+            last_year = series.reindex(ago).to_numpy()
             out[future.index.get_indexer(rows.index)] = last_year * growth
         return out
+
+
+def _last_year(days) -> pd.DatetimeIndex:
+    """The comparable day a year before each day (Diwali-aligned in the festive season)."""
+    return pd.DatetimeIndex([pd.Timestamp(calendar.same_day_last_year(d.date(), YEAR)) for d in days])
+
+
+def _aligned_last_year(frame: pd.DataFrame, level: pd.Series) -> tuple[pd.Series, pd.Series, pd.Series]:
+    """Each row's demand a year earlier, the week centred on that day, and the level then
+    (Diwali-aligned).
+
+    Days not in the frame (before the history, or after the cutoff) are NaN, so
+    nothing from the future can leak in.
+    """
+    week = frame.groupby("sku")["demand"].transform(lambda s: s.rolling(WEEK, center=True, min_periods=3).mean())
+    lookup = pd.DataFrame({"sku": frame["sku"], "day": frame["day"], "ly": frame["demand"], "ly_week": week,
+                           "ly_level": level})
+    days = frame["day"].drop_duplicates()
+    ago = pd.Series([pd.Timestamp(calendar.same_day_last_year(d.date(), YEAR)) for d in days], index=days.to_numpy())
+    keys = pd.DataFrame({"sku": frame["sku"], "day": frame["day"].map(ago)})
+    merged = keys.merge(lookup, on=["sku", "day"], how="left")
+    return tuple(pd.Series(merged[c].to_numpy(), index=frame.index) for c in ("ly", "ly_week", "ly_level"))
 
 
 class _StatsForecastModel:
@@ -233,7 +263,7 @@ class GradientBoosting:
 
     One model learns from every product (as in the M5 competition), predicting
     each day relative to the product's recent level so a sofa and a candle can
-    share what they learn about Black Friday. It forecasts every day directly,
+    share what they learn about Diwali. It forecasts every day directly,
     from features that are already known that far ahead.
 
     How far back "recent" is depends on how far ahead the day is: next week
@@ -246,7 +276,7 @@ class GradientBoosting:
     """
 
     name = "gradient_boosting"
-    description = "gradient boosted trees using promotions, holidays and last year's sales"
+    description = "gradient boosted trees using promotions, Indian festivals (Diwali, wedding season) and last year's sales"
     intermittent_only = False
     level_days = 28
     lag_buckets = (7, 14, 28, 56, 91, 182)
@@ -270,17 +300,34 @@ class GradientBoosting:
         dates = day.dt.date
         level = g.transform(lambda s: s.shift(lag).rolling(self.level_days, min_periods=7).mean())
         level = level.clip(lower=0.5)
+        to_diwali = dates.map(calendar.days_to_diwali)
+        festive = to_diwali.between(*calendar.FESTIVE_WINDOW)
+        last_year, last_year_week, level_then = _aligned_last_year(frame, level)
         feats = pd.DataFrame({
             "sku": frame["sku"].astype("category"),
             "weekday": day.dt.day_of_week,
-            "day_of_year": day.dt.day_of_year,
-            "to_black_friday": dates.map(calendar.days_to_black_friday).clip(-30, 40),
-            "to_christmas": dates.map(calendar.days_to_christmas).clip(-40, 10),
+            # Inside the festive window the day of the year would memorise where Diwali fell in
+            # past years (a lull on 6 Nov in 2024 and 2025, Dhanteras in 2026); the distance to
+            # Diwali says it instead, so the day of the year is left unknown there.
+            "day_of_year": day.dt.day_of_year.where(~festive),
+            # The Indian calendar: lunar festivals move, so the distance to them is the feature.
+            "to_diwali": to_diwali.clip(-45, 20),
+            "to_dhanteras": dates.map(calendar.days_to_dhanteras).clip(-10, 10),
+            "festive_sale": dates.map(calendar.days_since_festive_sale).clip(-10, 60),
+            "wedding_season": dates.map(calendar.is_wedding_season).astype(int),
+            "to_holi": dates.map(calendar.days_to_holi).clip(-10, 3),
+            "to_raksha_bandhan": dates.map(calendar.days_to_raksha_bandhan).clip(-10, 3),
+            "to_national_sale": dates.map(calendar.days_to_national_sale).clip(-7, 3),
             "discount": frame["discount"],
             "lag": lag,
             "recent_week": g.transform(lambda s: s.shift(lag).rolling(WEEK, min_periods=3).mean()) / level,
-            "last_year": g.shift(YEAR) / level,
-            "last_year_week": g.transform(lambda s: s.shift(YEAR - 3).rolling(WEEK, min_periods=3).mean()) / level,
+            # Last year's same day and week: 52 weeks back, or around Diwali the same distance from
+            # last year's Diwali (``calendar.same_day_last_year``).
+            "last_year": last_year / level,
+            "last_year_week": last_year_week / level,
+            # How far last year's same day rose above the level before it: a festival's lift,
+            # measured the same way as the target, so a sofa and a diya set can share it.
+            "last_year_lift": last_year / level_then,
         }, index=frame.index)
         return feats.assign(level=level)
 

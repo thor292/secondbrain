@@ -252,7 +252,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {company: len(items) for company, items in result.items()}
 
     class Simulation(BaseModel):
-        company: str = "root.lumen"
+        company: str = "root.desiliving"
         days: int = 14
         policy: Literal["as_is", "follow", "ignore"] = "as_is"
 
