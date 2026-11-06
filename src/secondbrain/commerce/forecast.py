@@ -538,6 +538,27 @@ class LiveAccuracy:
         self.plat_abs: dict[int, float] = {}
         self.plat_y: dict[int, float] = {}
         self.last: dict = {}
+        # per merchant, so any branch of the tree (a platform, one merchant) gets its own accuracy
+        self.mer = {k: np.zeros(0) for k in ("abs", "y", "naive_abs", "naive_y", "m_abs")}
+
+    def _mer_add(self, key: str, m: np.ndarray, values: np.ndarray) -> None:
+        a = self.mer[key]
+        if len(m):
+            need = int(m.max()) + 1
+            if need > len(a):
+                a = self.mer[key] = np.concatenate([a, np.zeros(need - len(a) + 64)])
+            a[:need] += np.bincount(m, values, need)
+
+    def scoped(self, merchants: np.ndarray) -> dict:
+        """WAPE over the merchants in a boolean mask: per product, per merchant (daily totals), seasonal naive."""
+        def total(key):
+            a = self.mer[key]
+            k = min(len(a), len(merchants))
+            return float(a[:k][merchants[:k]].sum())
+        y, ny = total("y"), total("naive_y")
+        return {"wape": round(total("abs") / y, 4) if y else None,
+                "merchant_wape": round(total("m_abs") / y, 4) if y else None,
+                "baseline_wape": round(total("naive_abs") / ny, 4) if ny else None}
 
     def score(self, s: dict, platform: np.ndarray, merchant: np.ndarray) -> None:
         rows, y, f = s["rows"], s["y"].astype(float), s["f"]
@@ -560,6 +581,11 @@ class LiveAccuracy:
             self.plat_y[int(pid)] = self.plat_y.get(int(pid), 0.0) + y[sel].sum()
         nm = int(m.max()) + 1
         my, mf = np.bincount(m, y, nm), np.bincount(m, f, nm)
+        self._mer_add("abs", m, err)
+        self._mer_add("y", m, y)
+        self._mer_add("naive_abs", m[ok], np.abs(y[ok] - s["naive"][ok]))
+        self._mer_add("naive_y", m[ok], y[ok])
+        self._mer_add("m_abs", np.arange(nm), np.abs(my - mf))
         self.m_abs += np.abs(my - mf).sum()
         self.m_y += my.sum()
         self.m_naive_abs += np.abs(np.bincount(m[ok], y[ok], nm) - np.bincount(m[ok], s["naive"][ok], nm)).sum()

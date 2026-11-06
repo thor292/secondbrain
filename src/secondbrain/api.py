@@ -19,6 +19,7 @@ from psycopg.rows import dict_row
 from pydantic import BaseModel
 
 from secondbrain import admin, demo, evolution, learning, live, maintenance, relationships, signals, tree
+from secondbrain.commerce import ask as commerce_chat
 from secondbrain.commerce import contract as commerce
 from secondbrain.documents import UnsupportedDocument, extract_text
 from secondbrain.forecasting.api import build_router as forecast_router
@@ -43,6 +44,16 @@ class RememberRequest(BaseModel):
 
 class AskRequest(BaseModel):
     question: str
+
+
+class CommerceScope(BaseModel):
+    level: Literal["hq", "platform", "merchant"] = "hq"
+    id: str | None = None
+
+
+class CommerceAskRequest(BaseModel):
+    question: str
+    scope: CommerceScope = CommerceScope()
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -308,6 +319,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         except httpx.HTTPError:
             raise HTTPException(503, "The Live Commerce engine is not running (uv run python -m secondbrain.commerce)")
         return Response(r.content, r.status_code, media_type=r.headers.get("content-type"))
+
+    @app.post("/commerce/ask")
+    def commerce_ask(body: CommerceAskRequest, brain: Brain):
+        """A question over the platforms, answered from the engine's live data for one scope (HQ, a platform,
+        a merchant). The scope's data is filtered before the model sees it."""
+        question = body.question.strip()
+        if not question or len(question) > 1000:
+            raise HTTPException(400, "Ask a question of up to 1000 characters")
+        try:
+            return commerce_chat.answer(brain.llm, question, body.scope.level, body.scope.id)
+        except commerce_chat.EngineDown:
+            raise HTTPException(503, "The Live Commerce engine is not running (uv run python -m secondbrain.commerce)")
+        except commerce_chat.BadScope as exc:
+            raise HTTPException(exc.status, exc.detail)
 
     @app.post("/admin/learn", dependencies=[Depends(require_admin)])
     def learn(brain: Brain):

@@ -317,3 +317,202 @@ def test_drop_persistence_is_learned_from_flagged_products_without_offers(engine
     engine.drop_obs = [(0.0, 1.0, False)] * 45   # dips that fully reverted
     assert engine.persistence() == pytest.approx(0.05)
     assert engine.persistence(True) == pytest.approx(0.5)
+
+
+# ------------------------------------------------------------------ command centre: HQ, Graph and Chat
+
+MERCHANTS = [  # (id, platform, name, category, product category, price, cost)
+    ("shopify-0001", "shopify", "Desi Living", "Home Decor", "Fashion", 1000.0, 500.0),
+    ("shopify-0002", "shopify", "Kurta Co", "Fashion", "Fashion", 1200.0, 600.0),
+    ("shopify-0003", "shopify", "Silk Route", "Fashion", "Fashion", 900.0, 450.0),
+    ("dmart-0001", "dmart", "DMart Powai", "Hypermarket", "Staples", 100.0, 90.0),
+    ("dmart-0002", "dmart", "DMart Thane", "Hypermarket", "Staples", 120.0, 107.0),
+]
+
+
+def feed_network(eng, rate=30.0, seed=2):
+    rng = np.random.default_rng(seed)
+    world = {"started_ms": 1, "sim_start": C.SIM_START,
+             "platforms": [{"id": "shopify", "name": "Shopify", "kind": "D2C", "color": "#95BF47"},
+                           {"id": "dmart", "name": "DMart", "kind": "Value", "color": "#00833E"}],
+             "merchants": [{"id": m, "platform": p, "name": n, "city": "Mumbai", "category": c, "x": 0.5, "y": 0.5}
+                           for m, p, n, c, *_ in MERCHANTS], "customers": 5000}
+    batch = [(C.WORLD, world, 0)]
+    days = [SIM_DAY - timedelta(C.HISTORY_DAYS - d) for d in range(C.HISTORY_DAYS)]
+    for m, p, n, c, pc, price, cost in MERCHANTS:
+        skus = [f"{m}-S{k}" for k in range(2)]
+        t = lambda kind: C.merchant_topic(p, m, kind)
+        batch.append((t("catalog"), {"products": [{"sku": s, "name": f"{n} item {k}", "category": pc, "price": price,
+                                                    "cost": cost, "stock": 400, "lead_days": 5, "perishable": False}
+                                                   for k, s in enumerate(skus)]}, 0))
+        batch.append((t("history"), {"days": [d.isoformat() for d in days], "skus": skus,
+                                     "units": [[int(rng.poisson(rate * WEEKDAY[d.weekday()])) for _ in skus] for d in days],
+                                     "prices": [[price] * 2 for _ in days]}, 0))
+    eng.process(batch)
+
+
+def network_hours(eng, hours, day=SIM_DAY, seed=3, rate=30.0):
+    rng = np.random.default_rng(seed)
+    share = _PRIOR / _PRIOR.sum()
+    for h in hours:
+        ts = (datetime.combine(day, datetime.min.time()) + timedelta(hours=h, minutes=59)).isoformat()
+        now = C.wall_ms()
+        batch = []
+        for m, p, n, c, pc, price, cost in MERCHANTS:
+            orders = [{"id": f"{m}-{h}-{k}", "customer": f"{m}-c{rng.integers(60)}", "sku": f"{m}-S{k % 2}", "qty": 1,
+                       "price": price, "offer": None}
+                      for k in range(rng.poisson(2 * rate * WEEKDAY[day.weekday()] * share[h]))]
+            batch.append((C.merchant_topic(p, m, "orders"), {"sent_ms": now, "sim_ts": ts, "orders": orders}, now))
+        batch.append((C.CLOCK, {"sent_ms": now, "sim_ts": ts, "speed": 3600, "running": True}, now))
+        eng.process(batch)
+
+
+def fake_signal(eng, merchant, urgency="medium", revenue=1000.0, kind="restock"):
+    m = eng.reg.merchant_index[merchant]
+    i = eng.reg.series_of[m][0]
+    eng._queue({"kind": kind, "i": i, "score": revenue, "urgency": urgency, "title": f"{kind} at {merchant}",
+                "detail": "test", "confidence": 0.5, "action": {"type": "restock", "units": 10, "hours": 72},
+                "expected": {"units": 10, "revenue": revenue, "margin": 0.2, "uplift_units": 1},
+                "evidence": eng._evidence(i, 1, 1, 0, 1, -1)}, m)
+    eng._flush(C.wall_ms())
+
+
+def closed_offer(eng, merchant, discount=0.2, base=50.0, units=70.0, stockout=False):
+    m = eng.reg.merchant_index[merchant]
+    i = eng.reg.series_of[m][0]
+    start = eng.now
+    o = Offer(f"sig-x{len(eng.outcome_log)}", i, eng.reg.merchants[m]["platform"], merchant,
+              eng.reg.merchants[m]["name"], eng.reg.sku[i], eng.reg.name[i], eng.reg.category[i], discount, start,
+              start + timedelta(hours=48), "merchant", float(eng.reg.price[i]), base, 5.0, -2.5, assured_uplift=2.0)
+    o.units, o.stockout = units, stockout
+    eng._log_outcome(o, eng.book.evaluate(o))
+
+
+@pytest.fixture
+def network(engine):
+    feed_network(engine)
+    for d in range(6):    # six closed days (six daily price checks), then half of the next
+        network_hours(engine, range(24), day=SIM_DAY + timedelta(d), seed=3 + d)
+    network_hours(engine, range(0, 12), day=SIM_DAY + timedelta(6), seed=10)
+    return engine
+
+
+def test_lessons_come_only_from_real_evidence(network):
+    eng = network
+    client = __import__("fastapi.testclient", fromlist=["TestClient"]).TestClient(create_app(eng))
+    kinds = lambda **q: [l["kind"] for l in client.get("/lessons", params=q).json()]
+    # flat history prices (no promotions), no closed offers, festival days that sold like any other day:
+    # the only lesson is the one the price checks taught (DMart staples at ~10% margin)
+    lessons = client.get("/lessons").json()
+    assert [(l["kind"], l["category"]) for l in lessons] == [("no_discount", "Staples")]
+    nd = lessons[0]
+    checked = sum(v[0] for (m, c), v in eng.price_checks.items() if c == "Staples")
+    assert nd["evidence_n"] == checked >= 2 and nd["learned_from"] == 2 and nd["applies_to"] == 2
+    assert "Discounts don't pay on Staples" in nd["title"] and nd["platform"] is None
+    assert kinds(platform="shopify") == []          # Shopify's fashion margins are 50%: no such lesson there
+    # two closed offers are not yet a lesson; the third is
+    closed_offer(eng, "shopify-0002", base=50, units=70)
+    closed_offer(eng, "shopify-0003", base=40, units=60)
+    assert "price_response" not in kinds()
+    closed_offer(eng, "shopify-0002", base=30, units=33)
+    closed_offer(eng, "shopify-0003", base=20, units=5, stockout=True)   # censored: not evidence of response
+    pr = next(l for l in client.get("/lessons").json() if l["kind"] == "price_response")
+    mean_uplift = np.mean([70 / 50 - 1, 60 / 40 - 1, 33 / 30 - 1])
+    assert pr["evidence_n"] == 3 and pr["learned_from"] == 2 and pr["applies_to"] == 3
+    assert f"sold {mean_uplift:+.0%} on average across 3 offers" in pr["title"] and "20% offer for 48h" in pr["title"]
+    assert pr["value"] == pytest.approx(eng.book.elasticity.category_value("Fashion"), abs=1e-3)
+    assert pr["prior"] == -2.5
+    assert client.get("/lessons").json()[0]["kind"] == "price_response"   # measured outcomes rank first
+    assert "price_response" not in kinds(platform="dmart")
+    # Desi Living sells Fashion but only 2 other merchants taught it: below the anonymity floor
+    assert "price_response" not in kinds(merchant="shopify-0001")
+    closed_offer(eng, "shopify-0001", base=50, units=75)
+    pr = next(l for l in client.get("/lessons", params={"merchant": "shopify-0001"}).json()
+              if l["kind"] == "price_response")
+    assert pr["learned_from"] == 3 and pr["applies_to"] == 1
+    for l in client.get("/lessons").json():
+        assert set(l) == {"id", "kind", "category", "platform", "title", "detail", "value", "prior", "evidence_n",
+                          "learned_from", "applies_to", "updated_sim_ts"}
+        assert l["evidence_n"] > 0 and l["learned_from"] > 0
+
+
+def test_scope_filtering_never_leaks_another_merchant(network):
+    eng = network
+    for mid, *_ in MERCHANTS:
+        fake_signal(eng, mid, revenue=100.0 * len(mid))
+    closed_offer(eng, "shopify-0002")
+    client = __import__("fastapi.testclient", fromlist=["TestClient"]).TestClient(create_app(eng))
+    for mid, pid, name, *_ in MERCHANTS:
+        others = [(m, n) for m, p, n, *_ in MERCHANTS if m != mid]
+        for path in ("/platforms", "/lessons", "/attention", "/tree"):
+            r = client.get(path, params={"merchant": mid})
+            assert r.status_code == 200, (path, r.text)
+            text = r.text
+            for m, n in others:
+                assert m not in text and n not in text, (mid, path, m)
+        (p,) = client.get("/platforms", params={"merchant": mid}).json()
+        m = eng.reg.merchant_index[mid]
+        assert p["id"] == pid and p["merchants"] == 1 and p["orders_today"] == int(eng.reg.m_orders_today[m])
+        assert p["offers_applied"] == eng.ledger.get(m, [0])[0] and p["orders_per_sec"] is None
+        att = client.get("/attention", params={"merchant": mid}).json()
+        assert {s["merchant"] for s in att} == {mid} and att[0]["platform_name"] in ("Shopify", "DMart")
+    # a platform sees only its own merchants
+    text = client.get("/tree", params={"platform": "dmart"}).text
+    assert "dmart-0001" in text and "shopify" not in text.replace('"platform"', "")
+    assert {s["platform"] for s in client.get("/attention", params={"platform": "shopify", "limit": 50}).json()} == {"shopify"}
+    assert client.get("/tree", params={"merchant": "nobody"}).status_code == 404
+    assert client.get("/platforms", params={"platform": "dmart", "merchant": "shopify-0001"}).status_code == 404
+    assert client.get("/lessons", params={"platform": "amazon"}).status_code == 404
+
+
+def test_tree_counts_add_up_and_attention_ranks_urgent_rupees_first(network):
+    eng = network
+    fake_signal(eng, "dmart-0001", urgency="medium", revenue=9000.0)
+    fake_signal(eng, "shopify-0002", urgency="high", revenue=500.0, kind="discount")
+    fake_signal(eng, "shopify-0003", urgency="medium", revenue=20000.0)
+    client = __import__("fastapi.testclient", fromlist=["TestClient"]).TestClient(create_app(eng))
+    t = client.get("/tree").json()
+    assert t["scope"] == {"level": "hq", "id": None}
+    merchants = [m for p in t["platforms"] for c in p["categories"] for m in c["merchants"]]
+    assert len(merchants) == len(MERCHANTS)
+    for key in ("orders_today", "open_signals"):
+        assert t["root"][key] == sum(p[key] for p in t["platforms"]) == sum(m[key] for m in merchants)
+        for p in t["platforms"]:
+            assert p[key] == sum(m[key] for c in p["categories"] for m in c["merchants"])
+    assert t["root"]["revenue_today"] == pytest.approx(sum(m["revenue_today"] for m in merchants))
+    assert t["root"]["orders_today"] == int(eng.reg.m_orders_today[:eng.reg.nm].sum()) > 0
+    status = {m["id"]: m["status"] for m in merchants}
+    open_by = eng._open_signals()
+    for mid, *_ in MERCHANTS:
+        sigs = open_by.get(mid, [])
+        assert status[mid] == ("urgent" if any(x["urgency"] == "high" for x in sigs) else "signal" if sigs else "ok")
+    assert status["shopify-0002"] == "urgent"
+    n_open = sum(len(v) for v in open_by.values())
+    plats = {p["id"]: p for p in client.get("/platforms").json()}
+    assert sum(p["merchants"] for p in plats.values()) == len(MERCHANTS)
+    assert sum(p["orders_today"] for p in plats.values()) == t["root"]["orders_today"]
+    assert sum(p["open_signals"] for p in plats.values()) == t["root"]["open_signals"] == n_open >= 3
+    assert sum(p["signals_total"] for p in plats.values()) == eng.pipeline["signals_raised"]
+    assert sum(c["merchants"] for c in plats["shopify"]["categories"]) == plats["shopify"]["merchants"] == 3
+    assert plats["shopify"]["active_customers_today"] > 0 and plats["shopify"]["accuracy"]["wape"] is not None
+    assert set(plats["shopify"]) >= {"id", "name", "kind", "color", "merchants", "customers", "series", "orders_today",
+                                     "revenue_today", "orders_per_sec", "active_customers_today", "accuracy",
+                                     "open_signals", "signals_total", "signals_by_kind", "offers_applied",
+                                     "uplift_revenue", "hit_rate", "categories"}
+    sub = client.get("/tree", params={"platform": "shopify"}).json()
+    assert sub["scope"] == {"level": "platform", "id": "shopify"} and [p["id"] for p in sub["platforms"]] == ["shopify"]
+    att = client.get("/attention", params={"limit": 200}).json()
+    assert len(att) == n_open
+    rank = [({"high": 0, "medium": 1, "low": 2}[s["urgency"]], -s["expected"]["revenue"]) for s in att]
+    assert rank == sorted(rank)
+    mine = [s["title"] for s in att if s["detail"] == "test"]
+    assert mine.index("discount at shopify-0002") < mine.index("restock at shopify-0003") < mine.index("restock at dmart-0001")
+    assert len(client.get("/attention", params={"limit": 2}).json()) == 2
+
+
+def test_run_days_control_is_validated_and_published(engine):
+    client = __import__("fastapi.testclient", fromlist=["TestClient"]).TestClient(create_app(engine))
+    assert client.post("/control", json={"cmd": "run_days", "days": 7}).status_code == 200
+    assert engine.control[-1] == {"cmd": "run_days", "days": 7}
+    for bad in (0, 61, "7", 2.5, None, True):
+        assert client.post("/control", json={"cmd": "run_days", "days": bad}).status_code == 400

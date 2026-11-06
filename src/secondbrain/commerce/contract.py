@@ -97,6 +97,44 @@ Engine HTTP API (ENGINE_PORT; the app proxies it at /commerce/api/...)
     GET  /signals?limit=50               most recent signals, newest first
     POST /control                        body: a _control command (not apply_offer's "by"); publishes it
     POST /offers/{signal_id}/apply       the merchant accepts a signal's offer (by "merchant")
+
+HQ, Graph and Chat (the command centre over the platforms)
+----------------------------------------------------------
+
+Scope: ``platform`` and ``merchant`` query parameters narrow every answer below to that branch of
+the tree, the way permissions work in the brain: a merchant sees only itself, a platform only its
+merchants, HQ (no parameter) everything.
+
+    GET  /platforms     [{"id", "name", "kind", "color", "merchants", "customers", "series",
+                          "orders_today", "revenue_today", "orders_per_sec", "active_customers_today",
+                          "accuracy": {"wape", "merchant_wape", "baseline_wape"},
+                          "open_signals", "signals_total", "signals_by_kind": {kind: n},
+                          "offers_applied", "uplift_revenue", "hit_rate",
+                          "categories": [{"name", "merchants", "revenue_today"}]}]
+    GET  /lessons       what the brain learned across merchants, strongest evidence first:
+                        [{"id", "kind": "price_response" | "no_discount" | "festival_lift" | "winback"
+                                        | "restock" | "surge",
+                          "category", "platform" (null = all), "title" (one plain sentence),
+                          "detail", "value" (e.g. -2.6 or 3.1), "prior", "evidence_n",
+                          "learned_from" (merchants whose outcomes taught it),
+                          "applies_to" (merchants it now improves), "updated_sim_ts"}]
+    GET  /attention?limit=10   open signals most worth acting on now (urgency, then expected rupees),
+                               each in the signal shape plus "platform_name"
+    GET  /tree          {"root": {"id": "root", "name": "SecondBrain", "orders_today", "revenue_today",
+                                  "open_signals"},
+                         "platforms": [{"id", "name", "color", "orders_today", "revenue_today",
+                                        "open_signals", "categories": [{"name", "merchants": [
+                                            {"id", "name", "city", "category", "status": "ok" | "signal" | "urgent",
+                                             "open_signals", "orders_today", "revenue_today",
+                                             "offers_applied"}]}]}],
+                         "scope": {"level": "hq" | "platform" | "merchant", "id"}}
+    POST /control       also {"cmd": "run_days", "days": 7}: the simulator runs at full speed for that many
+                        simulated days, then pauses (the HQ time machine)
+
+The app (not the engine) answers questions over this data with the language model:
+
+    POST /commerce/ask  {"question", "scope": {"level": "hq" | "platform" | "merchant", "id"}}
+                        -> {"answer", "sources": [{"kind": "signal" | "merchant" | "platform" | "lesson", "id", "title"}]}
 """
 
 import os

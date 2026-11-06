@@ -9,7 +9,9 @@ bursts) and does all the work, then publishes to the permission-checked live bro
 
 Cadence in simulated time: an intraday nowcast check every sim hour (drops, surges, evening
 clearance), and at each sim day close the forecaster update, live accuracy scoring and the
-day-level decisions (restock, price-response and overstock offers, festival, win-back). Budgets keep
+day-level decisions (restock, price-response and overstock offers, festival, win-back). The command
+centre's views (/platforms, /lessons, /attention, /tree) live in ``hq``; the engine keeps the per-merchant
+ledgers they read. Budgets keep
 the mix to roughly half offers (discount, clearance, coupon), then restock, festival and a few surges. The HTTP API from the contract
 runs in the same process (uvicorn in a thread).
 
@@ -137,6 +139,14 @@ class Engine:
         self.ticker_seen = 0
         self.last_stats: dict = {}
         self.last_stats_at = self.last_ticker_at = 0.0
+        self.run_until: str | None = None
+        # What the command centre (HQ, Graph, Chat) reads, kept per merchant so any branch of the tree is cheap:
+        self.live_start: int | None = None          # day index of the first live day
+        self.ledger: dict[int, list] = {}           # merchant -> [offers applied, uplift rupees, worked, judged]
+        self.sig_count: dict[tuple[int, str, str], int] = {}    # (merchant, kind, category) -> signals raised
+        self.outcome_log: list[tuple] = []          # every closed offer, compact (see _log_outcome)
+        self.price_checks: dict[tuple[int, str], list] = {}     # (merchant, category) -> [checked, declined,
+                                                                #    margin sum of declined, elasticity sum]
 
     def day_idx(self) -> int:
         return self.fc.day_index(self.today)
@@ -259,6 +269,7 @@ class Engine:
         self.running = bool(msg.get("running", self.running))
         self.catching_up = bool(msg.get("catching_up"))
         self.last_clock_sent = msg.get("sent_ms", self.last_clock_sent)
+        self.run_until = msg.get("run_until")
         if msg.get("sim_ts"):
             self._advance(datetime.fromisoformat(msg["sim_ts"]))
 
@@ -343,10 +354,12 @@ class Engine:
         d = ts.date()
         if self.today is None:
             self.today = d
+            self.live_start = self.day_idx()
             self._fit_pending(force=True)
         elif d < self.today - timedelta(days=1):
             self._reset(self.sim_start)   # the clock went back: a restarted simulator
             self.today = d
+            self.live_start = self.day_idx()
         while d > self.today:
             self._close_day()
         if self.now is None or ts > self.now:
@@ -431,7 +444,9 @@ class Engine:
         if self.now is None:
             return
         for o in self.book.due(self.now):
-            self.outcome_box.append(self.book.evaluate(o))
+            out = self.book.evaluate(o)
+            self._log_outcome(o, out)
+            self.outcome_box.append(out)
             self.elast_dirty = True
         if self.next_check is None:
             return
@@ -608,6 +623,8 @@ class Engine:
                                mean * np.where(per, 2, reg.lead[rows] + CYCLE_DAYS), e,
                                np.where(per, SPOIL_COST, EXCESS_COST), floor)
         profit = (best["discount"] > 0) & (best["gain"] >= MIN_GAIN)
+        if mode in ("price", "overstock"):   # no problem to fix: does any discount beat full price?
+            self._note_price_checks(rows, profit, (price - cost) / np.maximum(price, 1e-9), e)
         full_d = self.window_units(rows, self.now, self.now + timedelta(hours=DEFEND_HOURS))
         cf_d = full_d * cf_factor
         keep = self._keep_value(rows)
@@ -990,6 +1007,8 @@ class Engine:
             self.signal_by_id[sig["id"]] = sig
             self.pipeline["signals_raised"] += 1
             self.signals_by_kind[sig["kind"]] = self.signals_by_kind.get(sig["kind"], 0) + 1
+            key = (self.reg.merchant_index[sig["merchant"]], sig["kind"], sig["category"] or "")
+            self.sig_count[key] = self.sig_count.get(key, 0) + 1
             if sig["autopilot"]:
                 self.publish_control(self.apply_command(sig, "autopilot"))
         self.outbox = []
@@ -1035,6 +1054,41 @@ class Engine:
                               kind=self.signal_by_id.get(sid, {}).get("kind", "discount"),
                               applied_ms=int(time.time() * 1000)))
         self.applied_signals.add(sid)
+        self._ledger(m)[0] += 1
+
+    # ------------------------------------------------------------------ command-centre bookkeeping
+
+    def _ledger(self, m: int) -> list:
+        return self.ledger.setdefault(m, [0, 0.0, 0, 0])
+
+    def _log_outcome(self, o: Offer, out: dict) -> None:
+        """Per merchant totals for HQ, and a compact record the lessons are learned from."""
+        m = self.reg.merchant_index.get(o.merchant)
+        if m is None:
+            return
+        led = self._ledger(m)
+        led[1] += out["revenue_gain"]
+        judged = not o.stockout or out["worked"]
+        led[2] += int(judged and out["worked"])
+        led[3] += int(judged)
+        hrs = max((o.until - o.start).total_seconds() / 3600, 0.0)
+        # (merchant, category, discount, hours, baseline units, actual units, worked, judged, censored, rupees gained)
+        self.outcome_log.append((m, o.category, o.discount, hrs, max(o.baseline_units, 0.0), o.units,
+                                 bool(out["worked"]), bool(judged), bool(o.stockout), float(out["revenue_gain"])))
+
+    def _note_price_checks(self, rows: np.ndarray, offered: np.ndarray, margin: np.ndarray, e: np.ndarray) -> None:
+        """The daily price check on idle products: where no discount beats full price, the brain holds price."""
+        if not len(rows):
+            return
+        k = len(self.fc.categories)
+        keys, inv = np.unique(self.reg.s_merch[rows] * k + self.fc.cat[rows], return_inverse=True)
+        declined = ~np.asarray(offered, bool)
+        sums = (np.bincount(inv, minlength=len(keys)), np.bincount(inv, declined, len(keys)),
+                np.bincount(inv, np.where(declined, margin, 0.0), len(keys)), np.bincount(inv, e, len(keys)))
+        for u, key in enumerate(keys.tolist()):
+            rec = self.price_checks.setdefault((key // k, self.fc.categories[key % k]), [0, 0, 0.0, 0.0])
+            for f in range(4):
+                rec[f] += sums[f][u]
 
     # ------------------------------------------------------------------ live outputs
 
@@ -1111,6 +1165,7 @@ class Engine:
             "pipeline": {**self.pipeline, "capacity_orders_per_sec": r["capacity"],
                          "busy_share": round(r.get("busy", 0.0), 3), "active_offers": len(self.book.active)},
             "festival": {"name": nxt[1], "date": nxt[0].isoformat(), "days_to": (nxt[0] - self.today).days} if nxt else None,
+            "run_until": self.run_until,
         }
 
     def _festival_lifts(self) -> dict:
@@ -1202,13 +1257,41 @@ def _num(x) -> float | None:
 
 # ------------------------------------------------------------------ HTTP API
 
-CONTROL_CMDS = {"start", "pause", "speed", "reset", "apply_offer"}
+CONTROL_CMDS = {"start", "pause", "speed", "reset", "apply_offer", "run_days"}
+MAX_RUN_DAYS = 60
 
 
 def create_app(engine: Engine):
     from fastapi import FastAPI, HTTPException
 
+    from secondbrain.commerce import hq
+
     app = FastAPI(title="SecondBrain Live Commerce engine")
+
+    def scoped(view, platform: str | None, merchant: str | None, *args):
+        """Run a command-centre view on one branch of the tree (HQ, a platform, a merchant)."""
+        with engine.lock:
+            try:
+                sc = hq.resolve(engine, platform or None, merchant or None)
+            except hq.ScopeError as exc:
+                raise HTTPException(exc.status, exc.detail)
+            return view(engine, sc, *args)
+
+    @app.get("/platforms")
+    def platforms(platform: str | None = None, merchant: str | None = None):
+        return scoped(hq.platforms, platform, merchant)
+
+    @app.get("/lessons")
+    def lessons(platform: str | None = None, merchant: str | None = None):
+        return scoped(hq.lessons, platform, merchant)
+
+    @app.get("/attention")
+    def attention(limit: int = 10, platform: str | None = None, merchant: str | None = None):
+        return scoped(hq.attention, platform, merchant, max(0, min(limit, 200)))
+
+    @app.get("/tree")
+    def tree(platform: str | None = None, merchant: str | None = None):
+        return scoped(hq.tree, platform, merchant)
 
     @app.get("/status")
     def status():
@@ -1248,6 +1331,11 @@ def create_app(engine: Engine):
             raise HTTPException(400, f"cmd must be one of {sorted(CONTROL_CMDS)}")
         if cmd == "speed" and body.get("speed") not in C.SPEEDS:
             raise HTTPException(400, f"speed must be one of {list(C.SPEEDS)}")
+        if cmd == "run_days":
+            days = body.get("days")
+            if not isinstance(days, int) or isinstance(days, bool) or not 1 <= days <= MAX_RUN_DAYS:
+                raise HTTPException(400, f"days must be a whole number from 1 to {MAX_RUN_DAYS}")
+            body = {"cmd": "run_days", "days": days}
         if cmd == "apply_offer":
             missing = {"signal_id", "platform", "merchant", "sku", "discount", "until"} - set(body)
             if missing:

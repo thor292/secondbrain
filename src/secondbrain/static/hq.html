@@ -7,464 +7,1664 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='7' fill='%238b7bff'/></svg>">
 <link rel="stylesheet" href="/static/sb.css">
 <style>
-  /* Hero: the root brain and every business connected to it */
-  .hero { display: grid; grid-template-columns: 1.05fr 1fr; gap: 10px; align-items: center; overflow: hidden; padding: 30px 30px 26px; }
-  .hero h1 { font-size: 40px; line-height: 1.08; letter-spacing: -0.03em; margin: 10px 0 12px; font-weight: 800; }
-  .hero p.lead { color: var(--muted); font-size: 16px; max-width: 470px; margin: 0 0 22px; }
-  .hero canvas { width: 100%; height: 330px; display: block; }
-  .legend-line { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 4px; }
-  .legend-line i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
-  @media (max-width: 900px) { .hero { grid-template-columns: 1fr; } .hero h1 { font-size: 30px; } }
+  /* SecondBrain HQ: the calm executive view over every platform. Page-only styles; tokens come from sb.css. */
+  .hq { max-width: 1440px; }
+  .sb-nav .live-badge { display: none; } /* the hero shows its own mode badge */
+  .mode { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; letter-spacing: .04em; padding: 5px 11px; border-radius: 999px;
+          border: 1px solid var(--border); color: var(--muted); vertical-align: middle; white-space: nowrap; }
+  .mode::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+  .mode.on { color: var(--good); border-color: rgba(52, 211, 153, .35); background: var(--good-soft); }
+  .mode.on::before { background: var(--good); animation: ping 2s infinite; }
+  .mode.demo { color: var(--warn); border-color: rgba(251, 191, 36, .4); background: var(--warn-soft); }
+  .mode.demo::before { background: var(--warn); }
+  .demo-chip { font-size: 11px; font-weight: 700; letter-spacing: .04em; padding: 3px 9px; border-radius: 999px; color: var(--warn);
+               background: var(--warn-soft); border: 1px solid rgba(251, 191, 36, .4); cursor: help; white-space: nowrap; }
 
-  /* Time machine */
-  .tm-controls { display: flex; gap: 14px; align-items: end; flex-wrap: wrap; }
-  .tm-controls label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; font-weight: 600; }
-  .thinking { display: grid; grid-template-columns: 120px 1fr; gap: 24px; align-items: center; padding: 26px 6px 6px; }
-  .orb { width: 110px; height: 110px; border-radius: 50%; position: relative; background: radial-gradient(circle at 35% 35%, #b3a8ff, #6a5cf0 45%, #172045 75%);
-         box-shadow: 0 0 60px rgba(139, 123, 255, .55); animation: breathe 1.8s ease-in-out infinite; }
-  .orb::after { content: ""; position: absolute; inset: -12px; border-radius: 50%; border: 2px solid rgba(51, 214, 242, .5);
-                border-top-color: transparent; border-left-color: transparent; animation: spin 1.6s linear infinite; }
-  @keyframes breathe { 50% { transform: scale(1.06); box-shadow: 0 0 90px rgba(51, 214, 242, .5); } }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-  .steps li { display: flex; gap: 10px; align-items: center; color: var(--faint); transition: color .3s; }
-  .steps li .s { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--border-hi); display: grid; place-items: center; font-size: 11px; }
-  .steps li.on { color: var(--text); } .steps li.on .s { border-color: var(--cyan); border-top-color: transparent; animation: spin .9s linear infinite; }
-  .steps li.done { color: var(--muted); } .steps li.done .s { border-color: var(--good); background: var(--good); color: #062; }
+  /* ---------- 1. hero ---------- */
+  .hero { padding: 28px 30px 24px; overflow: hidden; }
+  .hero::before { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+                  background: radial-gradient(600px 260px at 0% 0%, rgba(139, 123, 255, .16), transparent 70%), radial-gradient(500px 240px at 100% 0%, rgba(51, 214, 242, .10), transparent 70%); }
+  .hero-top { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px 28px; align-items: start; }
+  .hero h1 { font-size: 46px; line-height: 1.04; letter-spacing: -0.035em; margin: 6px 0 10px; font-weight: 800; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .connected { color: var(--muted); font-size: 15.5px; display: flex; gap: 6px 10px; flex-wrap: wrap; align-items: center; }
+  .connected .pl { display: inline-flex; align-items: center; gap: 7px; font-weight: 700; color: var(--text); }
+  .connected .pl i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .connected .sep { color: var(--faint); }
+  .clock { text-align: right; min-width: 220px; }
+  .clock .d { font-size: 12px; color: var(--muted); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+  .clock .t { font-size: 40px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; line-height: 1.05; }
+  .clock .t small { font-size: 20px; color: var(--muted); font-weight: 700; }
+  .fest { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; padding: 4px 11px; border-radius: 999px; font-size: 12.5px; font-weight: 700;
+          color: #f5c451; background: rgba(245, 196, 81, .12); border: 1px solid rgba(245, 196, 81, .35); }
+  @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .fest { color: #a16207; background: rgba(202, 138, 4, .12); border-color: rgba(202, 138, 4, .4); } }
+  .kgrid { position: relative; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin-top: 22px; }
+  .kgrid .kpi { padding: 15px 16px; min-height: 112px; }
+  .kgrid .kpi .v { font-size: 29px; white-space: nowrap; }
+  .kgrid .kpi .d { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: relative; z-index: 1; }
+  .kgrid .kpi .spark { width: 70%; height: 42px; opacity: .5; }
+  @media (max-width: 1280px) { .kgrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (max-width: 900px) { .hero-top { grid-template-columns: 1fr; } .clock { text-align: left; } .hero h1 { font-size: 34px; } .clock .t { font-size: 30px; } }
+  @media (max-width: 640px) { .hero { padding: 20px 16px; } .kgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } .kgrid .kpi .v { font-size: 22px; } .kgrid .kpi { min-height: 98px; padding: 12px 13px; } .kgrid .kpi .d { white-space: normal; font-size: 12px; } }
 
-  .clock { display: flex; align-items: center; gap: 18px; margin: 22px 0 10px; flex-wrap: wrap; }
-  .clock .date { font-size: 46px; font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; min-width: 190px; }
-  .clock .from { color: var(--faint); font-size: 18px; font-weight: 600; }
-  .track { position: relative; height: 10px; background: var(--panel-hi); border-radius: 99px; margin: 6px 0 22px; }
-  .track .fill { position: absolute; inset: 0 auto 0 0; width: 0; border-radius: 99px; background: var(--grad); box-shadow: 0 0 18px rgba(51, 214, 242, .5); }
-  .track .mark { position: absolute; top: -5px; width: 4px; height: 20px; border-radius: 4px; transform: translateX(-2px); opacity: .9; }
-  .tm-body { display: grid; grid-template-columns: 1.7fr 1fr; gap: 18px; }
-  @media (max-width: 960px) { .tm-body { grid-template-columns: 1fr; } }
-  .charts { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
-  .pchart { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px 8px; transition: border-color .3s, box-shadow .3s; }
-  .pchart.alarm { border-color: rgba(251, 113, 133, .55); box-shadow: 0 0 0 1px rgba(251, 113, 133, .25), 0 0 24px -6px rgba(251, 113, 133, .5); }
-  .pchart.saved { border-color: rgba(52, 211, 153, .5); box-shadow: 0 0 24px -8px rgba(52, 211, 153, .6); }
-  .pchart .t { display: flex; justify-content: space-between; gap: 6px; font-size: 13px; font-weight: 600; }
-  .pchart .t .chip { padding: 2px 8px; font-size: 11px; }
-  .pchart svg { display: block; width: 100%; height: 70px; margin-top: 6px; overflow: visible; }
-  .feed { list-style: none; margin: 0; padding: 0; max-height: 470px; overflow: auto; display: flex; flex-direction: column; gap: 8px; }
-  .feed li { display: grid; grid-template-columns: 30px 1fr auto; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 12px;
-             background: var(--panel); border: 1px solid var(--border); font-size: 13.5px; }
-  .feed li .ic { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; font-weight: 800; }
-  .feed li .when { font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; }
-  .ic.good { background: var(--good-soft); color: var(--good); } .ic.bad { background: var(--bad-soft); color: var(--bad); }
-  .ic.info { background: var(--accent-soft); color: var(--violet); } .ic.cyan { background: rgba(51, 214, 242, .14); color: var(--cyan); }
-  .next { display: grid; gap: 8px; margin-top: 10px; }
-  .next div { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--border); font-size: 14px; }
+  /* scope bar: always says what you are looking at */
+  .scopebar { position: sticky; top: 64px; z-index: 15; display: flex; justify-content: center; margin: 16px 0 -4px; pointer-events: none; }
+  .scopebar > div { pointer-events: auto; display: inline-flex; align-items: center; gap: 10px; padding: 6px 8px 6px 14px; border-radius: 999px; font-size: 13.5px;
+                    background: color-mix(in srgb, var(--panel-solid) 88%, transparent); backdrop-filter: blur(14px); border: 1px solid var(--border-hi); box-shadow: var(--shadow); }
+  .scopebar .v { font-weight: 700; display: inline-flex; align-items: center; gap: 7px; }
+  .scopebar .v i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .scopebar .hint { color: var(--muted); font-size: 12.5px; padding-right: 6px; }
+  .scopebar.on > div { border-color: var(--sc); box-shadow: 0 0 0 3px color-mix(in srgb, var(--sc) 18%, transparent), var(--shadow); }
 
-  /* Businesses */
-  .biz { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 14px; }
-  .biz .card { padding: 18px 20px; }
-  .biz .head { display: flex; align-items: center; gap: 14px; }
-  .biz .avatar { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; font-weight: 800; font-size: 18px; color: #fff; background: var(--grad); }
-  .biz h3 { margin: 0; font-size: 17px; }
-  .biz .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 16px; }
-  .biz .stat .k { font-size: 11.5px; color: var(--muted); font-weight: 600; } .biz .stat .v { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
-  .ring { width: 64px; height: 64px; margin-left: auto; position: relative; flex: none; }
-  .ring span { position: absolute; inset: 0; display: grid; place-items: center; font-weight: 800; font-size: 14px; }
-  .lessons { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
-  .lessons li { display: grid; grid-template-columns: 18px 1fr; gap: 10px; font-size: 14.5px; }
-  .lessons li::before { content: ""; width: 10px; height: 10px; margin-top: 6px; border-radius: 50%; background: var(--grad); box-shadow: 0 0 12px rgba(51, 214, 242, .7); }
-  .gate { max-width: 420px; margin: 80px auto; text-align: center; }
+  /* ---------- 2. platform cards ---------- */
+  .plats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .pcard { cursor: pointer; padding: 0; overflow: hidden; transition: transform .2s, border-color .2s, box-shadow .25s, opacity .25s; }
+  .pcard:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--pc) 55%, transparent); }
+  .pcard:focus-visible { outline: 2px solid var(--pc); outline-offset: 2px; }
+  .pcard.sel { border-color: var(--pc); box-shadow: 0 0 0 3px color-mix(in srgb, var(--pc) 22%, transparent), var(--shadow); }
+  .pcard.dim { opacity: .55; }
+  .pcard.dim:hover { opacity: .85; }
+  .pcard .band { height: 4px; background: linear-gradient(90deg, var(--pc), color-mix(in srgb, var(--pc) 20%, transparent)); }
+  .pcard .in { padding: 18px 20px 18px; position: relative; }
+  .pcard .in::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(420px 160px at 0% 0%, color-mix(in srgb, var(--pc) 13%, transparent), transparent 70%); }
+  .pcard .ph { display: flex; align-items: center; gap: 12px; position: relative; }
+  .pcard .logo { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-weight: 800; font-size: 17px; color: #0b1122; background: var(--pc); flex: none;
+                 box-shadow: 0 8px 22px -8px var(--pc); }
+  .pcard .nm { font-size: 18px; font-weight: 800; letter-spacing: -0.01em; line-height: 1.15; }
+  .pcard .kd { font-size: 12.5px; color: var(--muted); }
+  .pcard .go { margin-left: auto; font-size: 12.5px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+  .pcard.sel .go { color: var(--pc); }
+  .pcard .big { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; margin-top: 16px; position: relative; }
+  .pcard .big .k { font-size: 11.5px; color: var(--muted); font-weight: 600; }
+  .pcard .big .v { font-size: 27px; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.15; white-space: nowrap; position: relative; z-index: 1; }
+  .pcard .opsbox { position: relative; }
+  .pcard .opsbox .spark { position: absolute; right: 0; bottom: -4px; width: 60%; height: 34px; opacity: .7; }
+  .pcard .stats3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 14px; padding: 12px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); position: relative; }
+  .pcard .stats3 .k { font-size: 11px; color: var(--muted); font-weight: 600; }
+  .pcard .stats3 .v { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .pcard .stats3 .s { font-size: 11px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pcard .row2 { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; position: relative; min-height: 26px; }
+  .pcard .row2 .chip { font-size: 12px; padding: 3px 9px; }
+  .pcard .offers { margin-top: 12px; font-size: 13px; color: var(--muted); position: relative; }
+  .pcard .offers b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .pcard .offers .g { color: var(--good); font-weight: 700; }
+  .pcard .cats { margin-top: 12px; display: grid; gap: 6px; position: relative; }
+  .pcard .cat { display: grid; grid-template-columns: 130px minmax(0, 1fr) 70px; gap: 8px; align-items: center; font-size: 12.5px; }
+  .pcard .cat .n { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+  .pcard .cat .b { height: 6px; border-radius: 6px; background: var(--panel-hi); overflow: hidden; }
+  .pcard .cat .b i { display: block; height: 100%; border-radius: 6px; background: var(--pc); transition: width .8s cubic-bezier(.2, .8, .2, 1); }
+  .pcard .cat .r { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+  @media (max-width: 1100px) { .plats { grid-template-columns: 1fr; } }
+
+  /* ---------- 3. tree of brains ---------- */
+  .treebox { padding: 0; overflow: hidden; }
+  .treebox canvas { display: block; width: 100%; touch-action: manipulation; }
+  .treebox .tip { position: absolute; z-index: 3; pointer-events: none; padding: 7px 10px; border-radius: 10px; font-size: 12.5px; max-width: 240px; color: var(--muted);
+                  background: color-mix(in srgb, var(--panel-solid) 94%, transparent); border: 1px solid var(--border-hi); box-shadow: var(--shadow); transform: translate(-50%, calc(-100% - 12px)); }
+  .treebox .tip b { display: block; font-size: 13px; color: var(--text); }
+  .mcard { position: absolute; z-index: 4; width: 280px; padding: 16px; border-radius: 14px; background: color-mix(in srgb, var(--panel-solid) 96%, transparent);
+           backdrop-filter: blur(14px); border: 1px solid var(--border-hi); box-shadow: 0 24px 60px -18px rgba(0, 0, 0, .6); }
+  .mcard .x { position: absolute; right: 6px; top: 4px; border: 0; background: transparent; color: var(--muted); font-size: 20px; cursor: pointer; padding: 4px 8px; }
+  .mcard h3 { margin: 8px 0 2px; font-size: 17px; padding-right: 20px; }
+  .mcard .w { font-size: 12.5px; color: var(--muted); }
+  .mcard .g4 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin: 12px 0 14px; }
+  .mcard .g4 .k { font-size: 11px; color: var(--muted); font-weight: 600; } .mcard .g4 .v { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .pbadge { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700; padding: 3px 9px; border-radius: 999px;
+            color: var(--pc); background: color-mix(in srgb, var(--pc) 14%, transparent); border: 1px solid color-mix(in srgb, var(--pc) 40%, transparent); white-space: nowrap; }
+  .pbadge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--pc); }
+  .tlegend { display: flex; gap: 8px 18px; flex-wrap: wrap; align-items: center; font-size: 12.5px; color: var(--muted); padding: 12px 18px 14px; border-top: 1px solid var(--border); }
+  .tlegend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+  .tlegend .fl { display: inline-flex; align-items: center; gap: 6px; }
+  .tlegend .fl b { font-weight: 800; }
+  .tlegend .cnt { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+  /* ---------- 4. lessons ---------- */
+  .lessons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  .lesson { padding: 18px 20px; }
+  .card.lesson + .card.lesson { margin-top: 0; }
+  .lesson .lt { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+  .lesson .lic { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; font-size: 16px; background: var(--accent-soft); }
+  .lesson .lk { font-weight: 700; letter-spacing: .06em; text-transform: uppercase; font-size: 11px; color: var(--violet); }
+  .lesson h3 { margin: 10px 0 4px; font-size: 17px; line-height: 1.35; letter-spacing: -0.01em; }
+  .lesson p { margin: 0; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+  .lesson .evi { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 12px; font-size: 13px; color: var(--muted); }
+  .lesson .evi b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .lesson .evi .arr { color: var(--cyan); font-weight: 800; padding: 0 2px; }
+  .lesson.fresh { animation: pop .45s cubic-bezier(.2, 1.4, .4, 1) both, lglow 2.4s ease; }
+  @keyframes lglow { 0% { border-color: var(--cyan); box-shadow: 0 0 34px -8px var(--cyan); } }
+  .vp { position: relative; height: 58px; margin: 12px 10px 0; }
+  .vp .ax { position: absolute; left: 0; right: 0; top: 27px; height: 4px; border-radius: 4px; background: var(--panel-hi); }
+  .vp .vseg { position: absolute; top: 27px; height: 4px; border-radius: 4px; background: var(--grad); transition: left .9s, width .9s; }
+  .vp .mk { position: absolute; top: 21px; width: 16px; height: 16px; margin-left: -8px; border-radius: 50%; }
+  .vp .mk.pr { border: 2px solid var(--faint); background: var(--panel-solid); }
+  .vp .mk.ln { background: var(--grad); box-shadow: 0 0 14px rgba(51, 214, 242, .6); transition: left .9s cubic-bezier(.2, .8, .2, 1); }
+  .vp .lb { position: absolute; transform: translateX(-50%); font-size: 11.5px; white-space: nowrap; color: var(--muted); }
+  .vp .lb.ln { top: 0; } .vp .lb.pr { top: 40px; }
+  .vp .lb b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .vp .lb.ln b { color: var(--cyan); }
+  .vp .lb.edge-l { transform: translateX(-8px); } .vp .lb.edge-r { transform: translateX(calc(-100% + 8px)); }
+  .lempty { display: grid; grid-template-columns: auto 1fr; gap: 18px; align-items: center; padding: 26px; }
+  .lempty .orb { width: 64px; height: 64px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #b3a8ff, #6a5cf0 45%, #172045 80%); box-shadow: 0 0 40px rgba(139, 123, 255, .45); animation: breathe 2.4s ease-in-out infinite; }
+  @keyframes breathe { 50% { transform: scale(1.06); box-shadow: 0 0 60px rgba(51, 214, 242, .5); } }
+  @media (max-width: 900px) { .lessons { grid-template-columns: 1fr; } }
+
+  /* ---------- 5. needs attention ---------- */
+  .att { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .acard { --u: var(--cyan); position: relative; padding: 15px 16px 14px 20px; border-radius: 14px; background: var(--panel); border: 1px solid var(--border); overflow: hidden; }
+  .acard::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--pc); }
+  .acard.high { --u: var(--bad); } .acard.medium { --u: var(--warn); }
+  .acard .top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }
+  .acard .urg { font-size: 10.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--u); padding: 2px 8px; border-radius: 999px;
+                background: color-mix(in srgb, var(--u) 13%, transparent); }
+  .acard .where b { color: var(--text); font-weight: 600; }
+  .acard h3 { margin: 8px 0 4px; font-size: 16px; line-height: 1.35; }
+  .acard p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .acard .bot { display: flex; align-items: center; gap: 8px 12px; margin-top: 12px; flex-wrap: wrap; }
+  .acard .imp { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; margin-right: 4px; }
+  .acard .imp small { display: block; font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: 0; }
+  .acard .act { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .tag { font-size: 11.5px; font-weight: 700; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+  .tag.ok { color: var(--good); background: var(--good-soft); border: 1px solid rgba(52, 211, 153, .35); }
+  .tag.auto { color: var(--violet); background: var(--accent-soft); border: 1px solid rgba(139, 123, 255, .35); }
+  .tag.wait { color: var(--muted); background: var(--panel-hi); border: 1px solid var(--border); }
+  @media (max-width: 900px) { .att { grid-template-columns: 1fr; } }
+
+  /* ---------- 6. time machine ---------- */
+  .tm { padding: 22px; }
+  .tm .ctl { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .tm .ctl .gap { flex: 1; }
+  .tm .state { font-size: 13px; color: var(--muted); margin-top: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .tm .prog { margin-top: 16px; }
+  .tm .bar { height: 10px; border-radius: 10px; background: var(--panel-hi); overflow: hidden; position: relative; }
+  .tm .bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 10px; background: var(--grad); box-shadow: 0 0 18px rgba(51, 214, 242, .6); transition: width .3s linear; }
+  .tm .bar.run i::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .4), transparent); background-size: 200% 100%; animation: shimmer 1.2s infinite; }
+  .tm .plab { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--muted); margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .tm .nums { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+  .tm .nums .kpi { padding: 13px 15px; }
+  .tm .nums .kpi .v { font-size: 23px; white-space: nowrap; }
+  .tm .nums .kpi .d { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tm .confirm { margin-top: 14px; padding: 14px 16px; border-radius: 12px; border: 1px solid rgba(251, 113, 133, .4); background: var(--bad-soft); display: flex; gap: 12px; align-items: center; flex-wrap: wrap; font-size: 14px; }
+  .btn.danger { background: var(--bad); color: #fff; border: 0; }
+  @media (max-width: 1100px) { .tm .nums { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (max-width: 640px) { .tm .nums { grid-template-columns: repeat(2, minmax(0, 1fr)); } .tm .ctl .gap { display: none; } .tm .ctl .btn { padding: 9px 12px; font-size: 14px; } }
+
+  .foot { margin-top: 34px; text-align: center; font-size: 14px; color: var(--muted); }
+  .foot a { font-weight: 600; }
+  .gate-wrap { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--bg) 70%, transparent); backdrop-filter: blur(8px); }
+  .gate { max-width: 420px; width: 100%; text-align: center; }
   .gate form { display: flex; gap: 8px; justify-content: center; margin-top: 16px; }
+  .gate form input { min-width: 0; flex: 1; }
+  @media (max-width: 640px) { .section-head h2 { font-size: 17px; } .lesson, .tm { padding: 16px; } .lempty { grid-template-columns: 1fr; } .pcard .cat { grid-template-columns: 110px minmax(0, 1fr) 62px; } }
 </style>
 </head>
 <body>
-<main class="page" id="out"><div class="shimmer" style="height:320px"></div></main>
+<main class="page hq">
+  <section class="card hero rise">
+    <div class="hero-top">
+      <div>
+        <div class="eyebrow">Command centre · root brain</div>
+        <h1>SecondBrain <span class="grad-text">HQ</span> <span class="mode" id="mode">Connecting…</span></h1>
+        <div class="connected" id="connected"></div>
+      </div>
+      <div class="clock"><div class="d" id="clk-d">&nbsp;</div><div class="t" id="clk-t">--:--</div><div id="fest"></div></div>
+    </div>
+    <div class="kgrid" id="kpis"></div>
+  </section>
+
+  <div class="scopebar" id="scopebar"></div>
+
+  <section class="section">
+    <div class="section-head"><div><h2>Three platforms, one brain</h2><p>Every merchant on each platform, forecast and coached in real time. Click a platform to focus the whole page on it.</p></div><span id="plats-demo"></span></div>
+    <div class="plats" id="plats"><div class="shimmer" style="height:380px"></div><div class="shimmer" style="height:380px"></div><div class="shimmer" style="height:380px"></div></div>
+  </section>
+
+  <section class="section">
+    <div class="section-head"><div><h2>The tree of brains</h2><p>SecondBrain at the centre, each platform around it, every merchant grouped by category. Patterns rise to the root; lessons flow back down.</p></div><span id="tree-demo"></span></div>
+    <div class="card treebox" id="treebox">
+      <canvas id="tree" role="img" aria-label="Tree of brains"></canvas>
+      <div class="tip hidden" id="treetip"></div>
+      <div class="mcard hidden" id="mcard"></div>
+      <div class="tlegend" id="tlegend"></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head"><div><h2>What the brain learned across all merchants</h2><p>Each lesson is learned from real outcomes at some merchants, then improves the forecasts and offers of every similar merchant. Strongest evidence first.</p></div><span id="lessons-demo"></span></div>
+    <div id="lessons"><div class="shimmer" style="height:200px"></div></div>
+  </section>
+
+  <section class="section">
+    <div class="section-head"><div><h2>Needs attention now</h2><p>The signals most worth acting on across platforms: most urgent first, then the most rupees.</p></div><span id="att-demo"></span></div>
+    <div id="att"><div class="shimmer" style="height:160px"></div></div>
+  </section>
+
+  <section class="section" id="tm-section">
+    <div class="section-head"><div><h2>Time machine</h2><p>Fast-forward the market and watch the brain learn: every merchant keeps forecasting, signalling and learning while days pass in seconds.</p></div></div>
+    <div class="card tm" id="tm"></div>
+  </section>
+
+  <div class="foot">
+    <a href="/explore?user=meera">Inside one merchant's brain: Desi Living →</a>
+    <div class="faint" style="margin-top:6px;font-size:12.5px">HQ sees totals and anonymous lessons. A merchant's own documents, notes and team stay inside that merchant's brain.</div>
+  </div>
+</main>
 <script src="/static/sb.js"></script>
 <script>
-const { el, svg, money, shortMoney, pct, fmtDay, countUp, kpi, store } = SB;
+const { el, svg } = SB;
 const $ = (id) => document.getElementById(id);
-SB.nav("hq", el("span", { class: "live" }, "Root brain online"));
+const Q = new URLSearchParams(location.search);
+const RM = matchMedia("(prefers-reduced-motion: reduce)");
+const reduced = () => RM.matches;
+const LIGHT = matchMedia("(prefers-color-scheme: light)");
+const isLight = () => LIGHT.matches && document.documentElement.dataset.theme !== "dark";
+SB.nav("hq");
 
+// ---------------------------------------------------------------- constants (shared with the Live Commerce wall)
+const SPEED_VAL = { "1x": 1, "1min": 60, "1h": 3600, "1day": 14400 };
+const SPEED_LABEL = { "1x": "real time", "1min": "1 min/s", "1h": "1 hr/s", "1day": "1 day/6 s" };
+const KIND = { discount: ["🏷️", "Discount"], restock: ["📦", "Restock"], winback: ["💌", "Win-back"], surge: ["📈", "Demand surge"], festival: ["🪔", "Festival"], clearance: ["⏳", "Clearance"] };
+const LKIND = { price_response: ["🏷️", "Price response"], no_discount: ["🛡️", "Hold the price"], festival_lift: ["🪔", "Festival lift"], winback: ["💌", "Win-back"], restock: ["📦", "Restock timing"], surge: ["📈", "Demand surges"] };
+const PLAT = {
+  shopify: { name: "Shopify", kind: "D2C online stores", dark: "#95BF47", light: "#5f8f1d", cust: 0.27, mark: "S" },
+  reliance: { name: "Reliance Retail", kind: "Smart, Digital, Trends · JioMart sellers", dark: "#4f8cff", light: "#2563eb", cust: 0.4, mark: "R" },
+  dmart: { name: "DMart", kind: "Hypermarkets", dark: "#f5a524", light: "#d97706", cust: 0.33, mark: "D" },
+};
+const PLAT_ORDER = ["shopify", "reliance", "dmart"];
+const pinfo = (id) => PLAT[id] || { name: String(id || "").replace(/^\w/, (c) => c.toUpperCase()), kind: "", dark: "#a78bfa", light: "#7c3aed", cust: 0, mark: String(id || "?")[0].toUpperCase() };
+const pcol = (id, api) => (isLight() ? pinfo(id).light : (PLAT[id] ? PLAT[id].dark : api || pinfo(id).dark));
+// Merchant category -> the product categories it sells (the brain learns per product category).
+const PCATS = {
+  Fashion: ["Fashion"], Beauty: ["Beauty"], "Electronics Accessories": ["Electronics Accessories"], Home: ["Home"], "Home Decor": ["Home"], Gourmet: ["Sweets", "Snacks"],
+  Grocery: ["Staples", "Snacks", "Dairy", "Fresh", "Personal Care", "Household", "Sweets"], Electronics: ["Electronics"],
+  Hypermarket: ["Staples", "Snacks", "Dairy", "Fresh", "Household", "Personal Care", "Sweets", "Home"],
+};
+const pcatsOf = (cat) => PCATS[cat] || [cat];
+
+// ---------------------------------------------------------------- formatting (Indian)
+const num = (v) => Math.round(+v || 0).toLocaleString("en-IN");
+function inr(v, dec) {
+  v = +v || 0; const a = Math.abs(v), s = v < 0 ? "−₹" : "₹";
+  if (a >= 1e7) return s + (a / 1e7).toFixed(dec ?? (a >= 1e9 ? 0 : a >= 1e8 ? 1 : 2)) + " Cr";
+  if (a >= 1e5) return s + (a / 1e5).toFixed(dec ?? 1) + " L";
+  return s + Math.round(a).toLocaleString("en-IN");
+}
+const plusInr = (v, d) => (v >= 0 ? "+" : "") + inr(v, d);
+const words = (n) => (n >= 1e7 ? +(n / 1e7).toFixed(1) + " crore" : n >= 1e5 ? +(n / 1e5).toFixed(1) + " lakh" : num(n));
+const pct0 = (v) => (v == null || !isFinite(v) ? "—" : Math.round(v * 100) + "%");
+const pad = (n) => String(n).padStart(2, "0");
+const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const parseSim = (s) => (s ? Date.parse(String(s).length <= 10 ? s + "T00:00:00Z" : String(s).replace(/Z$/, "") + "Z") : NaN);
+const simIso = (t) => new Date(t).toISOString().slice(0, 19);
+const fmtDate = (t) => { const d = new Date(t); return `${DOW[d.getUTCDay()]} ${d.getUTCDate()} ${MON[d.getUTCMonth()]}`; };
+const fmtTime = (t) => { const d = new Date(t); return pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()); };
+const festIcon = (n) => (/diwali|dhanteras|dooj|dussehra/i.test(n) ? "🪔" : /christmas/i.test(n) ? "🎄" : /wedding/i.test(n) ? "💍" : "✨");
+const sum = (a, f) => a.reduce((t, x) => t + (+f(x) || 0), 0);
+const accOf = (a) => (a && a.merchant_wape != null ? 1 - a.merchant_wape : null);
+// The naive baseline at the same (store-day) level, when the engine reports one.
+const naiveOf = (a) => (a && a.merchant_baseline_wape != null ? 1 - a.merchant_baseline_wape : null);
+
+let TK = {};
+function readTokens() {
+  const cs = getComputedStyle(document.documentElement);
+  for (const k of ["text", "muted", "faint", "cyan", "violet", "pink", "good", "bad", "warn", "bg", "panel-solid"]) TK[k] = cs.getPropertyValue("--" + k).trim();
+}
+readTokens();
+function rgba(hex, a) {
+  if (!hex || hex[0] !== "#") return hex;
+  const h = hex.length === 4 ? hex.slice(1).split("").map((c) => c + c).join("") : hex.slice(1, 7);
+  return `rgba(${parseInt(h.slice(0, 2), 16)},${parseInt(h.slice(2, 4), 16)},${parseInt(h.slice(4, 6), 16)},${a})`;
+}
+
+// A number that eases toward its target every frame.
+const TWEENS = [];
+class Tween {
+  constructor(node, fmt) { this.node = node; this.fmt = fmt; this.v = null; this.t = null; this.txt = ""; TWEENS.push(this); }
+  set(t) {
+    if (t == null || !isFinite(t)) { this.t = this.v = null; this.write("—"); return; }
+    if (this.v == null || reduced()) this.v = reduced() ? t : 0;
+    this.t = t;
+  }
+  step(dt) {
+    if (this.t == null || this.v == null) return;
+    this.v += (this.t - this.v) * (1 - Math.exp(-dt / 260));
+    if (Math.abs(this.t - this.v) < Math.abs(this.t) * 2e-5 + 1e-3) this.v = this.t;
+    this.write(this.fmt(this.v));
+  }
+  write(s) { if (s !== this.txt) { this.txt = s; this.node.textContent = s; } }
+}
+function makeSpark(color, { w = 120, h = 40 } = {}) {
+  const id = "sp" + Math.random().toString(36).slice(2, 8);
+  const poly = svg("polygon", { fill: `url(#${id})` }), line = svg("polyline", { fill: "none", stroke: color, "stroke-width": 2, "vector-effect": "non-scaling-stroke" });
+  const node = svg("svg", { viewBox: `0 0 ${w} ${h}`, preserveAspectRatio: "none", class: "spark", "aria-hidden": "true" },
+    svg("defs", {}, svg("linearGradient", { id, x1: 0, y1: 0, x2: 0, y2: 1 },
+      svg("stop", { offset: "0%", "stop-color": color, "stop-opacity": 0.45 }), svg("stop", { offset: "100%", "stop-color": color, "stop-opacity": 0 }))), poly, line);
+  return {
+    node,
+    update(vals) {
+      if (vals.length < 2) return;
+      const max = Math.max(...vals), min = Math.min(0, ...vals), n = vals.length;
+      const x = (i) => (i / (n - 1)) * w, y = (v) => h - 2 - ((v - min) / (max - min || 1)) * (h - 6);
+      const pts = vals.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+      line.setAttribute("points", pts); poly.setAttribute("points", `0,${h} ${pts} ${w},${h}`);
+    },
+  };
+}
+const push = (arr, v, n = 60) => { arr.push(+v || 0); if (arr.length > n) arr.shift(); };
+
+// ---------------------------------------------------------------- state
+const S = {
+  mode: null,                     // "live" | "mock"
+  scope: Q.get("platform") || null,
+  status: null, statsAt: 0,
+  sim: { ms: NaN, sentWall: 0, speed: 0, key: null, running: false, shown: NaN },
+  platforms: [], allPlatforms: [], tree: null, lessons: null, attention: null,
+  hist: { rev: [], ops: [], plat: {} },
+  demo: {},                       // endpoint -> null | "derived" | "mock"
+  retryAt: {},                    // endpoint -> when to try the real endpoint again
+  base: { merchants: [], merchAt: 0, signals: [], sigAt: 0 },
+  applied: new Map(),             // signal id -> "applying" | "applied"
+};
+
+// ---------------------------------------------------------------- data access
 const token = () => { try { return sessionStorage.getItem("sb-admin-token"); } catch { return null; } };
-async function admin(path, options = {}) {
-  const res = await fetch(path, { ...options, headers: { "Content-Type": "application/json", "X-Admin-Token": token() || "" } });
-  if (res.status === 401) { try { sessionStorage.removeItem("sb-admin-token"); } catch {} gate(); return null; }
-  if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.detail || res.statusText); }
+let MOCK = null;
+async function http(path, { method = "GET", body } = {}) {
+  const res = await fetch("/commerce/api" + path, { method, headers: { "Content-Type": "application/json", "X-Admin-Token": token() || "" }, body: body ? JSON.stringify(body) : undefined });
+  if (res.status === 401) { try { sessionStorage.removeItem("sb-admin-token"); } catch {} gate(); const e = new Error("Admin token needed"); e.status = 401; throw e; }
+  if (!res.ok) { const b = await res.json().catch(() => ({})); const e = new Error(b.detail || res.statusText); e.status = res.status; throw e; }
   return res.json();
 }
-function gate() {
-  const input = el("input", { type: "password", placeholder: "Admin token", autocomplete: "off" });
-  $("out").replaceChildren(el("div", { class: "card gate rise" }, el("div", { class: "eyebrow" }, "Root brain"),
-    el("h2", {}, "SecondBrain HQ"), el("p", { class: "muted" }, "For the team that runs the root brain."),
-    el("form", { onsubmit: (e) => { e.preventDefault(); try { sessionStorage.setItem("sb-admin-token", input.value.trim()); } catch {} load(); } },
-      input, el("button", { class: "btn primary" }, "Open"))));
-}
+const scoped = (p, scope) => (scope ? p + (p.includes("?") ? "&" : "?") + "platform=" + encodeURIComponent(scope) : p);
 
-const state = { days: 56, company: null };
-
-// Live: the root operator hears every notice across all companies (read-only login).
-let listening = false;
-const onLive = SB.batcher(1800, (items) => {
-  const sig = items.filter((m) => m.signal_id), mem = items.filter((m) => m.memory_id);
-  const where = [...new Set(items.map((m) => (m.brain || "").split(".")[1]).filter(Boolean))].join(", ");
-  if (sig.length) SB.toast("🔔", `${sig.length} new decision signal${sig.length === 1 ? "" : "s"}`, `Raised just now in ${where}`,
-    { tone: sig.some((m) => m.detail?.urgency === "high") ? "bad" : "" });
-  if (mem.length) SB.toast("🧠", `${mem.length} new memor${mem.length === 1 ? "y" : "ies"}`, `Learned just now in ${where}`);
-});
-
-async function load() {
-  if (!token()) return gate();
-  const data = await admin("/admin/hq");
-  if (!data) return;
-  if (!listening) {
-    listening = true;
-    SB.live("/admin/live/monitor", { "X-Admin-Token": token() }, (topic, m) => { if (m.signal_id || m.memory_id) onLive(m); });
+// The four HQ endpoints the engine is adding. Until it serves them (404/503), the page computes
+// contract-shaped answers in the browser from the live /merchants, /status and /signals, labelled "Demo data".
+async function getHQ(name, path, scope = S.scope) {
+  if (MOCK) { S.demo[name] = "mock"; return MOCK.hq(name, scope); }
+  if (!(S.retryAt[name] > Date.now())) {
+    try { const r = await http(scoped(path, scope)); S.demo[name] = null; return r; }
+    catch (e) { if (![404, 502, 503].includes(e.status)) throw e; S.retryAt[name] = Date.now() + 30000; }
   }
-  const sum = (f) => data.companies.reduce((t, c) => t + f(c), 0);
-  const oc = (c, k) => (c.outcomes[k] || { count: 0, value: 0 });
-  const graded = data.companies.filter((c) => c.accuracy && c.accuracy.wape != null);
-  const accuracy = graded.length ? 1 - graded.reduce((t, c) => t + c.accuracy.wape, 0) / graded.length : null;
-  const companies = data.companies.filter((c) => c.today);
-  if (!state.company && companies.length) state.company = (companies.find((c) => c.path === "root.desiliving") || companies[0]).path;
-
-  const canvas = el("canvas");
-  const hero = el("section", { class: "card hero rise" },
-    el("div", {},
-      el("div", { class: "eyebrow" }, "SecondBrain HQ · root brain"),
-      el("h1", {}, "Every business. ", el("span", { class: "grad-text" }, "One brain that learns.")),
-      el("p", { class: "lead" }, "Each business's brain forecasts, advises and checks itself. What works flows up here as anonymous patterns, and comes back down as better advice."),
-      el("div", { class: "kpis", style: { gridTemplateColumns: "repeat(2, 1fr)" } },
-        kpi("Businesses connected", data.companies.length, { glow: "glow" }),
-        kpi("Open decision signals", sum((c) => c.signals.open || 0), { delay: 80 }),
-        kpi("At stake right now", sum((c) => c.at_stake), { format: shortMoney, delay: 160 }),
-        kpi("Forecast accuracy", accuracy == null ? "—" : accuracy * 100, { format: (x) => Math.round(x) + "%", delay: 240,
-          glow: "glow-good", tip: "Average of 1 − error, checked against real sales" }))),
-    el("div", {}, canvas, el("div", { class: "legend-line" },
-      el("span", {}, el("i", { style: { background: "var(--cyan)" } }), "patterns flowing up"),
-      el("span", {}, el("i", { style: { background: "#f5c451" } }), "lessons flowing down"),
-      el("span", {}, el("i", { style: { background: "var(--faint)" } }), "private: nothing shared"))));
-
-  const results = el("section", { class: "section" },
-    el("div", { class: "section-head" }, el("div", {}, el("h2", {}, "What the brain's advice has been worth"),
-      el("p", {}, "Every warning is checked against what really happened."))),
-    el("div", { class: "kpis" },
-      kpi("Sales saved by acting", sum((c) => oc(c, "prevented").value), { format: shortMoney, glow: "glow-good", cls: "good" }),
-      kpi("Run-outs prevented", sum((c) => oc(c, "prevented").count), { delay: 80 }),
-      kpi("Warnings that came true", sum((c) => oc(c, "happened").count + oc(c, "happened_anyway").count), { delay: 160 }),
-      kpi("Lessons at the root", data.lessons.length, { delay: 240, glow: "glow" })));
-
-  const biz = el("div", { class: "biz" }, data.companies.map((c, i) => bizCard(c, oc, i)));
-  const lessons = el("ul", { class: "lessons" }, data.lessons.slice(0, 5).map((l) => el("li", { class: "rise" }, l)));
-  $("out").replaceChildren(hero, results, timeMachine(companies),
-    el("section", { class: "section" }, el("div", { class: "section-head" }, el("div", {}, el("h2", {}, "Connected businesses"),
-      el("p", {}, "Aggregates only: HQ never sees a business's notes or documents."))), biz),
-    el("section", { class: "section" }, el("div", { class: "section-head" }, el("div", {}, el("h2", {}, "What the root has learned"),
-      el("p", {}, "Anonymous patterns from businesses that share them. They make every business's advice better."))),
-      el("div", { class: "card" }, data.lessons.length ? lessons : el("div", { class: "empty" }, "Nothing learned yet."))));
-  network(canvas, data.companies);
-  const last = store.get("sb-hq-last");
-  if (last && last.company === state.company) showSummary(last, false);
+  S.demo[name] = "derived";
+  await ensureBase(name === "attention" || name === "tree" || name === "platforms");
+  return DERIVE[name](baseData(), scope);
 }
-
-function bizCard(c, oc, i) {
-  const acc = c.accuracy && c.accuracy.wape != null ? Math.max(0, 1 - c.accuracy.wape) : null;
-  const r = 26, len = 2 * Math.PI * r;
-  const arc = svg("circle", { cx: 32, cy: 32, r, fill: "none", stroke: "url(#ringg)", "stroke-width": 6, "stroke-linecap": "round",
-    "stroke-dasharray": len, "stroke-dashoffset": len, transform: "rotate(-90 32 32)", style: "transition: stroke-dashoffset 1.4s cubic-bezier(.2,.8,.2,1)" });
-  const ring = el("div", { class: "ring", title: c.accuracy_text || "Forecast accuracy, graded once real sales arrive" },
-    svg("svg", { viewBox: "0 0 64 64" },
-      svg("defs", {}, svg("linearGradient", { id: "ringg", x1: 0, y1: 0, x2: 1, y2: 1 },
-        svg("stop", { offset: 0, "stop-color": "#8b7bff" }), svg("stop", { offset: 1, "stop-color": "#33d6f2" }))),
-      svg("circle", { cx: 32, cy: 32, r, fill: "none", stroke: "var(--panel-hi)", "stroke-width": 6 }), arc),
-    el("span", {}, acc == null ? "—" : pct(acc)));
-  if (acc != null) requestAnimationFrame(() => setTimeout(() => arc.setAttribute("stroke-dashoffset", len * (1 - acc)), 200));
-  const lost = -(oc(c, "happened").value + oc(c, "happened_anyway").value);
-  const stat = (k, v, cls = "") => el("div", { class: "stat" }, el("div", { class: "k" }, k), el("div", { class: "v " + cls }, v));
-  return el("div", { class: "card rise", style: { animationDelay: i * 90 + "ms" } },
-    el("div", { class: "head" }, el("div", { class: "avatar" }, c.name[0]),
-      el("div", {}, el("h3", {}, c.name), el("div", { class: "row", style: { marginTop: "4px" } },
-        el("span", { class: "chip " + (c.sharing === "patterns" ? "accent" : "") }, c.sharing === "patterns" ? "↑ Shares patterns" : "🔒 Private"),
-        el("span", { class: "muted", style: { fontSize: "13px" } }, c.today ? `Brain's date ${fmtDay(c.today)}${SB.festivalNote(c.today) ? " · 🪔 " + SB.festivalNote(c.today) : ""}` : "No sales data yet"))),
-      ring),
-    el("div", { class: "stats" },
-      stat("Open signals", String(c.signals.open || 0)),
-      stat("At stake", shortMoney(c.at_stake)),
-      stat("Saved", shortMoney(oc(c, "prevented").value), "good"),
-      stat("People", String(c.people)),
-      stat("Departments", String(c.departments)),
-      stat("Lost", lost ? shortMoney(lost) : "₹0", lost ? "bad" : "")));
+let baseBusy = null;
+async function ensureBase(needSignals) {
+  if (baseBusy) return baseBusy;
+  baseBusy = (async () => {
+    const now = Date.now(), B = S.base, jobs = [];
+    if (now - B.merchAt > 2500) jobs.push(http("/merchants").then((l) => { if (Array.isArray(l)) { B.merchants = l; B.merchAt = Date.now(); } }).catch(() => {}));
+    if (needSignals && now - B.sigAt > 3000) jobs.push(http("/signals?limit=50").then((l) => { if (Array.isArray(l)) { mergeSignals(l); B.sigAt = Date.now(); } }).catch(() => {}));
+    await Promise.all(jobs);
+  })();
+  try { await baseBusy; } finally { baseBusy = null; }
 }
-
-// ---------- the living network: departments → company → root, lessons back down ----------
-function network(canvas, companies) {
-  const ctx = canvas.getContext("2d"), dpr = devicePixelRatio || 1;
-  let W, H, nodes, links, particles = [];
-  const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-  function layout() {
-    W = canvas.clientWidth; H = canvas.clientHeight; canvas.width = W * dpr; canvas.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const cx = W / 2, cy = H / 2, root = { x: cx, y: cy, r: 26, label: "Root brain", kind: "root" };
-    nodes = [root]; links = [];
-    const n = Math.max(companies.length, 1);
-    companies.forEach((c, i) => {
-      const a = (n === 2 ? Math.PI : -Math.PI / 2) + (i / n) * Math.PI * 2;
-      const co = { x: cx + Math.cos(a) * W * 0.27, y: cy + Math.sin(a) * H * 0.3, r: 16, label: c.name, kind: "company", sharing: c.sharing };
-      nodes.push(co); links.push({ a: co, b: root, shared: c.sharing === "patterns" });
-      const d = Math.max(c.departments, 1);
-      for (let j = 0; j < d; j++) {
-        // Departments fan out away from the root.
-        const b = a + (d === 1 ? 0 : (j / (d - 1) - 0.5) * 2.4), rr = Math.min(W * 0.17, 95);
-        const dep = { x: co.x + Math.cos(b) * rr, y: co.y + Math.sin(b) * rr * 1.15, r: 6, kind: "dept" };
-        nodes.push(dep); links.push({ a: dep, b: co, shared: true, dept: true });
-      }
-    });
-  }
-  layout(); addEventListener("resize", layout);
-  const spawn = () => {
-    for (const l of links) {
-      if (!l.shared) continue;
-      if (Math.random() < (l.dept ? 0.025 : 0.05)) particles.push({ l, t: 0, up: true, s: 0.006 + Math.random() * 0.006 });
-      if (!l.dept && Math.random() < 0.02) particles.push({ l, t: 0, up: false, s: 0.005 + Math.random() * 0.004 });
-    }
-  };
-  const t0 = performance.now();
-  function frame(now) {
-    if (!canvas.isConnected) return;
-    const time = (now - t0) / 1000;
-    ctx.clearRect(0, 0, W, H);
-    // Slowly turning orbits around the root.
-    const root = nodes[0];
-    for (const [k, rad] of [[1, 52], [-0.6, 84]]) {
-      ctx.save(); ctx.translate(root.x, root.y); ctx.rotate(time * 0.25 * k);
-      ctx.setLineDash([2, 9]); ctx.strokeStyle = "rgba(139,123,255,0.35)"; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.arc(0, 0, rad, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
-    }
-    ctx.setLineDash([]);
-    const cyan = css("--cyan") || "#33d6f2", violet = css("--violet") || "#8b7bff", text = css("--text"), faint = css("--faint");
-    for (const l of links) {
-      ctx.beginPath(); ctx.moveTo(l.a.x, l.a.y); ctx.lineTo(l.b.x, l.b.y);
-      ctx.setLineDash(l.shared ? [] : [4, 5]); ctx.strokeStyle = l.shared ? "rgba(139,123,255,0.28)" : faint; ctx.lineWidth = l.dept ? 1 : 1.6; ctx.stroke();
-    }
-    ctx.setLineDash([]);
-    spawn();
-    particles = particles.filter((p) => (p.t += p.s) < 1);
-    for (const p of particles) {
-      const [from, to] = p.up ? [p.l.a, p.l.b] : [p.l.b, p.l.a];
-      const x = from.x + (to.x - from.x) * p.t, y = from.y + (to.y - from.y) * p.t;
-      const g = ctx.createRadialGradient(x, y, 0, x, y, 7);
-      g.addColorStop(0, p.up ? cyan : "#f5c451"); g.addColorStop(1, "rgba(0,0,0,0)");
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI * 2); ctx.fill();
-    }
-    for (const nd of nodes) {
-      const pulse = nd.kind === "root" ? 1 + Math.sin(time * 2) * 0.08 : 1;
-      if (nd.kind !== "dept") {
-        const g = ctx.createRadialGradient(nd.x, nd.y, 0, nd.x, nd.y, nd.r * 3.2 * pulse);
-        g.addColorStop(0, nd.kind === "root" ? "rgba(139,123,255,0.55)" : "rgba(51,214,242,0.35)"); g.addColorStop(1, "rgba(0,0,0,0)");
-        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(nd.x, nd.y, nd.r * 3.2 * pulse, 0, Math.PI * 2); ctx.fill();
-      }
-      const g2 = ctx.createLinearGradient(nd.x - nd.r, nd.y - nd.r, nd.x + nd.r, nd.y + nd.r);
-      g2.addColorStop(0, violet); g2.addColorStop(1, cyan);
-      ctx.fillStyle = nd.kind === "company" && nd.sharing !== "patterns" ? faint : g2;
-      ctx.beginPath(); ctx.arc(nd.x, nd.y, nd.r * pulse, 0, Math.PI * 2); ctx.fill();
-      if (nd.label) {
-        ctx.fillStyle = text; ctx.font = `${nd.kind === "root" ? 700 : 600} 12.5px Inter, system-ui`; ctx.textAlign = "center";
-        ctx.fillText(nd.label, nd.x, nd.y + nd.r + 18);
-      }
-    }
-    requestAnimationFrame(frame);
-  }
-  requestAnimationFrame(frame);
+function mergeSignals(list) {
+  const B = S.base, seen = new Set(B.signals.map((s) => s.id));
+  for (const s of list) if (s && s.id && !seen.has(s.id)) { B.signals.push(s); seen.add(s.id); }
+  B.signals.sort((a, b) => String(b.sim_ts || "").localeCompare(String(a.sim_ts || "")));
+  if (B.signals.length > 300) B.signals.length = 300;
 }
+const baseData = () => ({ merchants: S.base.merchants, status: S.status || {}, signals: S.base.signals, open: null, extra: null });
 
-// ---------- time machine ----------
-function timeMachine(companies) {
-  const company = el("select", { onchange: (e) => { state.company = e.target.value; $("tm").replaceChildren(); } },
-    companies.map((c) => el("option", { value: c.path }, c.name)));
-  company.value = state.company;
-  const seg = el("div", { class: "seg" }, [[14, "2 weeks"], [28, "4 weeks"], [56, "8 weeks"]].map(([d, label]) =>
-    el("button", { type: "button", class: state.days === d ? "on" : "",
-      onclick: (e) => { state.days = d; seg.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b === e.target)); } }, label)));
-  return el("section", { class: "section" },
-    el("div", { class: "section-head" },
-      el("div", {}, el("div", { class: "eyebrow" }, "Time machine"), el("h2", {}, "Watch the brain run a business"),
-        el("p", {}, "Weeks of sales play out, through Diwali and the wedding season. The brain predicts run-outs, places orders, checks itself and learns.")),
-      el("button", { class: "btn ghost sm", onclick: resetDemo, title: "Back to the saved starting point" }, "↺ Reset demo")),
-    el("div", { class: "card" },
-      el("div", { class: "tm-controls" },
-        el("div", {}, el("label", {}, "Business"), company),
-        el("div", {}, el("label", {}, "Run for"), seg),
-        el("button", { class: "btn primary", id: "tm-go", onclick: run }, "▶  Run the brain")),
-      el("div", { id: "tm" })));
-}
-
-const STEPS = ["Customers buy, day by day", "Stock runs down", "The brain spots run-outs coming", "Orders go out, deliveries arrive",
-               "Each prediction is checked against reality", "Outcomes become memories", "Forecasts and advice are recalculated"];
-
-async function run() {
-  const box = $("tm"), go = $("tm-go");
-  go.disabled = true;
-  const items = STEPS.map((s) => el("li", {}, el("span", { class: "s" }), s));
-  box.replaceChildren(el("div", { class: "thinking rise" }, el("div", { class: "orb" }),
-    el("div", {}, el("div", { class: "eyebrow" }, "The brain is working"), el("ul", { class: "steps", style: { marginTop: "10px" } }, items))));
-  let i = 0; items[0].classList.add("on");
-  const timer = setInterval(() => {
-    if (i < items.length - 1) { items[i].classList.replace("on", "done"); items[i].querySelector(".s").textContent = "✓"; items[++i].classList.add("on"); }
-  }, 6500);
+async function control(cmd) {
   try {
-    const r = await admin("/admin/simulate", { method: "POST", body: JSON.stringify({ company: state.company, days: state.days, policy: "follow" }) });
-    if (!r) return;
-    store.set("sb-hq-last", r);
-    playback(r);
-  } catch (e) {
-    box.replaceChildren(el("p", { class: "bad" }, "Couldn't run: " + e.message));
-  } finally { clearInterval(timer); go.disabled = false; }
+    if (MOCK) MOCK.control(cmd); else await http("/control", { method: "POST", body: cmd });
+    return true;
+  } catch (e) { if (cmd.cmd !== "run_days") SB.toast("⚠️", "Command not sent", e.message, { tone: "bad" }); return false; }
 }
 
-async function resetDemo() {
-  if (!confirm("Go back to the demo's starting point?")) return;
-  try { await admin("/admin/demo/reset", { method: "POST" }); store.set("sb-hq-last", null); load(); }
-  catch (e) { alert("Couldn't reset: " + e.message); }
-}
-
-// Events on the business's calendar, so playback can reveal them day by day.
-function timeline(r) {
-  const events = [];
-  for (const p of Object.values(r.products)) {
-    p.arrived_on.forEach((d) => events.push({ day: d, ic: "cyan", icon: "▼", text: `${p.name}: order arrived`, name: p.name }));
-    p.stock.forEach((s, i) => { if (s === 0 && p.demand[i] > 0 && (i === 0 || p.stock[i - 1] > 0)) events.push({ day: p.days[i], ic: "bad", icon: "!", text: `${p.name} ran out`, name: p.name }); });
-  }
-  for (const f of SB.festivalsBetween(r.from, r.to)) events.push({ day: f.day, ic: "info", icon: "🪔", text: f.name, name: f.name });
-  for (const o of r.outcomes) {
-    const m = o.title.match(/runs out on (\w+ \d+|\d+ \w+)/), name = o.title.split(" runs out")[0];
-    const day = m ? isoOf(m[1], r.from) : r.to;
-    const good = o.result === "prevented";
-    events.push({ day: day < r.from ? r.from : day > r.to ? r.to : day, ic: good ? "good" : o.result === "false_alarm" ? "info" : "bad",
-      icon: good ? "✓" : o.result === "false_alarm" ? "~" : "✕", outcome: o.result, name,
-      text: good ? `${name}: predicted run-out avoided` : o.result === "false_alarm" ? `${name}: predicted run-out didn't come` : `${name}: ran out as predicted` });
-  }
-  return events.sort((a, b) => a.day.localeCompare(b.day));
-}
-function isoOf(monthDay, near) {
-  const year = +near.slice(0, 4);
-  for (const y of [year, year + 1, year - 1]) {
-    const d = new Date(`${monthDay}, ${y}`);
-    if (isNaN(d)) continue;
-    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    if (Math.abs(new Date(iso) - new Date(near)) < 200 * 864e5) return iso;
-  }
-  return near;
-}
-
-function playback(r) {
-  const box = $("tm"), products = Object.values(r.products), days = products[0]?.days || [];
-  if (!days.length) return showSummary(r, true);
-  const events = timeline(r), n = days.length;
-  const dateEl = el("div", { class: "date" }, fmtDay(days[0]));
-  const fill = el("div", { class: "fill" });
-  const color = { bad: "bad", good: "good", cyan: "cyan", info: "violet" };
-  const track = el("div", { class: "track" }, fill, events.map((e) => el("div", { class: "mark", title: e.text,
-    style: { left: (Math.max(0, days.indexOf(e.day)) / Math.max(1, n - 1)) * 100 + "%", background: `var(--${color[e.ic]})` } })));
-  const live = { sold: el("div", { class: "v" }, "0"), orders: el("div", { class: "v" }, "0"), prevented: el("div", { class: "v good" }, "0"), out: el("div", { class: "v" }, "0") };
-  const liveKpi = (k, v) => el("div", { class: "kpi" }, el("div", { class: "k" }, k), v);
-  const charts = products.map((p) => chart(p));
-  const feed = el("ul", { class: "feed" });
-  const name = document.querySelector("#out select")?.selectedOptions[0]?.textContent || "the business";
-  box.replaceChildren(
-    el("div", { class: "clock" }, el("span", { class: "from" }, fmtDay(r.from) + "  →"), dateEl, el("span", { class: "chip accent" }, "The brain is running " + name)),
-    track,
-    el("div", { class: "kpis", style: { marginBottom: "18px" } }, liveKpi("Units sold", live.sold), liveKpi("Orders delivered", live.orders),
-      liveKpi("Run-outs prevented", live.prevented), liveKpi("Days a product was out", live.out)),
-    el("div", { class: "tm-body" }, el("div", { class: "charts" }, charts.map((c) => c.node)),
-      el("div", {}, el("div", { class: "eyebrow", style: { marginBottom: "10px" } }, "Live feed"), feed)),
-    el("div", { id: "tm-summary" }));
-  const total = Math.min(9000, 2600 + n * 110), start = performance.now();
-  let shown = 0;
-  function frame(now) {
-    const t = Math.min(1, (now - start) / total), idx = Math.min(n - 1, Math.floor(t * (n - 1) + 1e-6));
-    dateEl.textContent = fmtDay(days[idx]);
-    fill.style.width = t * 100 + "%";
-    let sold = 0, out = 0, orders = 0;
-    for (const c of charts) { c.reveal(t, idx); sold += c.soldUntil(idx); out += c.outUntil(idx); orders += c.arrivalsUntil(days[idx]); }
-    live.sold.textContent = sold.toLocaleString("en-IN"); live.out.textContent = String(out); live.orders.textContent = String(orders);
-    while (shown < events.length && events[shown].day <= days[idx]) {
-      const e = events[shown++];
-      feed.prepend(el("li", { class: "pop" }, el("span", { class: "ic " + e.ic }, e.icon), el("span", {}, e.text), el("span", { class: "when" }, fmtDay(e.day))));
-      if (e.outcome === "prevented") live.prevented.textContent = String(+live.prevented.textContent + 1);
-      const target = charts.find((c) => c.name === e.name);
-      if (target) target.flash(e.outcome === "prevented" ? "saved" : e.ic === "bad" ? "alarm" : null);
+// ---------------------------------------------------------------- derive (contract shapes from the base data)
+const URANK = { high: 0, medium: 1, low: 2 };
+// A signal from /signals is open until the merchant acts, its outcome arrives, or its window passes.
+const isOpen = (s) => !s.autopilot && !S.applied.has(s.id) && !s._closed &&
+  (!isFinite(simNow()) || !s.sim_ts || parseSim(s.sim_ts) > simNow() - (s.action?.hours || 24) * 36e5);
+const DERIVE = {
+  platforms(B, scope) {
+    const st = B.status || {}, acc = st.accuracy || {}, X = B.extra || {}, all = B.merchants;
+    const ids = [...new Set([...PLAT_ORDER.filter((p) => all.some((m) => m.platform === p)), ...all.map((m) => m.platform)])];
+    const totRev = sum(all, (m) => m.revenue_today), open = B.open || B.signals.filter(isOpen);
+    return ids.filter((id) => !scope || id === scope).map((id) => {
+      const ms = all.filter((m) => m.platform === id), x = X[id] || {}, info = pinfo(id);
+      const rev = sum(ms, (m) => m.revenue_today), share = totRev > 0 ? rev / totRev : all.length ? ms.length / all.length : 0;
+      const kinds = {};
+      for (const s of open) if (s.platform === id) kinds[s.kind] = (kinds[s.kind] || 0) + 1;
+      const cats = {};
+      for (const m of ms) { const c = (cats[m.category] ||= { name: m.category, merchants: 0, revenue_today: 0 }); c.merchants++; c.revenue_today += +m.revenue_today || 0; }
+      return {
+        id, name: info.name, kind: info.kind, color: info.dark, merchants: ms.length,
+        customers: x.customers ?? Math.round((st.customers || 0) * info.cust),
+        series: x.series ?? Math.round((st.series || 0) * (all.length ? ms.length / all.length : 0)),
+        orders_today: sum(ms, (m) => m.orders_today), revenue_today: rev,
+        orders_per_sec: x.ops ?? st.platforms?.[id]?.orders_per_sec ?? 0,
+        active_customers_today: x.active ?? Math.round((st.active_customers_today || 0) * share),
+        accuracy: { wape: acc.by_platform?.[id] ?? acc.wape ?? null, merchant_wape: x.merchant_wape ?? acc.merchant_wape ?? null,
+                    baseline_wape: acc.baseline_wape ?? null, merchant_baseline_wape: x.baseline_wape ?? acc.merchant_baseline_wape ?? null },
+        open_signals: sum(ms, (m) => m.open_signals),
+        signals_total: x.signals_total ?? Math.round((st.signals_total || 0) * share),
+        signals_by_kind: kinds,
+        offers_applied: x.offers ?? Math.round((st.offers_applied || 0) * share),
+        uplift_revenue: x.uplift ?? (st.uplift_revenue || 0) * share,
+        hit_rate: x.hit_rate !== undefined ? x.hit_rate : st.learning?.hit_rate ?? null,
+        categories: Object.values(cats).sort((a, b) => b.revenue_today - a.revenue_today || b.merchants - a.merchants),
+      };
+    });
+  },
+  tree(B, scope) {
+    const urgent = new Set(), sig = new Set();
+    for (const s of B.open || B.signals.filter(isOpen)) (s.urgency === "high" ? urgent : sig).add(s.merchant);
+    const plats = DERIVE.platforms(B, scope).map((p) => {
+      const ms = B.merchants.filter((m) => m.platform === p.id), cats = {};
+      for (const m of ms) {
+        const status = urgent.has(m.id) ? "urgent" : (m.open_signals > 0 || sig.has(m.id)) ? "signal" : "ok";
+        (cats[m.category] ||= []).push({ id: m.id, name: m.name, city: m.city, category: m.category, status, open_signals: m.open_signals || 0,
+          orders_today: m.orders_today || 0, revenue_today: m.revenue_today || 0, offers_applied: m.offers_applied || 0 });
+      }
+      return { id: p.id, name: p.name, color: p.color, orders_today: p.orders_today, revenue_today: p.revenue_today, open_signals: p.open_signals,
+        categories: Object.entries(cats).map(([name, merchants]) => ({ name, merchants })).sort((a, b) => b.merchants.length - a.merchants.length) };
+    });
+    return { root: { id: "root", name: "SecondBrain", orders_today: sum(plats, (p) => p.orders_today), revenue_today: sum(plats, (p) => p.revenue_today), open_signals: sum(plats, (p) => p.open_signals) },
+      platforms: plats, scope: scope ? { level: "platform", id: scope } : { level: "hq", id: null } };
+  },
+  attention(B, scope) {
+    return (B.open || B.signals.filter(isOpen)).filter((s) => !scope || s.platform === scope)
+      .sort((a, b) => (URANK[a.urgency] ?? 3) - (URANK[b.urgency] ?? 3) || (b.expected?.revenue || 0) - (a.expected?.revenue || 0))
+      .slice(0, 10).map((s) => ({ ...s, platform_name: pinfo(s.platform).name }));
+  },
+  // The engine reports learned price response per category in /status; a category becomes a lesson
+  // once real offer outcomes (n > 0) have moved it.
+  lessons(B, scope) {
+    const els = B.status?.learning?.elasticity || {}, out = [];
+    for (const [c, e] of Object.entries(els)) {
+      if (!e || !(e.n > 0) || e.learned == null || e.prior == null) continue;
+      const ms = B.merchants.filter((m) => (!scope || m.platform === scope) && pcatsOf(m.category).includes(c));
+      if (!ms.length) continue;
+      out.push(lessonText({ id: "elasticity:" + c, kind: e.learned <= -1.3 ? "price_response" : "no_discount", category: c, platform: null, value: e.learned, prior: e.prior,
+        evidence_n: e.n, learned_from: Math.min(ms.length, e.n), applies_to: ms.length, updated_sim_ts: B.status.sim_ts }));
     }
-    if (t < 1) requestAnimationFrame(frame); else showSummary(r, true);
+    return out.sort((a, b) => b.evidence_n - a.evidence_n);
+  },
+};
+// Plain sentences for a lesson (for the demo data; the engine writes its own title and detail).
+function lessonText(L) {
+  const c = L.category, lc = c.toLowerCase(), v = +L.value, p = +L.prior, n = L.evidence_n;
+  const lift = (e) => Math.round(-e * 20);
+  const T = {
+    price_response: [`20% off ${c} lifts sales by about ${lift(v)}%, not the ${lift(p)}% we assumed.`,
+      `Measured on ${num(n)} completed offers. ${c} offers are now ${v < p ? "deeper and shorter" : "lighter"} for every merchant that sells ${lc}.`],
+    no_discount: [`Discounts barely move ${c}: 10% off adds only ${Math.round(-v * 10)}% sales, so hold the price.`,
+      `Measured on ${num(n)} completed offers. For ${lc} the brain now suggests reorders and bundles instead of price cuts, protecting margin.`],
+    festival_lift: [`${c} sells ${v.toFixed(1)}× a normal day around ${L.festival || "festivals"}.`,
+      `Seen across ${num(n)} store-days. Stock and offers for ${lc} are now planned ahead of every festival.`],
+    winback: [`A small coupon brings back ${pct0(v)} of lapsed ${c} customers within a week, not ${pct0(p)}.`,
+      `Measured on ${num(n)} coupon campaigns. Win-back coupons now go to the customers most likely to return.`],
+    restock: [`Reorder ${c} at ${v.toFixed(1)} days of cover, not ${p.toFixed(0)}: far fewer stock-outs.`,
+      `Learned from ${num(n)} restocks. Every store selling ${lc} now gets its reorder signal earlier.`],
+    surge: [`${pct0(v)} of ${c} demand spikes are real and last two days or more.`,
+      `Learned from ${num(n)} spikes. The brain now acts on a ${lc} spike within the hour instead of waiting a day.`],
+  }[L.kind] || [c, ""];
+  return { ...L, title: L.title || T[0], detail: L.detail || T[1] };
+}
+
+// ---------------------------------------------------------------- live messages
+function onMessage(topic, m) {
+  const i = topic.indexOf("commerce/");
+  if (i < 0 || !m) return;
+  const rest = topic.slice(i + 9), parts = rest.split("/");
+  if (rest === "stats") onStats(m);
+  else if (parts[0] === "signals") onSignal(m);
+  else if (parts[0] === "outcomes") onOutcome(m, parts[2]);
+}
+function onStats(m) {
+  S.status = m; S.statsAt = Date.now();
+  const sp = m.speed, key = typeof sp === "string" ? sp : Object.keys(SPEED_VAL).find((k) => SPEED_VAL[k] === sp);
+  S.sim.key = key || S.sim.key || "1h";
+  S.sim.speed = typeof sp === "number" ? sp : SPEED_VAL[key] || 0;
+  S.sim.running = !!m.running;
+  const t = parseSim(m.sim_ts);
+  if (isFinite(t)) { S.sim.ms = t; S.sim.sentWall = m.sent_ms || Date.now(); }
+  HERO.render(); KPI.render(); TM.onStats();
+}
+function onSignal(s) {
+  if (!s || !s.id) return;
+  if (!MOCK) mergeSignals([s]);
+  const node = TREE.byId.get(s.merchant);
+  if (node) { node.status = s.urgency === "high" || node.status === "urgent" ? "urgent" : "signal"; node.open_signals = (node.open_signals || 0) + 1; }
+  TREE.pulse(s.merchant, s.urgency);
+  LOOP.soon("attention", 900);
+}
+function onOutcome(o, merchantFromTopic) {
+  if (!o) return;
+  const s = S.base.signals.find((x) => x.id === o.signal_id); if (s) s._closed = true;
+  const mid = o.merchant || merchantFromTopic || s?.merchant;
+  if (mid) TREE.flowUp(mid, o.worked);
+  LOOP.soon("lessons", 1800);
+}
+
+// ---------------------------------------------------------------- 1. hero + KPIs
+const HERO = {
+  render() {
+    const st = S.status || {}, p = S.scope && S.platforms.find((x) => x.id === S.scope);
+    const ids = S.scope ? [S.scope] : PLAT_ORDER;
+    const names = [];
+    ids.forEach((id, i) => { if (i) names.push(el("span", { class: "sep" }, "·")); names.push(el("span", { class: "pl" }, el("i", { style: { background: pcol(id) } }), pinfo(id).name)); });
+    const m = p ? p.merchants : st.merchants, c = p ? p.customers : st.customers, se = p ? p.series : st.series;
+    const tail = m ? `— ${num(m)} merchants, ${words(c || 0)} customers, ${num(se || 0)} products forecast live` : "";
+    const key = ids.join() + tail + isLight();
+    if (this._k !== key) { this._k = key; $("connected").replaceChildren(...names, el("span", {}, tail)); }
+    const f = st.festival, fk = f?.name ? f.name + f.days_to : "";
+    if (this._f !== fk) {
+      this._f = fk;
+      $("fest").replaceChildren(f?.name ? el("span", { class: "fest" }, festIcon(f.name) + " " + (f.days_to <= 0 ? `${f.name} today` : f.days_to === 1 ? `${f.name} tomorrow` : `${f.name} in ${f.days_to} days`)) : "");
+    }
+  },
+  // The simulated clock runs between stats messages: sim time at sent_ms plus speed × elapsed wall time.
+  tick() {
+    if (!isFinite(S.sim.ms)) return;
+    let t = S.sim.ms + (S.sim.running ? S.sim.speed * (Date.now() - S.sim.sentWall) : 0);
+    if (isFinite(S.sim.shown) && t < S.sim.shown && S.sim.shown - t < Math.max(2000, S.sim.speed * 1500)) t = S.sim.shown;
+    S.sim.shown = t;
+    const d = new Date(t), ds = `${DOW[d.getUTCDay()]}, ${d.getUTCDate()} ${MON[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+    const real = Date.now() + 19800000, gap = t - real, dayOf = (x) => new Date(x).toISOString().slice(0, 10);
+    const rel = S.status?.catching_up ? "syncing today so far…" : !S.sim.running ? "paused"
+      : Math.abs(gap) < 120000 ? "● live now" : dayOf(t) === dayOf(real) ? "today"
+      : gap > 0 ? `fast-forward +${Math.max(1, Math.round(gap / 864e5))} day${Math.round(gap / 864e5) > 1 ? "s" : ""}` : "earlier";
+    if (this._d !== ds + rel) { this._d = ds + rel; $("clk-d").textContent = `${ds} · IST · ${rel}`; }
+    const hm = pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()), sec = pad(d.getUTCSeconds());
+    if (this._t !== hm + sec) { this._t = hm + sec; $("clk-t").innerHTML = `${hm}<small>:${sec}</small>`; }
+  },
+};
+const simNow = () => (isFinite(S.sim.shown) ? S.sim.shown : S.sim.ms);
+
+function setMode(mode, off) {
+  S.mode = mode;
+  const b = $("mode");
+  b.className = "mode " + (mode === "mock" ? "demo" : off ? "" : "on");
+  b.textContent = mode === "mock" ? "Demo data" : off ? "Reconnecting…" : "Live";
+  b.title = mode === "mock" ? (Q.get("mock") === "1" ? "Demo mode (?mock=1): every number on this page is generated in this browser" : "The Live Commerce engine isn't reachable, so this browser generates demo data")
+    : "Connected to the Live Commerce engine";
+}
+
+const KDEF = [
+  { k: "rev", label: "Revenue today", fmt: (v) => inr(v, 2), glow: "glow", spark: "var(--violet)" },
+  { k: "ops", label: "Orders / sec", fmt: num, spark: "var(--cyan)" },
+  { k: "sig", label: "Signals raised", fmt: num },
+  { k: "upl", label: "Uplift from offers", fmt: (v) => plusInr(v), glow: "glow-good" },
+  { k: "acc", label: "Store-day accuracy", fmt: (v) => v.toFixed(1) + "%", tip: "Store-day accuracy: 100% − WAPE of each store's daily sales, scored on days the forecast never saw. 'Naive' repeats last week's sales." },
+  { k: "hit", label: "Offer hit rate", fmt: (v) => Math.round(v) + "%", tip: "Share of completed offers that sold more than the forecast without the offer" },
+];
+const K = {};
+const KPI = {
+  init() {
+    $("kpis").replaceChildren(...KDEF.map((d, i) => {
+      const v = el("div", { class: "v" }, "—"), sub = el("div", { class: "d" }, " ");
+      const node = el("div", { class: `kpi rise ${d.glow || ""}`, title: d.tip, style: { animationDelay: i * 50 + "ms" } }, el("div", { class: "k" }, d.label), v, sub);
+      const sp = d.spark ? makeSpark(d.spark) : null;
+      if (sp) node.append(sp.node);
+      K[d.k] = { node, v, sub, tw: new Tween(v, d.fmt), sp };
+      return node;
+    }));
+  },
+  render() {
+    if (!K.rev) return;
+    const st = S.status || {}, P = S.platforms, p = S.scope && P.find((x) => x.id === S.scope);
+    const rows = S.scope ? (p ? [p] : []) : P;
+    const rev = sum(rows, (x) => x.revenue_today), orders = sum(rows, (x) => x.orders_today);
+    K.rev.tw.set(rows.length ? rev : null);
+    K.rev.sub.textContent = rows.length ? `${num(orders)} orders today` : " ";
+    const ops = p ? p.orders_per_sec : st.orders_per_sec;
+    K.ops.tw.set(ops ?? null);
+    K.ops.sub.textContent = st.running === false ? "simulation paused" : `${num(p ? p.active_customers_today : st.active_customers_today)} customers active today`;
+    const sig = p ? p.signals_total : st.signals_total, open = sum(rows, (x) => x.open_signals);
+    K.sig.tw.set(sig ?? null);
+    const kinds = Object.entries((p ? p.signals_by_kind : st.signals_by_kind) || {}).sort((a, b) => b[1] - a[1]).slice(0, 3);
+    K.sig.sub.textContent = `${num(open)} open now` + (kinds.length ? " · " + kinds.map(([k, n]) => `${KIND[k]?.[0] || "•"}${num(n)}`).join(" ") : "");
+    K.upl.tw.set((p ? p.uplift_revenue : st.uplift_revenue) ?? null);
+    K.upl.sub.textContent = `from ${num(p ? p.offers_applied : st.offers_applied)} offers applied`;
+    const a = p ? p.accuracy : st.accuracy, head = accOf(a), bt = st.accuracy?.backtest;
+    const naive = naiveOf(a);
+    if (head != null) { K.acc.tw.set(100 * head); K.acc.sub.textContent = "store-day" + (naive != null ? ` · naive ${(100 * naive).toFixed(0)}%` : ""); }
+    else if (bt?.wape != null) { K.acc.tw.set(100 * (1 - bt.wape)); K.acc.sub.textContent = `backtest ${bt.days || ""} days · naive ${Math.round(100 * (1 - bt.baseline_wape))}%`; }
+    else { K.acc.tw.set(null); K.acc.sub.textContent = "scored after the first full day"; }
+    const hit = p ? p.hit_rate : st.learning?.hit_rate;
+    K.hit.tw.set(hit != null ? 100 * hit : null);
+    K.hit.sub.textContent = hit != null ? (S.scope ? "of completed offers" : `of ${num(st.learning?.judged ?? st.learning?.outcomes)} measured offers`) : "measured as offers complete";
+  },
+  sample() {
+    if (!K.rev) return;
+    const p = S.scope && S.platforms.find((x) => x.id === S.scope), rows = S.scope ? (p ? [p] : []) : S.platforms;
+    push(S.hist.rev, sum(rows, (x) => x.revenue_today), 60);
+    push(S.hist.ops, p ? p.orders_per_sec : S.status?.orders_per_sec, 60);
+    K.rev.sp.update(S.hist.rev); K.ops.sp.update(S.hist.ops);
+  },
+};
+
+// ---------------------------------------------------------------- scope
+function setScope(id) {
+  id = id || null;
+  if (id === S.scope) return;
+  S.scope = id;
+  const q = new URLSearchParams(location.search);
+  if (S.scope) q.set("platform", S.scope); else q.delete("platform");
+  history.replaceState(null, "", location.pathname + (q.toString() ? "?" + q : ""));
+  S.hist.rev = []; S.hist.ops = [];
+  S.platforms = S.scope ? S.allPlatforms.filter((p) => p.id === S.scope) : S.allPlatforms;
+  TREE.sig = ""; TREE.closeCard(); LESSONS.seen = null; // a new scope is not new learning
+  for (const k of ["lessons", "att"]) $(k)._k = "";
+  SCOPE.render(); HERO.render(); PLATS.render(); KPI.render();
+  LOOP.now();
+}
+const SCOPE = {
+  render() {
+    const bar = $("scopebar");
+    if (!S.scope) {
+      bar.className = "scopebar";
+      bar.replaceChildren(el("div", {}, el("span", { class: "v" }, "Viewing: all platforms"), el("span", { class: "hint" }, "click a platform to focus")));
+      return;
+    }
+    const c = pcol(S.scope);
+    bar.className = "scopebar on"; bar.style.setProperty("--sc", c);
+    bar.replaceChildren(el("div", {}, el("span", { class: "v" }, el("i", { style: { background: c } }), "Viewing: " + pinfo(S.scope).name),
+      el("button", { class: "btn sm", onclick: () => setScope(null) }, "← All platforms")));
+  },
+};
+
+// ---------------------------------------------------------------- 2. platform cards
+const PLATS = {
+  cards: new Map(),
+  render() {
+    const box = $("plats");
+    demoChip("plats-demo", "platforms");
+    const rows = S.allPlatforms.length ? S.allPlatforms : S.platforms; // all three stay visible; the others dim when scoped
+    if (!rows.length) return;
+    if (box.querySelector(".shimmer")) box.replaceChildren();
+    const ids = rows.map((p) => p.id);
+    for (const [id, c] of this.cards) if (!ids.includes(id)) { c.node.remove(); this.cards.delete(id); }
+    rows.forEach((p, i) => {
+      let c = this.cards.get(p.id);
+      if (!c) { c = this.build(p, i); this.cards.set(p.id, c); }
+      if (box.children[i] !== c.node) box.insertBefore(c.node, box.children[i] || null);
+      this.fill(c, p);
+    });
+  },
+  build(p, i) {
+    const t = (fmt) => { const n = el("span", {}, "—"); return { n, tw: new Tween(n, fmt) }; };
+    const c = { rev: t((v) => inr(v, 2)), ops: t(num), spark: makeSpark(pcol(p.id, p.color), { w: 100, h: 34 }) };
+    const toggle = () => setScope(S.scope === p.id ? null : p.id);
+    c.node = el("article", { class: "card pcard rise", tabindex: 0, role: "button", style: { animationDelay: i * 70 + "ms" },
+      onclick: toggle, onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } } },
+      el("div", { class: "band" }),
+      el("div", { class: "in" },
+        el("div", { class: "ph" }, el("div", { class: "logo" }, pinfo(p.id).mark), el("div", {}, el("div", { class: "nm" }, p.name), el("div", { class: "kd" }, p.kind || pinfo(p.id).kind)), c.go = el("span", { class: "go" }, "Focus →")),
+        el("div", { class: "big" },
+          el("div", {}, el("div", { class: "k" }, "Revenue today"), el("div", { class: "v" }, c.rev.n)),
+          el("div", { class: "opsbox" }, el("div", { class: "k" }, "Orders / sec"), el("div", { class: "v" }, c.ops.n), c.spark.node)),
+        c.s3 = el("div", { class: "stats3" }),
+        c.kinds = el("div", { class: "row2" }),
+        c.offers = el("div", { class: "offers" }),
+        c.cats = el("div", { class: "cats" })));
+    return c;
+  },
+  fill(c, p) {
+    c.node.style.setProperty("--pc", pcol(p.id, p.color));
+    c.node.classList.toggle("sel", S.scope === p.id);
+    c.node.classList.toggle("dim", !!S.scope && S.scope !== p.id);
+    c.node.setAttribute("aria-label", `${p.name}: ${S.scope === p.id ? "back to all platforms" : "focus the page on this platform"}`);
+    c.go.textContent = S.scope === p.id ? "Viewing ✓" : "Focus →";
+    c.rev.tw.set(p.revenue_today); c.ops.tw.set(p.orders_per_sec);
+    c.spark.update(S.hist.plat[p.id] || []);
+    const acc = accOf(p.accuracy), naive = naiveOf(p.accuracy);
+    const accTxt = acc != null ? (100 * acc).toFixed(1) + "%" : "—";
+    const accSub = acc != null ? (naive != null ? `store-day · naive ${(100 * naive).toFixed(0)}%` : "store-day") : "after day 1";
+    const s3 = [["Merchants", num(p.merchants), `${num(p.series)} products`], ["Customers", words(p.customers || 0), `${num(p.active_customers_today)} buying today`], ["Accuracy", accTxt, accSub]];
+    c.s3.replaceChildren(...s3.map(([k, v, s]) => el("div", {}, el("div", { class: "k" }, k), el("div", { class: "v" }, v), el("div", { class: "s" }, s))));
+    const kinds = Object.entries(p.signals_by_kind || {}).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).slice(0, 4);
+    c.kinds.replaceChildren(el("span", { class: "chip " + (p.open_signals ? "warn" : "") }, `${num(p.open_signals)} open signals`),
+      ...kinds.map(([k, n]) => el("span", { class: "chip", title: `${KIND[k]?.[1] || k}: ${n} open` }, `${KIND[k]?.[0] || "•"} ${num(n)}`)));
+    c.offers.replaceChildren(el("b", {}, num(p.offers_applied)), " offers applied · ", el("span", { class: p.uplift_revenue < 0 ? "bad" : "g" }, plusInr(p.uplift_revenue)), " uplift",
+      ...(p.hit_rate != null ? [" · ", el("b", {}, pct0(p.hit_rate)), " hit rate"] : []));
+    const top = (p.categories || []).slice(0, 3), max = Math.max(1, ...top.map((x) => x.revenue_today || 0));
+    const key = top.map((x) => x.name + x.merchants).join();
+    if (c._ck !== key) {
+      c._ck = key;
+      c.cats.replaceChildren(...top.map((x) => el("div", { class: "cat" }, el("span", { class: "n", title: `${x.name} · ${num(x.merchants)} merchants` }, `${x.name} · ${num(x.merchants)}`), el("div", { class: "b" }, el("i")), el("span", { class: "r" }, ""))));
+    }
+    top.forEach((x, i) => { const r = c.cats.children[i]; if (!r) return; r.querySelector("i").style.width = Math.max(3, (100 * (x.revenue_today || 0)) / max) + "%"; r.querySelector(".r").textContent = inr(x.revenue_today); });
+  },
+};
+function demoChip(id, name) {
+  const box = $(id); if (!box) return;
+  const d = S.demo[name] || "";
+  if (box._k === d) return; box._k = d;
+  box.replaceChildren(d ? el("span", { class: "demo-chip", title: d === "mock" ? "Generated in this browser (demo mode)"
+    : `The engine doesn't serve /commerce/api/${name} yet, so this is computed in your browser from the live merchants and stats.` }, "Demo data") : "");
+}
+
+// ---------------------------------------------------------------- 3. the tree of brains (canvas)
+const TREE = {
+  box: $("treebox"), cv: $("tree"), tip: $("treetip"), card: $("mcard"),
+  ctx: null, layer: null, lctx: null, w: 0, h: 0, dpr: 1, sig: "", data: null,
+  root: null, plats: [], cats: [], ms: [], byId: new Map(), parts: [], hover: null, sel: null, rdot: 3, dirty: true, rootFlash: 0, nextAmb: 0,
+  init() {
+    this.ctx = this.cv.getContext("2d");
+    this.layer = document.createElement("canvas"); this.lctx = this.layer.getContext("2d");
+    new ResizeObserver(() => { if (this.data && Math.abs(this.box.clientWidth - this.w) > 2) this.layout(); }).observe(this.box);
+    this.cv.addEventListener("pointermove", (e) => { if (e.pointerType === "mouse") this.onHover(e); });
+    this.cv.addEventListener("pointerleave", () => { this.hover = null; this.tip.classList.add("hidden"); this.cv.style.cursor = "default"; });
+    this.cv.addEventListener("click", (e) => this.onClick(e));
+  },
+  set(tree) {
+    if (!tree || !tree.platforms) return;
+    const sig = tree.platforms.map((p) => p.id + ":" + p.categories.map((c) => c.name + "=" + c.merchants.map((m) => m.id).join(",")).join("|")).join(";");
+    this.data = tree;
+    if (sig !== this.sig || !this.root) { this.sig = sig; this.layout(); }
+    else {
+      this.root.d = tree.root;
+      for (const p of tree.platforms) {
+        const n = this.byId.get("p:" + p.id); if (n) n.d = p;
+        for (const c of p.categories) for (const m of c.merchants) { const n2 = this.byId.get(m.id); if (n2) Object.assign(n2, m); }
+      }
+    }
+    this.legend();
+    if (this.sel) this.openCard(this.sel, true);
+  },
+  layout() {
+    const tree = this.data; if (!tree) return;
+    const w = this.box.clientWidth, phone = w < 640;
+    const h = phone ? Math.round(w * 1.12) : Math.round(Math.min(780, Math.max(500, w * 0.54)));
+    this.dpr = Math.min(2, devicePixelRatio || 1); this.w = w; this.h = h;
+    for (const c of [this.cv, this.layer]) { c.width = Math.round(w * this.dpr); c.height = Math.round(h * this.dpr); }
+    this.cv.style.height = h + "px";
+    const cx = w / 2, cy = h / 2, padX = phone ? 12 : 34, padY = phone ? 16 : 30;
+    const rx = w / 2 - padX, ry = h / 2 - padY, avgR = (rx + ry) / 2;
+    const P = (a, r) => [cx + Math.cos(a) * rx * r, cy + Math.sin(a) * ry * r];
+    const plats = tree.platforms, single = plats.length === 1, old = this.byId;
+    this.byId = new Map(); this.plats = []; this.cats = []; this.ms = [];
+    this.root = { kind: "root", d: tree.root, x: cx, y: single ? padY + 12 : cy, r: single ? 11 : phone ? 18 : 26 };
+    const total = Math.max(1, sum(plats, (p) => sum(p.categories, (c) => c.merchants.length)));
+    const G = single ? 0 : 0.2, avail = Math.PI * 2 - G * plats.length - (single ? 0.6 : 0);
+    const spans = plats.map((p) => Math.max(0.12, sum(p.categories, (c) => c.merchants.length) / total)), spanSum = sum(spans, (x) => x);
+    // single platform: leave a gap at the top for the edge up to the root; else centre the first platform at the top
+    let a = single ? -Math.PI / 2 + 0.3 : -Math.PI / 2 - (avail * spans[0] / spanSum) / 2;
+    const r0 = single ? 0.5 : 0.62, r1 = 0.97, rCat = single ? 0.36 : 0.5, rPlat = 0.27;
+    let minCell = Infinity;
+    plats.forEach((p, pi) => {
+      const span = avail * spans[pi] / spanSum, a0 = a, a1 = a + span, mid = (a0 + a1) / 2;
+      const [px, py] = single ? [cx, cy] : P(mid, rPlat);
+      const pn = { kind: "plat", id: p.id, d: p, x: px, y: py, a: mid, r: single ? (phone ? 16 : 22) : phone ? 11 : 16, glow: 0 };
+      this.plats.push(pn); this.byId.set("p:" + p.id, pn);
+      const n = Math.max(1, sum(p.categories, (c) => c.merchants.length)), g2 = Math.min(0.06, span * 0.04);
+      const cavail = span - g2 * (p.categories.length - 1);
+      let b = a0;
+      for (const c of p.categories) {
+        const cs = cavail * c.merchants.length / n, b0 = b, cm = b0 + cs / 2;
+        const [hx, hy] = P(cm, rCat);
+        const cn = { kind: "cat", name: c.name, plat: pn, x: hx, y: hy, a: cm, span: cs, ms: [] };
+        this.cats.push(cn);
+        const list = [...c.merchants].sort((x, y) => String(x.id).localeCompare(String(y.id)));
+        const D = (r1 - r0) * avgR, L = Math.max(4, cs * ((r0 + r1) / 2) * avgR);
+        const k = Math.max(1, Math.min(9, Math.round(D / Math.sqrt((D * L) / list.length)))), per = Math.ceil(list.length / k);
+        if (list.length >= 8) minCell = Math.min(minCell, Math.min(D / k, L / per)); // tiny categories would shrink every dot
+        list.forEach((m, j) => {
+          const row = j % k, col = Math.floor(j / k);
+          const rr = r0 + ((row + 0.5) / k) * (r1 - r0), aa = b0 + ((col + 0.5 + (per > 1 ? (row % 2 ? 0.25 : -0.25) : 0)) / per) * cs;
+          const [mx, my] = P(aa, rr), [qx, qy] = P(aa, rCat + 0.06), prev = old.get(m.id);
+          const mn = Object.assign({ kind: "m", plat: pn, cat: cn, x: mx, y: my, qx, qy, pulse: prev?.pulse || 0, pcol: prev?.pcol }, m);
+          cn.ms.push(mn); this.ms.push(mn); this.byId.set(m.id, mn);
+        });
+        b = b0 + cs + g2;
+      }
+      a = a1 + G;
+    });
+    this.rdot = Math.max(1.6, Math.min(4.4, (isFinite(minCell) ? minCell : 8) * 0.36));
+    this.P = P; this.single = single; this.parts = []; this.dirty = true;
+    if (this.sel) { const nn = this.byId.get(this.sel.id); if (nn) this.openCard(nn, true); else this.closeCard(); }
+  },
+  // Edges, hubs and labels change rarely: drawn into an offscreen layer.
+  drawStatic() {
+    const g = this.lctx, light = isLight(), phone = this.w < 640, root = this.root;
+    g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0); g.clearRect(0, 0, this.w, this.h);
+    for (const pn of this.plats) {
+      const col = pcol(pn.id, pn.d.color), cats = this.cats.filter((c) => c.plat === pn);
+      g.strokeStyle = rgba(col, light ? 0.2 : 0.12); g.lineWidth = 0.7; g.beginPath();
+      for (const cn of cats) for (const m of cn.ms) { g.moveTo(cn.x, cn.y); g.quadraticCurveTo(m.qx, m.qy, m.x, m.y); }
+      g.stroke();
+      g.strokeStyle = rgba(col, light ? 0.6 : 0.45); g.lineWidth = 1.5; g.beginPath();
+      for (const cn of cats) { const [qx, qy] = this.single ? [cn.x, cn.y] : this.P(cn.a, 0.27); g.moveTo(pn.x, pn.y); g.quadraticCurveTo(qx, qy, cn.x, cn.y); }
+      g.stroke();
+      const gr = g.createLinearGradient(root.x, root.y, pn.x, pn.y);
+      gr.addColorStop(0, rgba(TK.violet, 0.9)); gr.addColorStop(1, rgba(col, 0.9));
+      g.strokeStyle = gr; g.lineWidth = 3.2; g.beginPath(); g.moveTo(root.x, root.y); g.lineTo(pn.x, pn.y); g.stroke();
+    }
+    g.textAlign = "center"; g.textBaseline = "middle"; g.lineJoin = "round";
+    for (const cn of this.cats) {
+      const col = pcol(cn.plat.id, cn.plat.d.color);
+      g.fillStyle = col; g.beginPath(); g.arc(cn.x, cn.y, phone ? 2.5 : 3.5, 0, Math.PI * 2); g.fill();
+      const arcPx = cn.span * (this.w + this.h) / 4;
+      if (arcPx < (phone ? 40 : 56) || (phone && !this.single)) continue; // on a phone the names come on tap
+      const [lx, ly] = this.P(cn.a, (this.single ? 0.36 : 0.5) - 0.075);
+      g.font = `600 ${phone ? 9.5 : 11.5}px Inter, system-ui, sans-serif`;
+      const label = cn.name + (phone ? "" : ` · ${cn.ms.length}`);
+      g.lineWidth = 4; g.strokeStyle = TK.bg; g.strokeText(label, lx, ly);
+      g.fillStyle = TK.muted; g.fillText(label, lx, ly);
+    }
+    this.dirty = false;
+  },
+  draw(now, dt) {
+    if (!this.data || !this.w) return;
+    if (this.dirty) this.drawStatic();
+    const g = this.ctx, dpr = this.dpr, light = isLight(), phone = this.w < 640;
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, this.cv.width, this.cv.height); g.drawImage(this.layer, 0, 0);
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // ambient flow: faint patterns rising and lessons descending, so the tree breathes
+    if (!reduced() && now > this.nextAmb && this.plats.length) {
+      this.nextAmb = now + 700 + Math.random() * 600;
+      const pn = this.plats[(Math.random() * this.plats.length) | 0], up = Math.random() < 0.5;
+      this.parts.push({ pts: up ? [[pn.x, pn.y], [this.root.x, this.root.y]] : [[this.root.x, this.root.y], [pn.x, pn.y]], t0: now, dur: 1400, col: up ? TK.cyan : TK.violet, size: 1.8, alpha: 0.55 });
+    }
+    // merchants, batched by colour
+    const r = this.rdot, groups = new Map();
+    for (const m of this.ms) {
+      const col = m.status === "urgent" ? TK.bad : m.status === "signal" ? TK.pink : pcol(m.plat.id, m.plat.d.color); // pink, not amber: DMart is amber
+      let gp = groups.get(col); if (!gp) groups.set(col, (gp = [])); gp.push(m);
+    }
+    for (const [col, list] of groups) {
+      g.fillStyle = rgba(col, light ? 0.92 : 0.85); g.beginPath();
+      for (const m of list) { g.moveTo(m.x + r, m.y); g.arc(m.x, m.y, r, 0, Math.PI * 2); }
+      g.fill();
+    }
+    for (const m of this.ms) if (m.status === "urgent") {
+      const k = reduced() ? 0.5 : 0.5 + 0.5 * Math.sin(now / 420 + m.x);
+      g.strokeStyle = rgba(TK.bad, 0.25 + 0.3 * k); g.lineWidth = 1.2; g.beginPath(); g.arc(m.x, m.y, r + 2.5 + k * 1.5, 0, Math.PI * 2); g.stroke();
+    }
+    // pulses when a signal lands
+    for (const m of this.ms) if (m.pulse > 0) {
+      m.pulse = Math.max(0, m.pulse - dt / 1700);
+      const p = m.pulse, col = m.pcol || TK.warn;
+      g.strokeStyle = rgba(col, p * 0.9); g.lineWidth = 2; g.beginPath(); g.arc(m.x, m.y, r + (1 - p) * 16, 0, Math.PI * 2); g.stroke();
+      g.fillStyle = rgba(col, p * 0.35); g.beginPath(); g.arc(m.x, m.y, r + 3 * p, 0, Math.PI * 2); g.fill();
+    }
+    // particles: patterns up, lessons down
+    const alive = [];
+    for (const q of this.parts) {
+      const t = (now - q.t0) / q.dur;
+      if (t < 0) { alive.push(q); continue; }
+      if (t >= 1) { q.done?.(); continue; }
+      alive.push(q);
+      const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+      for (let k = 5; k >= 0; k--) {
+        const [x, y] = along(q.pts, Math.max(0, e - k * 0.022));
+        g.fillStyle = rgba(q.col, (q.alpha ?? 1) * (k ? 0.5 * (1 - k / 6) : 1));
+        g.beginPath(); g.arc(x, y, (q.size || 2.6) * (k ? 1 - k / 8 : 1.15), 0, Math.PI * 2); g.fill();
+      }
+    }
+    this.parts = alive.length > 260 ? alive.slice(-260) : alive;
+    // platform nodes
+    g.textAlign = "center"; g.textBaseline = "middle"; g.lineJoin = "round";
+    for (const pn of this.plats) {
+      const col = pcol(pn.id, pn.d.color);
+      pn.glow = Math.max(0, pn.glow - dt / 1200);
+      const R2 = pn.r * (2.6 + pn.glow), halo = g.createRadialGradient(pn.x, pn.y, pn.r * 0.6, pn.x, pn.y, R2);
+      halo.addColorStop(0, rgba(col, 0.35 + 0.3 * pn.glow)); halo.addColorStop(1, rgba(col, 0));
+      g.fillStyle = halo; g.beginPath(); g.arc(pn.x, pn.y, R2, 0, Math.PI * 2); g.fill();
+      g.fillStyle = col; g.beginPath(); g.arc(pn.x, pn.y, pn.r, 0, Math.PI * 2); g.fill();
+      g.fillStyle = "#0b1122"; g.font = `800 ${Math.round(pn.r * 0.95)}px Inter, system-ui, sans-serif`; g.fillText(pinfo(pn.id).mark, pn.x, pn.y + 0.5);
+      const ly = pn.y + pn.r + (phone ? 10 : 14);
+      g.font = `700 ${phone ? 11 : 13.5}px Inter, system-ui, sans-serif`;
+      g.lineWidth = 4; g.strokeStyle = TK.bg; g.strokeText(pn.d.name, pn.x, ly); g.fillStyle = TK.text; g.fillText(pn.d.name, pn.x, ly);
+      if (!phone || this.single) {
+        const sub = `${inr(pn.d.revenue_today)} today · ${num(pn.d.open_signals)} open`, y2 = ly + (phone ? 13 : 16);
+        g.font = `500 ${phone ? 10 : 11.5}px Inter, system-ui, sans-serif`;
+        g.strokeText(sub, pn.x, y2); g.fillStyle = TK.muted; g.fillText(sub, pn.x, y2);
+      }
+    }
+    // the root brain, breathing
+    const R = this.root, br = reduced() ? 0 : Math.sin(now / 900) * 0.5 + 0.5;
+    this.rootFlash = Math.max(0, this.rootFlash - dt / 1000);
+    const glowR = R.r * (2.3 + br * 0.4 + this.rootFlash), hg = g.createRadialGradient(R.x, R.y, R.r * 0.5, R.x, R.y, glowR);
+    hg.addColorStop(0, rgba(TK.violet, 0.45 + this.rootFlash * 0.3)); hg.addColorStop(0.6, rgba(TK.cyan, 0.12 + this.rootFlash * 0.2)); hg.addColorStop(1, rgba(TK.cyan, 0));
+    g.fillStyle = hg; g.beginPath(); g.arc(R.x, R.y, glowR, 0, Math.PI * 2); g.fill();
+    const cg = g.createLinearGradient(R.x - R.r, R.y - R.r, R.x + R.r, R.y + R.r);
+    cg.addColorStop(0, "#8b7bff"); cg.addColorStop(1, "#33d6f2");
+    g.fillStyle = cg; g.beginPath(); g.arc(R.x, R.y, R.r, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = "rgba(255,255,255,.55)"; g.lineWidth = 1.4; g.beginPath(); g.arc(R.x, R.y, R.r * 0.55, 0, Math.PI * 2); g.stroke();
+    g.fillStyle = "#fff"; g.beginPath(); g.arc(R.x, R.y, R.r * 0.18, 0, Math.PI * 2); g.fill();
+    if (!this.single && !phone) {
+      g.font = `800 ${phone ? 11.5 : 14}px Inter, system-ui, sans-serif`;
+      g.lineWidth = 4; g.strokeStyle = TK.bg; g.strokeText("SecondBrain", R.x, R.y + R.r + 15); g.fillStyle = TK.text; g.fillText("SecondBrain", R.x, R.y + R.r + 15);
+    } else if (this.single) {
+      g.textAlign = "left"; g.font = `700 ${phone ? 10.5 : 12}px Inter, system-ui, sans-serif`;
+      g.fillStyle = TK.muted; g.fillText("SecondBrain (root)", R.x + R.r + 8, R.y); g.textAlign = "center";
+    }
+    for (const m of [this.hover, this.sel]) if (m && m.kind === "m") {
+      g.strokeStyle = TK.text; g.lineWidth = 2; g.beginPath(); g.arc(m.x, m.y, r + 4, 0, Math.PI * 2); g.stroke();
+    }
+  },
+  pick(e) {
+    const b = this.cv.getBoundingClientRect(), x = e.clientX - b.left, y = e.clientY - b.top;
+    let best = null, bd = Math.max(9, this.rdot + 5);
+    for (const m of this.ms) { const d = Math.hypot(m.x - x, m.y - y); if (d < bd) { bd = d; best = m; } }
+    if (best) return best;
+    for (const pn of this.plats) if (Math.hypot(pn.x - x, pn.y - y) < pn.r + 8) return pn;
+    if (Math.hypot(this.root.x - x, this.root.y - y) < this.root.r + 8) return this.root;
+    for (const cn of this.cats) if (Math.hypot(cn.x - x, cn.y - y) < 10) return cn;
+    return null;
+  },
+  onHover(e) {
+    const n = this.pick(e);
+    this.hover = n;
+    this.cv.style.cursor = n ? "pointer" : "default";
+    if (!n) { this.tip.classList.add("hidden"); return; }
+    let t;
+    if (n.kind === "m") t = [el("b", {}, n.name), `${pinfo(n.plat.id).name} · ${n.city || ""} · ${n.category}`, el("br"),
+      `${n.status === "urgent" ? "Urgent signal" : n.status === "signal" ? "Open signal" : "All good"} · ${inr(n.revenue_today)} today · click for more`];
+    else if (n.kind === "plat") t = [el("b", {}, n.d.name), `${num(sum(this.cats.filter((c) => c.plat === n), (c) => c.ms.length))} merchants · click to ${S.scope ? "see all platforms" : "focus"}`];
+    else if (n.kind === "root") t = [el("b", {}, "SecondBrain"), S.scope ? "Click to see all platforms" : "The root brain: anonymous lessons from every merchant"];
+    else t = [el("b", {}, n.name), `${n.ms.length} merchants on ${pinfo(n.plat.id).name}`];
+    this.tip.replaceChildren(...t);
+    this.tip.classList.remove("hidden");
+    this.tip.style.left = Math.max(120, Math.min(this.w - 120, n.x)) + "px"; this.tip.style.top = n.y - (n.r || this.rdot) + "px";
+  },
+  onClick(e) {
+    const n = this.pick(e);
+    if (!n) return this.closeCard();
+    if (n.kind === "plat") return setScope(S.scope === n.id ? null : n.id);
+    if (n.kind === "root") return setScope(null);
+    if (n.kind === "m") this.openCard(n);
+    else { this.onHover(e); setTimeout(() => { if (this.hover === n) { this.hover = null; this.tip.classList.add("hidden"); } }, 2500); } // category name on tap
+  },
+  openCard(m, keepPos) {
+    this.sel = m; this.tip.classList.add("hidden");
+    const col = pcol(m.plat.id, m.plat.d.color);
+    const st = m.status === "urgent" ? el("span", { class: "chip bad" }, "Urgent signal") : m.status === "signal" ? el("span", { class: "chip warn" }, "Open signal") : el("span", { class: "chip good" }, "All good");
+    this.card.replaceChildren(
+      el("button", { class: "x", "aria-label": "Close", onclick: () => this.closeCard() }, "×"),
+      el("div", { class: "row" }, el("span", { class: "pbadge", style: "--pc:" + (col) }, pinfo(m.plat.id).name), st),
+      el("h3", {}, m.name), el("div", { class: "w" }, `${m.city || ""} · ${m.category}`),
+      el("div", { class: "g4" }, ...[["Revenue today", inr(m.revenue_today)], ["Orders today", num(m.orders_today)], ["Open signals", num(m.open_signals)], ["Offers applied", num(m.offers_applied)]]
+        .map(([k, v]) => el("div", {}, el("div", { class: "k" }, k), el("div", { class: "v" }, v)))),
+      el("a", { class: "btn sm primary", href: "/commerce?merchant=" + encodeURIComponent(m.id) }, "Open in Live Commerce →"));
+    this.card.classList.remove("hidden");
+    if (keepPos && this.card.style.left) return;
+    const cw = Math.min(280, this.w - 24), ch = this.card.offsetHeight || 220;
+    let x = m.x + 16;
+    if (x + cw > this.w - 12) x = m.x - cw - 16;
+    x = Math.max(12, Math.min(this.w - cw - 12, x));
+    const y = Math.max(12, Math.min(this.h - ch - 12, m.y - ch / 2));
+    this.card.style.width = cw + "px"; this.card.style.left = x + "px"; this.card.style.top = y + "px";
+  },
+  closeCard() { this.sel = null; this.card.classList.add("hidden"); this.card.style.left = ""; },
+  pulse(id, urgency) {
+    const m = this.byId.get(id); if (!m) return;
+    m.pulse = 1; m.pcol = urgency === "high" ? TK.bad : urgency === "medium" ? TK.warn : TK.cyan;
+    m.plat.glow = Math.min(1, m.plat.glow + 0.35);
+  },
+  // An outcome is a pattern: it travels merchant -> category -> platform -> root.
+  flowUp(id, worked) {
+    const m = this.byId.get(id); if (!m || reduced() || this.parts.length > 200) return;
+    this.parts.push({ pts: [[m.x, m.y], [m.cat.x, m.cat.y], [m.plat.x, m.plat.y], [this.root.x, this.root.y]], t0: performance.now(), dur: 1700,
+      col: worked === false ? TK.pink : TK.cyan, size: 2.8, done: () => { this.rootFlash = Math.min(1, this.rootFlash + 0.5); } });
+  },
+  // A lesson is shared: it travels root -> platform -> category -> the merchants it now improves.
+  flowDown(lesson) {
+    if (reduced() || !this.ms.length) return;
+    const fits = this.ms.filter((m) => pcatsOf(m.category).includes(lesson.category) && (!lesson.platform || m.plat.id === lesson.platform));
+    const chosen = fits.sort(() => Math.random() - 0.5).slice(0, 16), t0 = performance.now();
+    this.rootFlash = 1;
+    chosen.forEach((m, i) => this.parts.push({ pts: [[this.root.x, this.root.y], [m.plat.x, m.plat.y], [m.cat.x, m.cat.y], [m.x, m.y]], t0: t0 + i * 90, dur: 1900,
+      col: TK.violet, size: 2.4, done: () => { m.pulse = 0.8; m.pcol = TK.good; } }));
+  },
+  legend() {
+    const c = { ok: 0, signal: 0, urgent: 0 };
+    for (const m of this.ms) c[m.status] = (c[m.status] || 0) + 1;
+    const dots = this.plats.map((p) => pcol(p.id, p.d.color));
+    $("tlegend").replaceChildren(
+      el("span", { title: "OK merchants are drawn in their platform's colour" }, ...dots.map((col) => el("i", { style: { background: col, marginRight: "2px" } })), " OK"),
+      el("span", {}, el("i", { style: { background: "var(--pink)" } }), "Open signal"),
+      el("span", {}, el("i", { style: { background: "var(--bad)" } }), "Urgent"),
+      el("span", { class: "fl" }, el("b", { style: { color: "var(--cyan)" } }, "↑"), "patterns rise to the root"),
+      el("span", { class: "fl" }, el("b", { style: { color: "var(--violet)" } }, "↓"), "lessons flow to merchants"),
+      el("span", { class: "cnt" }, `${num(this.ms.length)} merchants · ${num(c.ok)} ok · ${num(c.signal)} signal · ${num(c.urgent)} urgent`));
+    this.cv.setAttribute("aria-label", `Tree of brains: SecondBrain connected to ${this.plats.map((p) => p.d.name).join(", ")}; ${this.ms.length} merchants, ${c.signal} with open signals, ${c.urgent} urgent.`);
+  },
+};
+function along(pts, t) {
+  if (pts.length < 2) return pts[0];
+  const segs = []; let L = 0;
+  for (let i = 1; i < pts.length; i++) { const d = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); segs.push(d); L += d; }
+  let s = t * L;
+  for (let i = 0; i < segs.length; i++) {
+    if (s <= segs[i] || i === segs.length - 1) { const f = segs[i] ? Math.min(1, s / segs[i]) : 1; return [pts[i][0] + (pts[i + 1][0] - pts[i][0]) * f, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * f]; }
+    s -= segs[i];
   }
+  return pts[pts.length - 1];
+}
+
+// ---------------------------------------------------------------- 4. lessons
+const LESSONS = {
+  seen: null, showAll: false,
+  render(list) {
+    demoChip("lessons-demo", "lessons");
+    const box = $("lessons"), prev = this.seen;
+    this.seen = new Map((list || []).map((l) => [l.id, l]));
+    if (!list || !list.length) {
+      if (box._k === "empty") return; box._k = "empty";
+      box.replaceChildren(el("div", { class: "card lempty" }, el("div", { class: "orb" }),
+        el("div", {}, el("h3", { style: { margin: "0 0 4px" } }, "No lessons yet"),
+          el("p", { class: "muted", style: { margin: 0 } }, "Lessons appear as offers complete: each finished offer tells the brain how shoppers really responded, and once a pattern holds across merchants it is shared with all of them. ",
+            el("a", { href: "#tm-section", onclick: (e) => { e.preventDefault(); $("tm-section").scrollIntoView({ behavior: "smooth", block: "start" }); } }, "Run the time machine"), " to watch the first lessons form."))));
+      return;
+    }
+    if (prev) {   // new or strengthened lessons flow down the tree
+      let n = 0;
+      for (const l of list) {
+        const o = prev.get(l.id);
+        if ((!o || l.evidence_n > o.evidence_n) && n < 2) { n++; TREE.flowDown(l); if (!o && prev.size) SB.toast("🧠", "The brain learned something new", l.title, { ms: 7000 }); }
+      }
+    }
+    const shown = this.showAll ? list : list.slice(0, 6);
+    const key = shown.map((l) => `${l.id}:${l.evidence_n}:${l.applies_to}:${l.learned_from}:${l.value}`).join("|") + this.showAll;
+    if (box._k === key) return; box._k = key;
+    const old = new Map([...box.querySelectorAll(".lesson")].map((n) => [n.dataset.id, n]));
+    const grid = el("div", { class: "lessons" }, shown.map((l) => this.card(l, prev && prev.size && !prev.has(l.id), old.get(l.id))));
+    const more = list.length > 6 ? el("div", { style: { textAlign: "center", marginTop: "12px" } },
+      el("button", { class: "btn sm ghost", onclick: () => { this.showAll = !this.showAll; box._k = ""; this.render(list); } }, this.showAll ? "Show the strongest 6" : `Show all ${list.length} lessons`)) : "";
+    box.replaceChildren(grid, more);
+  },
+  card(l, fresh, oldNode) {
+    const [ic, kname] = LKIND[l.kind] || ["🧠", l.kind];
+    const pl = l.platform ? el("span", { class: "pbadge", style: "--pc:" + (pcol(l.platform)) }, pinfo(l.platform).name) : el("span", { class: "chip" }, "All platforms");
+    return el("article", { class: `card lesson ${fresh ? "fresh" : ""}`, "data-id": l.id },
+      el("div", { class: "lt" }, el("span", { class: "lic" }, ic), el("span", { class: "lk" }, kname), el("span", { class: "chip" }, l.category), pl),
+      el("h3", {}, l.title), l.detail ? el("p", {}, l.detail) : null,
+      this.viz(l, oldNode),
+      el("div", { class: "evi" }, "Learned from", el("b", {}, num(l.learned_from) + " merchant" + (l.learned_from === 1 ? "" : "s")), el("span", { class: "arr" }, "→"),
+        "now applied to", el("b", {}, num(l.applies_to)), el("span", { class: "faint" }, `· ${num(l.evidence_n)} results`)));
+  },
+  // Where the brain started (assumed) and where the evidence moved it (learned).
+  viz(l, oldNode) {
+    if (l.value == null || l.prior == null) return null;
+    const v = +l.value, p = +l.prior;
+    let lo, hi, fmt;
+    if (l.kind === "price_response" || l.kind === "no_discount") { lo = Math.min(-3.5, v, p) - 0.2; hi = 0; fmt = (x) => (x < 0 ? "−" : "") + Math.abs(x).toFixed(1); }
+    else if (l.kind === "festival_lift") { lo = 1; hi = Math.max(4, v, p) + 0.3; fmt = (x) => "×" + x.toFixed(1); }
+    else if (l.kind === "restock") { lo = 0; hi = Math.max(7, v, p) + 0.5; fmt = (x) => x.toFixed(1) + " days"; }
+    else if (l.kind === "winback" || l.kind === "surge") { lo = 0; hi = Math.max(1, v, p); fmt = (x) => Math.round(x * 100) + "%"; }
+    else { const d = Math.abs(v - p) || 1; lo = Math.min(v, p) - d; hi = Math.max(v, p) + d; fmt = (x) => x.toFixed(2); }
+    const pos = (x) => Math.max(0, Math.min(100, ((x - lo) / (hi - lo || 1)) * 100));
+    const pp = pos(p), pv = pos(v);
+    const what = l.kind === "price_response" || l.kind === "no_discount" ? "Price response (elasticity)" : l.kind === "festival_lift" ? "Sales vs a normal day" : l.kind === "restock" ? "Reorder point" : "Rate";
+    const lab = (cls, x, title, val) => el("div", { class: `lb ${cls}${x < 14 ? " edge-l" : x > 86 ? " edge-r" : ""}`, style: { left: x + "%" } }, title + " ", el("b", {}, val));
+    const prevLeft = oldNode?.querySelector(".mk.ln")?.style.left;
+    const mk = el("div", { class: "mk ln", style: { left: prevLeft || pv + "%" } });
+    if (prevLeft && prevLeft !== pv + "%") requestAnimationFrame(() => requestAnimationFrame(() => (mk.style.left = pv + "%")));
+    return el("div", { class: "vp", title: `${what}: assumed ${fmt(p)}, learned ${fmt(v)}`, role: "img", "aria-label": `${what}: assumed ${fmt(p)}, learned ${fmt(v)}` },
+      el("div", { class: "ax" }), el("div", { class: "vseg", style: { left: Math.min(pp, pv) + "%", width: Math.abs(pv - pp) + "%" } }),
+      el("div", { class: "mk pr" , style: { left: pp + "%" } }), mk,
+      lab("ln", pv, "learned", fmt(v)), lab("pr", pp, "assumed", fmt(p)));
+  },
+};
+
+// ---------------------------------------------------------------- 5. needs attention
+const ATT = {
+  canApply(s) { return !s.autopilot && ["discount", "coupon"].includes(s.action?.type); },
+  render(list) {
+    demoChip("att-demo", "attention");
+    const box = $("att");
+    if (!list || !list.length) {
+      const paused = !!S.status && !S.status.running, k = "empty" + paused;
+      if (box._k === k) return; box._k = k;
+      box.replaceChildren(el("div", { class: "card empty" }, el("div", { style: { fontSize: "28px" } }, "✓"),
+        el("div", { style: { fontWeight: 700, color: "var(--text)", margin: "4px 0" } }, "Nothing needs attention right now"),
+        paused ? "The simulation is paused. Start it in the time machine below and signals appear here the moment they are raised." : "New signals appear here the moment they are raised."));
+      return;
+    }
+    const shown = list.slice(0, 8), key = shown.map((s) => s.id + (S.applied.get(s.id) || "")).join() + isLight();
+    if (box._k === key) return; box._k = key;
+    box.replaceChildren(el("div", { class: "att" }, shown.map((s) => this.card(s))));
+  },
+  card(s) {
+    const [ic, kname] = KIND[s.kind] || ["•", s.kind];
+    const ex = s.expected || {}, a = s.action || {}, st = S.applied.get(s.id);
+    let act;
+    if (s.autopilot) act = el("span", { class: "tag auto" }, "⚙ Autopilot applied");
+    else if (st === "applied") act = el("span", { class: "tag ok" }, "✓ Applied · measuring");
+    else if (st === "applying") act = el("button", { class: "btn sm good", disabled: true }, "Applying…");
+    else if (this.canApply(s)) act = el("button", { class: "btn sm good", onclick: () => this.apply(s) }, "Apply offer");
+    else act = el("span", { class: "tag wait" }, `${ic} ${kname}`);
+    const chips = [];
+    if (a.type === "discount" && a.discount) chips.push(el("span", { class: "chip accent" }, `${Math.round(a.discount * 100)}% off${a.hours ? " · " + a.hours + "h" : ""}`));
+    if (a.type === "coupon" && a.coupon) chips.push(el("span", { class: "chip accent" }, `₹${num(a.coupon)} × ${num(a.customers || 0)}`));
+    if (a.type === "restock" && a.units) chips.push(el("span", { class: "chip warn" }, `Order ${num(a.units)} units`));
+    const impLabel = a.type === "restock" ? "sales protected" : a.type === "hold_price" ? "sales at stake" : "expected revenue";
+    const col = pcol(s.platform);
+    return el("article", { class: `acard ${s.urgency || "low"}`, style: "--pc:" + (col) },
+      el("div", { class: "top" }, el("span", { class: "pbadge", style: "--pc:" + (col) }, s.platform_name || pinfo(s.platform).name),
+        el("span", { class: "urg" }, s.urgency || "low"), el("span", { class: "where" }, el("b", {}, s.merchant_name || s.merchant), " · " + (s.city || ""))),
+      el("h3", {}, `${ic} ${s.title || "Signal"}`), s.detail ? el("p", {}, s.detail) : null,
+      el("div", { class: "bot" }, el("div", { class: "imp" }, inr(ex.revenue || 0), el("small", {}, impLabel + (s.confidence != null ? ` · ${pct0(s.confidence)} confident` : ""))),
+        ...chips, el("div", { class: "act" }, act)));
+  },
+  async apply(s) {
+    S.applied.set(s.id, "applying"); this.render(S.attention);
+    try {
+      if (MOCK) MOCK.apply(s.id); else await http(`/offers/${encodeURIComponent(s.id)}/apply`, { method: "POST" });
+      S.applied.set(s.id, "applied");
+      SB.toast("🏷️", "Offer applied", `${s.title} · ${s.merchant_name}`, { tone: "good", ms: 3500 });
+      TREE.pulse(s.merchant, "low");
+    } catch (e) { S.applied.delete(s.id); SB.toast("⚠️", "Couldn't apply the offer", e.message, { tone: "bad" }); }
+    this.render(S.attention);
+    LOOP.soon("attention", 2500); LOOP.soon("platforms", 300);
+  },
+};
+
+// ---------------------------------------------------------------- 6. time machine
+const TM = {
+  run: null, last: null, confirm: false, tw: {},
+  init() {
+    const b = (label, fn, cls = "btn") => el("button", { class: cls, onclick: fn }, label);
+    this.btns = [1, 7, 14].map((d) => b(d === 1 ? "Run 1 day" : d === 7 ? "Run 1 week" : "Run 2 weeks", () => this.start(d), "btn primary"));
+    this.pauseBtn = b("Pause", () => this.togglePause());
+    this.resetBtn = b("↺ Back to today", () => { this.confirm = true; this.render(); }, "btn ghost");
+    this.stateEl = el("div", { class: "state" });
+    this.barI = el("i", { style: { width: "0%" } }); this.bar = el("div", { class: "bar", role: "progressbar", "aria-label": "Time machine progress" }, this.barI);
+    this.plab = el("div", { class: "plab" }, el("span", {}, ""), el("span", {}, ""));
+    this.confirmEl = el("div");
+    const tile = (k, label, fmt, glow) => { const v = el("div", { class: "v" }, "—"), d = el("div", { class: "d" }, " "); this.tw[k] = { tw: new Tween(v, fmt), d }; return el("div", { class: "kpi " + (glow || "") }, el("div", { class: "k" }, label), v, d); };
+    this.nums = el("div", { class: "nums" },
+      tile("day", "Simulated days", (v) => v.toFixed(1)), tile("rev", "Revenue", (v) => inr(v, 2), "glow"),
+      tile("sig", "Signals raised", num), tile("upl", "Uplift from offers", (v) => plusInr(v), "glow-good"), tile("les", "Lessons learned", num));
+    $("tm").replaceChildren(el("div", { class: "ctl" }, ...this.btns, el("span", { class: "gap" }), this.pauseBtn, this.resetBtn), this.stateEl, this.confirmEl,
+      el("div", { class: "prog" }, this.bar, this.plab), this.nums);
+    this.render();
+  },
+  snap() { const st = S.status || {}; return { t: simNow(), rev: st.revenue_total || 0, sig: st.signals_total || 0, off: st.offers_applied || 0, upl: st.uplift_revenue || 0, les: (S.lessons || []).length }; },
+  async start(days) {
+    if (this.run || !isFinite(simNow())) return;
+    const t0 = simNow();
+    const run = this.run = { days, t0, target: t0 + days * 864e5, base: this.snap(), wall: Date.now(), fallback: false, prevKey: S.sim.key && S.sim.key !== "1day" ? S.sim.key : "1h" };
+    this.last = null; this.confirm = false; this.render(); LOOP.now();
+    const ok = await control({ cmd: "run_days", days });
+    if (!ok) return this.fallback(run);
+    // The engine may accept the command without knowing it: if the clock hasn't leapt ahead, fall back.
+    if (!MOCK) setTimeout(() => { if (this.run === run && !S.status?.run_until && simNow() - run.t0 < 2 * 36e5) this.fallback(run); }, 3000);
+  },
+  // Until the engine knows run_days: run at a day per 6 s, then pause after N × 6 s.
+  async fallback(run) {
+    if (this.run !== run || run.fallback) return;
+    run.fallback = true; run.t0 = simNow(); run.target = run.t0 + run.days * 864e5; run.base = this.snap(); run.wall = Date.now();
+    await control({ cmd: "speed", speed: "1day" });
+    await control({ cmd: "start" });
+    run.timer = setTimeout(async () => {
+      if (this.run !== run) return;
+      await control({ cmd: "pause" });
+      await control({ cmd: "speed", speed: run.prevKey });
+      this.finish();
+    }, run.days * 6000);
+  },
+  finish() {
+    const run = this.run; if (!run) return;
+    clearTimeout(run.timer);
+    const end = this.snap();
+    let days = Math.max(0, (end.t - run.t0) / 864e5);
+    if (Math.abs(days - run.days) < 0.2) days = run.days; // the shown clock trails the engine by a moment
+    this.last = { days, base: run.base, end };
+    this.run = null;
+    this.render();
+    const d = this.last;
+    SB.toast("⏩", `Ran ${+d.days.toFixed(1)} simulated day${d.days === 1 ? "" : "s"}`,
+      `+${num(d.end.sig - d.base.sig)} signals · ${plusInr(d.end.upl - d.base.upl)} uplift · ${num(Math.max(0, d.end.les - d.base.les))} new lessons`, { tone: "good", ms: 8000 });
+    LOOP.now();
+  },
+  // The engine reports a running time machine as run_until in stats (also one started from another screen).
+  onStats() {
+    const until = parseSim(S.status?.run_until);
+    if (isFinite(until) && !this.run) {
+      const t0 = simNow();
+      this.run = { days: Math.max(1, Math.round((until - t0) / 864e5)), t0, target: until, base: this.snap(), wall: Date.now(), fallback: false, adopted: true };
+      this.last = null; LOOP.now();
+    }
+    const run = this.run;
+    if (run && isFinite(until)) run.target = until;
+    if (run && (simNow() >= run.target - 15 * 6e4 || (!S.sim.running && !run.fallback && !isFinite(until) && Date.now() - run.wall > 4000))) this.finish();
+    this.render();
+  },
+  togglePause() {
+    if (S.sim.running) { if (this.run) { clearTimeout(this.run.timer); this.finish(); } control({ cmd: "pause" }); S.sim.running = false; }
+    else { control({ cmd: "start" }); S.sim.running = true; S.sim.sentWall = Date.now(); S.sim.ms = simNow(); }
+    this.render();
+  },
+  async reset() {
+    this.confirm = false; this.run = null; this.last = null;
+    S.applied.clear(); S.base.signals = [];
+    await control({ cmd: "reset" });
+    SB.toast("↺", "Back to today", "The simulation restarts from today's real time.", { ms: 4000 });
+    setTimeout(() => LOOP.now(), 600);
+    this.render();
+  },
+  render() {
+    if (!this.btns) return;
+    const run = this.run, st = S.status || {}, ready = !!st.sim_ts;
+    for (const b of this.btns) b.disabled = !!run || !ready;
+    this.pauseBtn.textContent = S.sim.running ? "⏸ Pause" : "▶ Start";
+    this.pauseBtn.disabled = !ready;
+    this.resetBtn.disabled = !!run || !ready;
+    const stKey = (run ? "r" + run.days : S.sim.running ? "s" + S.sim.key : "p") + (this.last ? "l" : "");
+    if (this._st !== stKey) {
+      this._st = stKey;
+      this.stateEl.replaceChildren(
+        run ? el("span", { class: "chip accent" }, `⏩ Running ${run.days === 1 ? "1 day" : run.days === 7 ? "1 week" : run.days === 14 ? "2 weeks" : run.days + " days"} at full speed`)
+          : S.sim.running ? el("span", { class: "chip good" }, `▶ Running at ${SPEED_LABEL[S.sim.key] || "speed " + S.sim.speed + "×"}`) : el("span", { class: "chip" }, "⏸ Paused"),
+        el("span", {}, run ? "Watch the numbers, the tree and the lessons move." : this.last ? `Last run: ${this.last.days.toFixed(1)} simulated days.` : "Each button runs the whole market forward, then pauses."));
+    }
+    const ck = String(this.confirm);
+    if (this._ck !== ck) {
+      this._ck = ck;
+      this.confirmEl.replaceChildren(this.confirm ? el("div", { class: "confirm" },
+        el("span", { style: { flex: 1, minWidth: "220px" } }, "Go back to today? The simulated days and what was learned in them are cleared, and the simulation restarts from today's real time."),
+        el("button", { class: "btn sm danger", onclick: () => this.reset() }, "Yes, back to today"),
+        el("button", { class: "btn sm ghost", onclick: () => { this.confirm = false; this.render(); } }, "Cancel")) : "");
+    }
+    const t = simNow();
+    if (run) {
+      const f = Math.max(0, Math.min(1, (t - run.t0) / (run.target - run.t0)));
+      this.barI.style.width = (f * 100).toFixed(1) + "%"; this.bar.classList.add("run"); this.bar.setAttribute("aria-valuenow", Math.round(f * 100));
+      this.plab.children[0].textContent = `Day ${Math.min(run.days, Math.floor(f * run.days) + 1)} of ${run.days} · ${fmtDate(t)} ${fmtTime(t)}`;
+      this.plab.children[1].textContent = `${Math.round(f * 100)}% · ends ${fmtDate(run.target)}`;
+    } else {
+      this.bar.classList.remove("run");
+      this.barI.style.width = this.last ? "100%" : "0%";
+      this.plab.children[0].textContent = isFinite(t) ? `Now ${fmtDate(t)} ${fmtTime(t)} IST` : "";
+      this.plab.children[1].textContent = this.last ? "Done" : "";
+    }
+    const base = run ? run.base : this.last ? this.last.base : null, cur = run ? this.snap() : this.last ? this.last.end : this.snap();
+    const d = (k) => (base ? cur[k] - base[k] : cur[k]);
+    const lbl = base ? (run ? "this run" : "last run") : "since the start";
+    this.tw.day.tw.set(base ? Math.max(0, (cur.t - base.t) / 864e5) : 0); this.tw.day.d.textContent = base ? lbl : "press a button to run";
+    this.tw.rev.tw.set(d("rev")); this.tw.rev.d.textContent = lbl;
+    this.tw.sig.tw.set(d("sig")); this.tw.sig.d.textContent = lbl;
+    this.tw.upl.tw.set(d("upl")); this.tw.upl.d.textContent = `${num(d("off"))} offers · ${lbl}`;
+    this.tw.les.tw.set(base ? Math.max(0, cur.les - base.les) : cur.les); this.tw.les.d.textContent = base ? "new, " + lbl : "shared across merchants";
+  },
+};
+
+// ---------------------------------------------------------------- refresh loop
+const LOOP = {
+  every: { platforms: 2000, tree: 4000, attention: 5000, lessons: 8000 },
+  due: {}, busy: {},
+  now() { for (const k in this.every) this.due[k] = 0; },
+  soon(k, ms) { this.due[k] = Math.min(this.due[k] ?? Infinity, Date.now() + ms); },
+  tick() {
+    const fast = TM.run ? 0.5 : 1, now = Date.now();
+    for (const k in this.every) if (!this.busy[k] && now >= (this.due[k] || 0)) {
+      this.busy[k] = true; this.due[k] = now + this.every[k] * fast;
+      this.run(k).catch((e) => { if (e?.status !== 401) console.warn("HQ refresh", k, e?.message || e); }).finally(() => { this.busy[k] = false; });
+    }
+  },
+  async run(k) {
+    const scope = S.scope;
+    if (k === "platforms") {
+      const list = await getHQ("platforms", "/platforms", scope);
+      const all = scope ? await getHQ("platforms", "/platforms", null) : list;
+      if (scope !== S.scope) return;
+      S.platforms = list; S.allPlatforms = all;
+      for (const p of all) push((S.hist.plat[p.id] ||= []), p.orders_per_sec, 40);
+      PLATS.render(); KPI.render(); KPI.sample(); HERO.render();
+    } else if (k === "tree") {
+      const t = await getHQ("tree", "/tree", scope);
+      if (scope !== S.scope) return;
+      S.tree = t; TREE.set(t); demoChip("tree-demo", "tree");
+    } else if (k === "attention") {
+      const a = await getHQ("attention", "/attention?limit=10", scope);
+      if (scope !== S.scope) return;
+      S.attention = a; ATT.render(a);
+    } else if (k === "lessons") {
+      const l = await getHQ("lessons", "/lessons", scope);
+      if (scope !== S.scope) return;
+      S.lessons = l; LESSONS.render(l); TM.render();
+    }
+  },
+};
+
+let lastFrame = performance.now();
+function frame(now) {
+  const raw = now - lastFrame, dt = Math.min(80, raw); lastFrame = now;
+  for (const t of TWEENS) t.step(Math.min(1000, raw));
+  HERO.tick(); TREE.draw(now, dt);
+  if (TM.run && (!TM._r || now - TM._r > 250)) { TM._r = now; TM.render(); }
   requestAnimationFrame(frame);
 }
 
-function chart(p) {
-  const W = 240, H = 70, n = p.stock.length, max = Math.max(1, ...p.stock);
-  const x = (i) => (n <= 1 ? 0 : (i / (n - 1)) * W), y = (v) => H - 3 - (v / max) * (H - 8);
-  const id = "c" + Math.random().toString(36).slice(2, 8);
-  const clip = svg("rect", { x: 0, y: -10, width: 0, height: H + 20 });
-  const step = n > 1 ? W / (n - 1) : W;
-  const pts = p.stock.map((s, i) => `${x(i)},${y(s)}`).join(" ");
-  const outRects = p.stock.map((s, i) => (s === 0 && p.demand[i] > 0 ? svg("rect", { x: x(i) - step / 2, y: 0, width: step, height: H, fill: "var(--bad)", opacity: 0.22 }) : null));
-  const dots = p.arrived_on.map((d) => { const i = p.days.indexOf(d); return i < 0 ? null : svg("circle", { cx: x(i), cy: y(p.stock[i]), r: 4, fill: "var(--good)", stroke: "var(--bg)", "stroke-width": 2 }); });
-  const head = svg("circle", { r: 4, fill: "var(--cyan)", cx: 0, cy: y(p.stock[0]) });
-  const node = el("div", { class: "pchart" },
-    el("div", { class: "t" }, el("span", {}, p.name), el("span", { class: "chip" }, "watching")),
-    svg("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none" },
-      svg("defs", {}, svg("clipPath", { id }, clip),
-        svg("linearGradient", { id: id + "g", x1: 0, y1: 0, x2: 0, y2: 1 }, svg("stop", { offset: 0, "stop-color": "#33d6f2", "stop-opacity": 0.35 }), svg("stop", { offset: 1, "stop-color": "#33d6f2", "stop-opacity": 0 }))),
-      svg("line", { x1: 0, x2: W, y1: H - 3, y2: H - 3, stroke: "var(--border)" }),
-      svg("g", { "clip-path": `url(#${id})` }, outRects,
-        svg("polygon", { points: `0,${H} ${pts} ${W},${H}`, fill: `url(#${id}g)` }),
-        svg("polyline", { points: pts, fill: "none", stroke: "var(--cyan)", "stroke-width": 2.2, "vector-effect": "non-scaling-stroke", "stroke-linejoin": "round" }),
-        dots),
-      head));
-  const status = node.querySelector(".chip");
-  const soldCum = [], outCum = []; let s = 0, o = 0;
-  p.stock.forEach((st, i) => { const before = i ? p.stock[i - 1] : st + p.demand[i]; s += Math.min(p.demand[i], Math.max(before, 0)); o += st === 0 && p.demand[i] > 0 ? 1 : 0; soldCum.push(s); outCum.push(o); });
+// ---------------------------------------------------------------- boot
+function gate() {
+  if (document.querySelector(".gate-wrap")) return;
+  const input = el("input", { type: "password", placeholder: "Admin token", autocomplete: "off", "aria-label": "Admin token" });
+  const wrap = el("div", { class: "gate-wrap" }, el("div", { class: "card gate pop" }, el("div", { class: "eyebrow" }, "Root brain"),
+    el("h2", {}, "SecondBrain HQ"), el("p", { class: "muted" }, "The command centre over every platform. It needs the root operator's admin token."),
+    el("form", { onsubmit: (e) => { e.preventDefault(); try { sessionStorage.setItem("sb-admin-token", input.value.trim()); } catch {} wrap.remove(); boot(); } },
+      input, el("button", { class: "btn primary" }, "Open")),
+    el("p", { style: { marginTop: "14px", fontSize: "13px" } }, el("a", { href: "?mock=1" }, "See the demo data instead"))));
+  document.body.append(wrap); setTimeout(() => input.focus(), 50);
+}
+async function fetchJSON(url, timeout = 4000) {
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), timeout);
+  try { const r = await fetch(url, { signal: ctl.signal }); if (!r.ok) { const e = new Error(r.statusText); e.status = r.status; throw e; } return await r.json(); }
+  finally { clearTimeout(t); }
+}
+let started = false;
+function startShared() {
+  if (started) return; started = true;
+  KPI.init(); TREE.init(); TM.init(); SCOPE.render(); HERO.render();
+  LOOP.now(); setInterval(() => LOOP.tick(), 250); LOOP.tick();
+  LIGHT.addEventListener("change", () => {
+    readTokens(); TREE.dirty = true;
+    for (const c of PLATS.cards.values()) c.node.remove();
+    PLATS.cards.clear(); PLATS.render(); SCOPE.render(); HERO.render(); TREE.legend();
+    $("att")._k = ""; ATT.render(S.attention); $("lessons")._k = ""; LESSONS.render(S.lessons);
+  });
+  requestAnimationFrame((t) => { lastFrame = t; frame(t); });
+}
+async function startMock(reason) {
+  let seed = null, st = null;
+  try { seed = await fetchJSON("/commerce/api/merchants", 3000); } catch {}
+  try { st = await fetchJSON("/commerce/api/status", 3000); } catch {}
+  MOCK = makeMock(Array.isArray(seed) ? seed : null, st);
+  setMode("mock");
+  if (reason === "offline") $("mode").title = "The Live Commerce engine isn't reachable, so this browser generates demo data";
+  startShared();
+  MOCK.run({ stats: onStats, signal: onSignal, outcome: onOutcome });
+}
+async function startLive(status) {
+  setMode("live");
+  startShared();
+  onStats(status);
+  // Stats arrive from the live broker every 500 ms; poll the engine when the broker is quiet.
+  setInterval(async () => { if (Date.now() - S.statsAt > 2500) { try { onStats(await http("/status")); } catch {} } }, 2000);
+  let res;
+  try { res = await fetch("/admin/live/monitor", { headers: { "X-Admin-Token": token() || "" } }); } catch { res = null; }
+  if (res && res.status === 401) { try { sessionStorage.removeItem("sb-admin-token"); } catch {} return gate(); }
+  if (res && res.ok) {
+    const client = await SB.live("/admin/live/monitor", { "X-Admin-Token": token() }, onMessage);
+    if (client) { client.on("connect", () => setMode("live")); client.on("offline", () => setMode("live", true)); }
+  }
+}
+async function boot() {
+  if (Q.get("mock") === "1") return startMock("forced");
+  let status;
+  try { status = await fetchJSON("/commerce/api/status"); } catch { return startMock("offline"); }
+  if (!status || !status.sim_ts) return startMock("offline");
+  if (!token()) return gate();
+  startLive(status);
+}
+
+// ================================================================ demo data (mock engine)
+// Runs a small market in the browser: the real engine's merchants when it is reachable (else a
+// generated 600), revenue that follows the day and the festival calendar, signals, offers and their
+// outcomes, and lessons that form from those outcomes. Answers the HQ endpoints in contract shapes.
+function makeMock(seedMerchants, realStatus) {
+  const mulberry = (a) => () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const R = mulberry(20261106), pick = (a) => a[(R() * a.length) | 0];
+  const poisson = (l) => { if (l <= 0) return 0; if (l > 30) return Math.max(0, Math.round(l + Math.sqrt(l) * (R() + R() + R() - 1.5) * 2)); const L = Math.exp(-l); let k = 0, p = 1; do { k++; p *= R(); } while (p > L); return k - 1; };
+  const PRODUCTS = {
+    Fashion: [["Cotton Kurta Set", 1299], ["Banarasi Silk Saree", 3499], ["Men's Nehru Jacket", 1899], ["Kolhapuri Chappals", 799], ["Chikankari Kurti", 999]],
+    Beauty: [["Kumkumadi Face Oil", 899], ["Ubtan Face Pack", 449], ["Vitamin C Serum", 599], ["Kajal Twin Pack", 199]],
+    "Electronics Accessories": [["boAt Airdopes 141", 1299], ["20000 mAh Power Bank", 1999], ["Type-C Fast Charger", 699]],
+    Home: [["Terracotta Diya Set (12)", 199], ["Brass Puja Thali", 899], ["Diwali LED String Lights", 349], ["Cotton Bedsheet Set", 899]],
+    Sweets: [["Kaju Katli 500g", 549], ["Haldiram's Soan Papdi 500g", 199], ["Dry Fruit Gift Box", 1199]],
+    Snacks: [["Haldiram's Bhujia 1kg", 245], ["Parle-G Family Pack", 100], ["Lay's Magic Masala 6-pack", 120]],
+    Staples: [["Tata Salt 1kg", 28], ["Aashirvaad Atta 10kg", 489], ["Fortune Sunflower Oil 1L", 155], ["India Gate Basmati 5kg", 649], ["Toor Dal 1kg", 172]],
+    Dairy: [["Amul Butter 500g", 285], ["Amul Ghee 1L", 650], ["Mother Dairy Paneer 200g", 90]],
+    Fresh: [["Onions 1kg", 40], ["Tomatoes 1kg", 36], ["Bananas (dozen)", 60]],
+    "Personal Care": [["Dove Soap 4-pack", 220], ["Colgate Strong Teeth 200g", 110]],
+    Household: [["Surf Excel Matic 2kg", 425], ["Vim Bar 3-pack", 60]],
+    Electronics: [["Samsung 43\" Smart TV", 31990], ["Prestige Induction Cooktop", 2499], ["Philips Air Fryer", 7999], ["Mi Power Bank 20000", 1999]],
+  };
+  // Price response the brain assumes at first (prior, from the engine when available) and what shoppers really do.
+  const ELAST = { Fashion: [-1.6, -2.6], Beauty: [-1.5, -0.9], "Electronics Accessories": [-1.8, -2.3], Home: [-1.6, -2.2], Sweets: [-1.0, -1.8], Snacks: [-1.0, -1.35],
+    Staples: [-1.0, -0.4], Dairy: [-1.0, -0.45], Fresh: [-1.0, -1.9], "Personal Care": [-1.5, -1.1], Household: [-1.6, -1.2], Electronics: [-1.8, -1.15] };
+  for (const [c, e] of Object.entries(realStatus?.learning?.elasticity || {})) if (ELAST[c] && e.prior != null) ELAST[c][0] = e.prior;
+  const FEST_LIFT = { Sweets: 3.1, Electronics: 2.4, Home: 2.3, Fashion: 1.9, "Electronics Accessories": 2.0, Snacks: 1.6, Staples: 1.25, Beauty: 1.7 };
+  const FESTDAYS = { "2026-10-20": ["Dussehra", 1.4], "2026-11-04": [null, 1.2], "2026-11-05": [null, 1.35], "2026-11-06": ["Dhanteras", 1.8], "2026-11-07": [null, 1.9], "2026-11-08": ["Diwali", 1.6],
+    "2026-11-09": [null, 1.1], "2026-11-11": ["Bhai Dooj", 1.25], "2026-11-24": ["Wedding season", 1.2], "2026-12-25": ["Christmas", 1.3] };
+  const FESTIVALS = [["2026-11-06", "Dhanteras"], ["2026-11-08", "Diwali"], ["2026-11-11", "Bhai Dooj"], ["2026-11-24", "Wedding season"], ["2026-12-25", "Christmas"], ["2027-01-14", "Makar Sankranti"]];
+  const dayKey = (t) => new Date(t).toISOString().slice(0, 10);
+  const festMult = (t) => FESTDAYS[dayKey(t)]?.[1] || 1;
+  const HOURLY = [0.2, 0.1, 0.05, 0.05, 0.08, 0.2, 0.5, 0.9, 1.2, 1.4, 1.6, 1.8, 1.9, 1.7, 1.5, 1.4, 1.5, 1.7, 2.0, 2.2, 2.1, 1.6, 1.0, 0.5];
+  const HSUM = HOURLY.reduce((a, b) => a + b, 0);
+  const dens = (t) => HOURLY[new Date(t).getUTCHours()] / HSUM; // share of a day's sales in this hour
+
+  // ----- world: the real merchants when we have them
+  let world = seedMerchants && seedMerchants.length ? seedMerchants.map((m) => ({ id: m.id, platform: m.platform, name: m.name, city: m.city, category: m.category })) : null;
+  if (!world) {
+    world = [];
+    const CITIES = ["Mumbai", "Delhi", "Bengaluru", "Hyderabad", "Chennai", "Kolkata", "Pune", "Ahmedabad", "Jaipur", "Lucknow", "Surat", "Kochi", "Indore", "Nagpur", "Thane", "Vadodara", "Bhopal", "Chandigarh", "Coimbatore", "Patna"];
+    const LOC = ["Powai", "Andheri", "Saket", "Rohini", "Whitefield", "Koramangala", "Kukatpally", "T Nagar", "Salt Lake", "Kothrud", "Satellite", "Malviya Nagar", "Gomti Nagar", "Vesu", "Edappally", "Vijay Nagar"];
+    const BR = ["Desi", "Kesar", "Mitti", "Indigo", "Saffron", "Banyan", "Lotus", "Peacock", "Zari", "Tulsi", "Neel", "Chandni", "Sutra", "Haveli", "Amrit", "Kulhad"], SUF = ["Living", "Label", "Studio", "Loom", "Naturals", "Co", "House", "Crafts"];
+    const plan = [["shopify", [["Fashion", 71], ["Beauty", 60], ["Electronics Accessories", 48], ["Home", 42], ["Gourmet", 19]]], ["reliance", [["Grocery", 126], ["Electronics", 42], ["Fashion", 42]]], ["dmart", [["Hypermarket", 150]]]];
+    let i = 0;
+    for (const [pid, cats] of plan) for (const [cat, n] of cats) for (let k = 0; k < n; k++) {
+      const loc = pick(LOC);
+      const name = pid === "shopify" ? (i === 0 ? "Desi Living" : `${pick(BR)} ${pick(SUF)}`) : pid === "dmart" ? `DMart ${loc}`
+        : `${cat === "Grocery" ? "Reliance Smart" : cat === "Electronics" ? "Reliance Digital" : "Reliance Trends"} ${loc}`;
+      world.push({ id: `${pid}-${String(++i).padStart(4, "0")}`, platform: pid, name, city: pick(CITIES), category: cat });
+    }
+  }
+  const SIZE = { shopify: [90000, 650], reliance: [320000, 420], dmart: [1100000, 360] }; // ₹ a day, average order value
+  const W = world.map((m) => {
+    const [d, aov] = SIZE[m.platform] || [200000, 500], k = 0.35 + Math.pow(R(), 1.6) * 2.2;
+    return { ...m, D: d * k, aov: aov * (0.8 + R() * 0.4), pcats: pcatsOf(m.category).filter((c) => PRODUCTS[c]), rev: 0, ord: 0, offers: 0, open: 0, festy: /Gourmet|Electronics|Home/.test(m.category) };
+  });
+  for (const m of W) if (!m.pcats.length) m.pcats = ["Staples"];
+  const byId = new Map(W.map((m) => [m.id, m]));
+  const pids = [...new Set(W.map((m) => m.platform))];
+  const customersTotal = realStatus?.customers || 120000, seriesTotal = realStatus?.series || 16291;
+  let st;
+
+  function lesson(kind, cat, prior, truth) {
+    const id = kind + ":" + cat;
+    let L = st.lessons.get(id);
+    if (!L) st.lessons.set(id, (L = { id, kind, category: cat, prior, truth, n: 0, learned: new Set(), plats: new Set(), updated: null, festival: null }));
+    return L;
+  }
+  function evidence(L, m, k = 1) { L.n += k; L.learned.add(m.id); L.plats.add(m.platform); L.updated = simIso(st.t); }
+  const lessonValue = (L) => (L ? +(L.prior + (L.truth - L.prior) * (1 - Math.exp(-L.n / 14))).toFixed(2) : null);
+  function festivalLessons(name) {
+    for (const [c, lift] of Object.entries(FEST_LIFT)) {
+      const ms = W.filter((m) => m.pcats.includes(c)); if (!ms.length) continue;
+      const L = lesson("festival_lift", c, 1.5, lift); L.festival = name;
+      for (const m of ms) evidence(L, m, 1);
+    }
+  }
+  function closeDay(prevDay) {
+    const f = FESTDAYS[prevDay];
+    if (f && f[0]) festivalLessons(f[0]);
+    for (const m of W) { m.rev = 0; m.ord = 0; }
+    st.daysRun++;
+  }
+  function newSignal(m, emit) {
+    const pc = pick(m.pcats), [product, price] = pick(PRODUCTS[pc]), prior = (ELAST[pc] || [-1.2])[0];
+    const perishable = pc === "Fresh" || pc === "Dairy", r = R();
+    const kind = perishable && r < 0.45 ? "clearance" : r < 0.42 ? "discount" : r < 0.7 ? "restock" : r < 0.82 ? "winback" : r < 0.93 ? "surge" : "festival";
+    const units = Math.round(Math.max(3, Math.min(2500, (m.D / price) * (0.015 + R() * 0.05))));
+    const fest = FESTIVALS.find(([d]) => d > dayKey(st.t)) || FESTIVALS[0];
+    const disc = kind === "clearance" ? 0.25 : [0.08, 0.1, 0.12, 0.15, 0.2][(R() * 5) | 0];
+    const hours = kind === "clearance" ? 12 : [24, 48, 72][(R() * 3) | 0];
+    const lift = Math.round(units * -prior * disc * (0.8 + R() * 0.5)), cover = (0.6 + R() * 2.5).toFixed(1);
+    let title, detail, action, urgency, rev;
+    if (kind === "discount") {
+      title = `Give ${Math.round(disc * 100)}% off ${product} for ${hours}h`; urgency = R() < 0.2 ? "high" : "medium";
+      detail = `Selling ${Math.round(18 + R() * 30)}% below forecast with ${Math.round(8 + R() * 20)} days of stock. At ${Math.round(disc * 100)}% off the brain expects +${num(lift)} units.`;
+      action = { type: "discount", discount: disc, hours }; rev = (units + lift) * price * (1 - disc);
+    } else if (kind === "clearance") {
+      title = `Clear ${product} before it spoils: ${Math.round(disc * 100)}% off for 12h`; urgency = "high";
+      detail = `${num(units)} units expire within a day at today's pace. A short markdown sells them through and frees the shelf.`;
+      action = { type: "discount", discount: disc, hours }; rev = units * price * (1 - disc);
+    } else if (kind === "restock" || kind === "festival") {
+      urgency = kind === "festival" ? "medium" : R() < 0.5 ? "high" : "medium";
+      title = kind === "festival" ? `Stock up ${product} for ${fest[1]}` : `Reorder ${product} today`;
+      detail = kind === "festival" ? `${fest[1]} demand for ${pc.toLowerCase()} runs about ${(FEST_LIFT[pc] || 1.5).toFixed(1)}× normal. Order ${num(units)} units now so they arrive in time.`
+        : `Only ${cover} days of stock left against the forecast. Order ${num(units)} units (lead time ${2 + ((R() * 4) | 0)} days) to avoid a stock-out.`;
+      action = { type: "restock", units }; rev = units * price;
+    } else if (kind === "winback") {
+      const cust = Math.round(20 + R() * 120), coupon = [50, 75, 100, 150][(R() * 4) | 0];
+      title = `Send a ₹${coupon} coupon to ${cust} lapsed customers`; urgency = "low";
+      detail = `${cust} regulars who bought ${product} haven't come back in 5 weeks. A small coupon brings back about 1 in 4.`;
+      action = { type: "coupon", coupon, customers: cust }; rev = cust * 0.24 * m.aov * 2.2;
+    } else {
+      title = `${product} demand is surging: hold the price, add stock`; urgency = R() < 0.4 ? "high" : "medium";
+      detail = `Orders are ${Math.round(40 + R() * 90)}% above forecast for the last 3 hours in ${m.city}. Hold the price and move stock from slower lines.`;
+      action = { type: "hold_price" }; rev = units * price * 0.6;
+    }
+    const s = { id: `sig-${++st.seq}`, sent_ms: Date.now(), sim_ts: simIso(st.t), platform: m.platform, merchant: m.id, merchant_name: m.name, city: m.city,
+      sku: pc.slice(0, 3).toUpperCase() + "-" + ((product.length * 37) % 997), product, category: pc, kind, urgency, title, detail, action,
+      expected: { units: units + Math.max(0, lift), revenue: Math.round(rev), margin: 0.18 + R() * 0.2, uplift_units: Math.max(0, lift) },
+      confidence: 0.62 + R() * 0.33, evidence: { cover_days: +cover, elasticity: prior }, latency_ms: 3 + R() * 9,
+      autopilot: kind === "discount" && urgency !== "high" && R() < 0.3 };
+    const P = st.P[m.platform]; P.sig++; P.kinds[kind] = (P.kinds[kind] || 0) + 1;
+    const rec = { s, m, until: st.t + (hours || 24) * 36e5 };
+    if (s.autopilot) applyOffer(rec); else { st.open.set(s.id, rec); m.open++; }
+    st.recent.push(s); if (st.recent.length > 120) st.recent.shift();
+    if (emit) emit.push(["signal", s]);
+  }
+  function closeSignal(rec) { if (st.open.delete(rec.s.id)) rec.m.open = Math.max(0, rec.m.open - 1); }
+  function applyOffer(rec) {
+    closeSignal(rec);
+    rec.m.offers++; st.P[rec.m.platform].offers++;
+    st.pending.push({ rec, due: st.t + (rec.s.action.hours || 48) * 36e5 });
+  }
+  function outcome(rec, emit) {
+    const { s, m } = rec, pc = s.category, [prior, truth] = ELAST[pc] || [-1.2, -1.2], coupon = s.action.type === "coupon";
+    const worked = R() < (coupon ? 0.7 : truth <= -1.3 ? 0.78 : 0.35);
+    const exp = Math.max(1, s.expected.uplift_units || Math.round(s.expected.units * 0.2));
+    const act = Math.round(exp * (worked ? 0.95 + R() * 0.5 : 0.15 + R() * 0.5));
+    const gain = act * s.expected.revenue / Math.max(1, s.expected.units);
+    const P = st.P[m.platform]; P.uplift += gain; P.judged++; if (worked) P.hits++;
+    st.outcomes++; st.judged++; if (worked) st.hits++;
+    const key = coupon ? "winback" : truth <= -1.3 ? "price_response" : "no_discount";
+    const L = coupon ? lesson(key, pc, 0.15, 0.26) : lesson(key, pc, prior, truth), before = lessonValue(L);
+    evidence(L, m);
+    if (emit) emit.push(["outcome", { signal_id: s.id, merchant: m.id, sku: s.sku, product: s.product, merchant_name: m.name, discount: s.action.discount || 0,
+      expected_uplift_units: exp, actual_uplift_units: act, uplift_pct: act / Math.max(1, s.expected.units), revenue_gain: gain, worked, category: pc,
+      elasticity_before: before, elasticity_after: lessonValue(L) }]);
+  }
+  function step(dtH, emit) {
+    const t1 = st.t + dtH * 36e5;
+    if (dayKey(t1) !== dayKey(st.t)) closeDay(dayKey(st.t));
+    const fm = festMult(t1), f0 = dens(t1) * dtH * fm, boost = 1 + Math.min(0.08, st.daysRun * 0.004);
+    for (const m of W) {
+      const f = f0 * (m.festy ? 1 + (fm - 1) * 0.6 : 1) * (0.75 + R() * 0.5) * boost * (1 + Math.min(0.15, m.offers * 0.004));
+      const rev = m.D * f, o = rev / m.aov;
+      m.rev += rev; m.ord += o; st.tot.rev += rev; st.tot.ord += o; st.ordTick += o; st.P[m.platform].ordTick += o;
+    }
+    // signals: about 18 an hour across the market, more in busy hours and on festival days
+    const n = poisson(18 * dtH * (0.5 + dens(t1) * 12) * (0.6 + fm * 0.4));
+    for (let i = 0; i < n; i++) newSignal(W[(R() * W.length) | 0], emit && emit.length < 6 ? emit : null);
+    // merchants act on some open offers; the rest expire (restocks and surges still teach the brain)
+    for (const rec of [...st.open.values()]) {
+      if (rec.until <= t1) {
+        closeSignal(rec);
+        if (rec.s.kind === "restock" || rec.s.kind === "festival") evidence(lesson("restock", rec.s.category, 2, 4.2), rec.m);
+        if (rec.s.kind === "surge") evidence(lesson("surge", rec.s.category, 0.5, 0.72), rec.m);
+      } else if (["discount", "coupon"].includes(rec.s.action.type) && R() < 0.03 * dtH) applyOffer(rec);
+    }
+    st.pending = st.pending.filter((p) => { if (p.due <= t1) { outcome(p.rec, emit && emit.length < 10 ? emit : null); return false; } return true; });
+    st.t = t1;
+  }
+  // Accuracy improves a little with every simulated day the brain learns from.
+  function accuracy() {
+    const k = Math.exp(-st.daysRun / 25), BASE = { shopify: [0.17, 0.33, 0.43], reliance: [0.12, 0.26, 0.38], dmart: [0.09, 0.21, 0.33] };
+    const per = {}, w = {};
+    for (const p of pids) { const b = BASE[p] || [0.13, 0.27, 0.38]; per[p] = { merchant_wape: b[0] * (0.8 + 0.2 * k), wape: b[1] * (0.85 + 0.15 * k), baseline_wape: b[2] }; w[p] = sum(W.filter((m) => m.platform === p), (m) => m.D); }
+    const tw = sum(pids, (p) => w[p]) || 1, avg = (f) => sum(pids, (p) => per[p][f] * w[p]) / tw;
+    return { per, all: { wape: avg("wape"), baseline_wape: avg("baseline_wape") * 1.05, merchant_wape: avg("merchant_wape"), merchant_baseline_wape: avg("baseline_wape"),
+      days_scored: 56 + st.daysRun, by_platform: Object.fromEntries(pids.map((p) => [p, per[p].wape])) } };
+  }
+  function status() {
+    const P = st.P;
+    return { sent_ms: Date.now(), sim_ts: simIso(st.t), speed: st.target ? 28800 : st.key, running: st.running, catching_up: false, run_until: st.target ? simIso(st.target) : null,
+      merchants: W.length, customers: customersTotal, series: seriesTotal,
+      orders_total: Math.round(st.tot.ord), revenue_total: st.tot.rev, orders_per_sec: st.running ? st.ops : 0,
+      active_customers_today: Math.min(customersTotal, Math.round(sum(W, (m) => m.ord) * 0.55)),
+      signals_total: sum(pids, (p) => P[p].sig), signals_by_kind: pids.reduce((o, p) => { for (const [k, n] of Object.entries(P[p].kinds)) o[k] = (o[k] || 0) + n; return o; }, {}),
+      offers_applied: sum(pids, (p) => P[p].offers), uplift_revenue: sum(pids, (p) => P[p].uplift),
+      platforms: Object.fromEntries(pids.map((p) => [p, { orders_per_sec: st.running ? P[p].ops : 0 }])),
+      accuracy: accuracy().all,
+      learning: { outcomes: st.outcomes, judged: st.judged, hit_rate: st.judged ? st.hits / st.judged : null,
+        elasticity: Object.fromEntries(Object.entries(ELAST).map(([c, [p]]) => { const L = st.lessons.get("price_response:" + c) || st.lessons.get("no_discount:" + c); return [c, { prior: p, learned: lessonValue(L) ?? p, n: L?.n || 0 }]; })) },
+      festival: (() => { const d = dayKey(st.t), f = FESTIVALS.find(([x]) => x >= d); return f ? { name: f[1], date: f[0], days_to: Math.round((Date.parse(f[0]) - Date.parse(d)) / 864e5) } : null; })() };
+  }
+  function base() {
+    const acc = accuracy(), P = st.P, custW = { shopify: 0.27, reliance: 0.4, dmart: 0.33 };
+    const merchants = W.map((m) => ({ id: m.id, platform: m.platform, name: m.name, city: m.city, category: m.category, orders_today: Math.round(m.ord), revenue_today: m.rev, open_signals: m.open, offers_applied: m.offers }));
+    const extra = Object.fromEntries(pids.map((p) => {
+      const ms = W.filter((m) => m.platform === p), cust = Math.round(customersTotal * (custW[p] || 1 / pids.length));
+      return [p, { customers: cust, series: Math.round(seriesTotal * ms.length / W.length), ops: st.running ? P[p].ops : 0, active: Math.min(cust, Math.round(sum(ms, (m) => m.ord) * 0.55)),
+        merchant_wape: acc.per[p].merchant_wape, baseline_wape: acc.per[p].baseline_wape, signals_total: P[p].sig, offers: P[p].offers, uplift: P[p].uplift,
+        hit_rate: P[p].judged ? P[p].hits / P[p].judged : null }];
+    }));
+    return { merchants, status: status(), signals: st.recent, open: [...st.open.values()].map((r) => r.s), extra };
+  }
+  function lessons(scope) {
+    const out = [];
+    for (const L of st.lessons.values()) {
+      if (L.n < 3) continue;
+      const fits = W.filter((m) => m.pcats.includes(L.category) && (!scope || m.platform === scope));
+      if (!fits.length) continue;
+      const learned = scope ? [...L.learned].filter((id) => byId.get(id)?.platform === scope).length : L.learned.size;
+      out.push(lessonText({ id: L.id, kind: L.kind, category: L.category, platform: L.plats.size === 1 ? [...L.plats][0] : null,
+        value: L.kind === "festival_lift" ? L.truth : lessonValue(L), prior: L.prior, festival: L.festival,
+        evidence_n: L.n, learned_from: learned, applies_to: fits.length, updated_sim_ts: L.updated }));
+    }
+    return out.sort((a, b) => b.evidence_n - a.evidence_n);
+  }
+  function fresh() {
+    const nowIST = Date.now() + 19800000;
+    st = { t: nowIST - (nowIST % 864e5) - 3 * 864e5, running: true, key: "1min", speed: 60, target: null, prevKey: null, seq: 0,
+      tot: { rev: 0, ord: 0 }, P: Object.fromEntries(pids.map((p) => [p, { sig: 0, kinds: {}, offers: 0, uplift: 0, hits: 0, judged: 0, ops: 0, ordTick: 0 }])),
+      open: new Map(), pending: [], recent: [], lessons: new Map(), outcomes: 0, hits: 0, judged: 0, daysRun: 0, ops: 0, ordTick: 0 };
+    for (const m of W) { m.rev = 0; m.ord = 0; m.offers = 0; m.open = 0; }
+    festivalLessons("Dussehra"); // learned from the 56 days of history the merchants brought with them
+    // a short warm start (the last three days up to now) so the market has a history
+    while (st.t < nowIST) step(Math.min(0.5, (nowIST - st.t) / 36e5), null);
+  }
+
+  fresh();
+  let H = null, lastStats = 0;
+  function tick() {
+    const emit = [];
+    if (st.running) {
+      // simulated time this tick: speed × 250 ms, or a day every 3 s while the time machine runs
+      let simMs = st.target ? 864e5 / 12 : st.speed * 250;
+      if (st.target) simMs = Math.min(simMs, st.target - st.t);
+      st.ordTick = 0; for (const p of pids) st.P[p].ordTick = 0;
+      let left = simMs / 36e5;
+      while (left > 1e-9) { const d = Math.min(0.5, left); step(d, emit); left -= d; }
+      st.ops = st.ops * 0.6 + st.ordTick * 4 * 0.4;
+      for (const p of pids) st.P[p].ops = st.P[p].ops * 0.6 + st.P[p].ordTick * 4 * 0.4;
+      if (st.target && st.t >= st.target) { st.target = null; st.running = false; st.key = st.prevKey || "1min"; st.speed = SPEED_VAL[st.key]; }
+    }
+    if (H) {
+      for (const [k, x] of emit) (k === "signal" ? H.signal : H.outcome)(x);
+      if (Date.now() - lastStats >= 480) { lastStats = Date.now(); H.stats(status()); }
+    }
+  }
+  setInterval(tick, 250);
+
   return {
-    node, name: p.name,
-    reveal(frac, idx) {
-      clip.setAttribute("width", frac * W + 2); head.setAttribute("cx", x(idx)); head.setAttribute("cy", y(p.stock[idx]));
-      const isOut = p.stock[idx] === 0 && p.demand[idx] > 0;
-      status.textContent = isOut ? "out of stock" : "in stock"; status.className = "chip " + (isOut ? "bad" : "good");
+    run(h) { H = h; h.stats(status()); },
+    hq(name, scope) { return name === "lessons" ? lessons(scope) : DERIVE[name](base(), scope); },
+    control(c) {
+      if (c.cmd === "start") st.running = true;
+      else if (c.cmd === "pause") { st.running = false; if (st.target) { st.target = null; st.key = st.prevKey || st.key; st.speed = SPEED_VAL[st.key]; } }
+      else if (c.cmd === "speed" && SPEED_VAL[c.speed]) { st.key = c.speed; st.speed = SPEED_VAL[c.speed]; }
+      else if (c.cmd === "run_days") { if (!st.target) st.prevKey = st.key; st.target = st.t + (+c.days || 1) * 864e5; st.running = true; }
+      else if (c.cmd === "reset") fresh();
+      if (H) { lastStats = Date.now(); H.stats(status()); }
     },
-    soldUntil: (idx) => soldCum[idx] || 0, outUntil: (idx) => outCum[idx] || 0,
-    arrivalsUntil: (day) => p.arrived_on.filter((d) => d <= day).length,
-    flash(kind) { if (!kind) return; node.classList.add(kind); setTimeout(() => node.classList.remove(kind), 1600); },
+    apply(id) { const rec = st.open.get(id); if (!rec) throw new Error("This signal is no longer open"); applyOffer(rec); },
   };
 }
 
-function showSummary(r, animate) {
-  const b = r.before, a = r.after;
-  if (!b || !a) return;
-  if (!animate) playbackStatic(r);
-  const box = $("tm-summary"); if (!box) return;
-  const prevented = a.prevented - b.prevented, cameTrue = a.came_true - b.came_true, wrong = a.false_alarms - b.false_alarms;
-  const products = Object.values(r.products || {});
-  const missed = products.reduce((t, p) => t + (p.lost_value || 0), 0);
-  box.replaceChildren(el("div", { class: "section rise" },
-    el("div", { class: "section-head" }, el("div", {}, el("h2", {}, `${fmtDay(b.today)} → ${fmtDay(a.today)}: what the brain did`))),
-    el("div", { class: "kpis" },
-      kpi("Predictions checked", prevented + cameTrue + wrong, { d: `${prevented + cameTrue} right · ${wrong} wrong`, glow: "glow" }),
-      kpi("Run-outs prevented", prevented, { glow: "glow-good", cls: "good", d: shortMoney(a.saved - b.saved) + " of sales saved", delay: 80 }),
-      kpi("Forecast accuracy", a.forecast_error == null ? "—" : (1 - a.forecast_error) * 100, { format: (x) => Math.round(x) + "%",
-        d: b.forecast_error == null ? "checked on real sales" : `was ${Math.round((1 - b.forecast_error) * 100)}%`, delay: 160, tip: r.accuracy_text }),
-      kpi("New memories", a.memories - b.memories, { format: (x) => "+" + Math.round(x), d: `+${a.forecasts_graded - b.forecasts_graded} forecasts graded`, delay: 240 }),
-      kpi("Sales missed", missed, { format: shortMoney, cls: missed ? "bad" : "good", glow: missed ? "glow-bad" : "", delay: 320,
-        d: missed ? "mostly products already out at the start" : "never out of stock" })),
-    el("div", { class: "section" }, el("div", { class: "eyebrow" }, "What the brain will do next"),
-      el("div", { class: "next" }, (r.top_signals || []).slice(0, 4).map((s, i) =>
-        el("div", { class: "rise", style: { animationDelay: i * 80 + "ms" } }, el("span", { class: "chip " + (s.urgency === "high" ? "bad" : "accent") }, s.urgency),
-          el("span", {}, s.title), s.impact_value ? el("span", { class: "muted", style: { marginLeft: "auto" } }, shortMoney(s.impact_value) + " at stake") : null))))));
-}
-
-// A saved result shown again after a reload: the final frame, no animation.
-function playbackStatic(r) {
-  const box = $("tm"); if (!box || box.children.length) return;
-  const products = Object.values(r.products || {});
-  const charts = products.map((p) => { const c = chart(p); c.reveal(1, p.days.length - 1); return c.node; });
-  box.replaceChildren(el("div", { class: "clock" }, el("span", { class: "from" }, fmtDay(r.from) + "  →"), el("div", { class: "date" }, fmtDay(r.to))),
-    el("div", { class: "charts" }, charts), el("div", { id: "tm-summary" }));
-}
-
-load();
+boot();
 </script>
 </body>
 </html>

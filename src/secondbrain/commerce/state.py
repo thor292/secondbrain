@@ -2,7 +2,8 @@
 
 Arrays indexed by series (merchant x SKU) and by merchant, so the forecaster and the decision
 layer work on all of them at once; dictionaries only map platform ids to those indexes.
-Customers are kept per merchant (first and last day seen, visit days) for win-back.
+Customers are kept per merchant (first and last day seen, visit days) for win-back; regulars and
+lapsed regulars per merchant are refreshed at each day close (``lapsed``).
 """
 
 import numpy as np
@@ -12,7 +13,8 @@ SERIES_FIELDS = {"s_merch": np.int64, "s_plat": np.int64, "price": float, "cost"
                  "t_out": bool}
 MERCHANT_FIELDS = {"m_plat": np.int64, "m_orders_today": np.int64, "m_rev_today": float,
                    "m_orders_total": np.int64, "m_rev_total": float, "m_last_sent": np.int64,
-                   "m_visits": np.int64, "m_interval": float}
+                   "m_visits": np.int64, "m_interval": float, "m_active_today": np.int64,
+                   "m_regulars": np.int64, "m_lapsed": np.int64}
 
 
 def _grow(obj, fields: dict, n: int, cap: int) -> int:
@@ -98,10 +100,12 @@ class Registry:
         if rec is None:
             self.customers[m][customer] = [day, day, 1]
             self.m_visits[m] += 1
+            self.m_active_today[m] += 1
         elif rec[1] != day:
             rec[1] = day
             rec[2] += 1
             self.m_visits[m] += 1
+            self.m_active_today[m] += 1
 
     def lapsed(self, m: int, today: int) -> tuple[int, float]:
         """Regulars now away for more than twice their usual interval (but not gone for good).
@@ -112,6 +116,8 @@ class Registry:
         """
         recs = np.array(list(self.customers[m].values()), dtype=float).reshape(-1, 3)
         recs = recs[recs[:, 2] >= 2]
+        self.m_regulars[m] = len(recs)
+        self.m_lapsed[m] = 0
         if not len(recs):
             return 0, 0.0
         span, gaps = recs[:, 1] - recs[:, 0], recs[:, 2] - 1
@@ -120,6 +126,7 @@ class Registry:
         usual = (span + typical) / (gaps + 1)
         away = today - recs[:, 1]
         lapsed = (usual >= 1.5) & (away > 2 * usual) & (away <= 6 * usual)
+        self.m_lapsed[m] = int(lapsed.sum())
         return int(lapsed.sum()), float(usual[lapsed].mean()) if lapsed.any() else 0.0
 
     def new_day(self) -> None:
@@ -130,3 +137,4 @@ class Registry:
         self.t_out[:n] = self.stock[:n] <= 0   # out of stock at some point today: no evidence of weak demand
         self.m_orders_today[:nm] = 0
         self.m_rev_today[:nm] = 0
+        self.m_active_today[:nm] = 0

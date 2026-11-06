@@ -19,7 +19,7 @@ import numpy as np
 import pytest
 
 from secondbrain.commerce import contract
-from secondbrain.commerce.simulator import CATS, DAY, PIDS, Simulator, State, DemandModel, sim_date
+from secondbrain.commerce.simulator import CATS, DAY, PIDS, Simulator, State, DemandModel, sim_date, sim_ts
 from secondbrain.commerce.world import build_world
 
 FEST = {name: (d - sim_date(0)).days for d, name in contract.FESTIVALS.items()}
@@ -266,6 +266,33 @@ def test_controls(sim):
     sim.handle({"cmd": "reset"})
     assert not sim.running and sim.state.t == 0
     assert any(t == contract.WORLD for t, *_ in sim.sent)
+
+
+def test_run_days_runs_fast_then_pauses_on_the_day(sim):
+    sim.handle({"cmd": "speed", "speed": "1min"})
+    sim.advance(5 * 3600)
+    start = sim.state.t
+    sim.handle({"cmd": "run_days", "days": 2})
+    clock = sim.clock_payload()
+    assert sim.running and clock["requested"] == "1day" and not sim.catching_up
+    assert clock["run_until"] == sim_ts(start + 2 * DAY)
+    ticks = 0
+    while sim.running and ticks < 1000:
+        dt = sim.step(6 * 3600.0)   # big steps: the last one is cut to land exactly on the target
+        sim.advance(dt)
+        sim.finish_step()
+        ticks += 1
+    assert not sim.running and sim.state.t == pytest.approx(start + 2 * DAY)
+    assert ticks == 8 and sim.state.day == 2
+    clock = sim.clock_payload()
+    assert clock["run_until"] is None and clock["requested"] == "1min" and not clock["running"]
+    # a pause in the middle cancels the run and keeps the user's speed
+    sim.handle({"cmd": "run_days", "days": 3})
+    sim.handle({"cmd": "pause"})
+    assert sim.run_until is None and sim.requested == "1min" and not sim.running
+    for bad in (0, -1, "x", None, 999):
+        sim.handle({"cmd": "run_days", "days": bad})
+        assert sim.run_until is None and not sim.running
 
 
 def _broker_up() -> bool:

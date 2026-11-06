@@ -21,6 +21,8 @@
   .who.on { background: var(--accent-soft); border-color: rgba(139,123,255,.4); }
   .who .av { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; color: #fff; }
   .who b { display: block; font-size: 14px; font-weight: 600; } .who small { color: var(--muted); font-size: 12px; }
+  .side .co .live-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #34d399; margin-left: 6px; vertical-align: 1px; box-shadow: 0 0 8px #34d399; }
+  .who .av.glyph { font-size: 16px; }
 
   /* Conversation */
   .main { display: flex; flex-direction: column; min-height: 0; }
@@ -98,7 +100,7 @@
           </div>
         </div>
       </form>
-      <div class="hint">Searches your department first, then your company. Never another company.</div>
+      <div class="hint" id="hint">Searches your department first, then your company. Never another company.</div>
     </div></div>
   </section>
 </div>
@@ -124,25 +126,51 @@ const SUGGEST = {
   karan: [["How many days of earned leave do we get?", "BharatFleet's own policy, never Desi Living's"], ["Who is Ananya Reddy?", "Another company's customer: nothing"]],
   meera: [["What are our biggest risks before Diwali?", "Across the whole company"], ["What was Q2 revenue?", "Finance, seen by the CEO"], ["Which carrier handles sofas and what does it cost?", "Carrier contract"], ["What happened with the damaged brass lamps from Noor Metalcraft?", "Supplier history"]],
 };
+// Platforms (live): questions over the Live Commerce engine, one scope each (HQ, a platform, a merchant).
+const COMMERCE = [
+  { id: "commerce:hq", level: "hq", sid: null, name: "SecondBrain HQ", sub: "All platforms", color: "#8b7bff", glyph: "✦" },
+  { id: "commerce:shopify", level: "platform", sid: "shopify", name: "Shopify", sub: "D2C online stores", color: "#95BF47" },
+  { id: "commerce:reliance", level: "platform", sid: "reliance", name: "Reliance Retail", sub: "Smart, Digital, Trends, JioMart", color: "#0A3A82" },
+  { id: "commerce:dmart", level: "platform", sid: "dmart", name: "DMart", sub: "Value hypermarkets", color: "#00833E" },
+  { id: "commerce:shopify-0001", level: "merchant", sid: "shopify-0001", name: "Desi Living", sub: "Shopify merchant", color: "#95BF47" },
+].map((p) => ({ ...p, commerce: true }));
+const COMMERCE_SUGGEST = {
+  hq: [["Where should we act first across all platforms?", "Most valuable open signals"], ["Which DMart stores need restocking today?", "Restock across the network"],
+       ["What has the brain learned about pricing?", "Lessons from measured offers"], ["How accurate are the forecasts on each platform?", "Live forecast accuracy"]],
+  shopify: [["Which offers worked best on Shopify this week?", "Measured offer outcomes"], ["Which Shopify merchants need attention now?", "Open signals"],
+            ["Which categories should we not discount?", "Margin protection"]],
+  reliance: [["Which Reliance stores need attention now?", "Open signals"], ["Which offers worked best on Reliance Retail?", "Measured offer outcomes"],
+             ["Are regular customers coming back?", "Win-back"]],
+  dmart: [["Which DMart stores need restocking today?", "Restock signals"], ["Which DMart products are running out most often?", "Stockout patterns"],
+          ["What did the brain learn about festival demand?", "Festival lifts"]],
+  merchant: [["What should we restock today?", "Your stock and lead times"], ["Did our last offers work?", "Measured outcomes"],
+             ["What should we do for Diwali?", "Festival plan from live data"]],
+  "shopify-0001": [["What should Desi Living do for Diwali?", "Festival plan from live data"], ["Which products will run out first?", "Stock cover"],
+                   ["Did our last offers work?", "Measured outcomes"]],
+};
 const GENERIC = [["What is our Diwali shipping cutoff?", "Plans and dates"], ["Who handles damaged brass lamps?", "Process across teams"], ["What changed recently?", "Newest notes"]];
 
 async function api(path, options = {}) {
   const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
-  if (state.user) headers["X-User-Id"] = state.user.id;
+  if (state.user && !state.user.commerce) headers["X-User-Id"] = state.user.id;
   const res = await fetch(path, { ...options, headers });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.detail || res.statusText);
   return body;
 }
-const role = (u) => (u.name.match(/\((.*)\)/) || [])[1] || u.brain_name;
+const role = (u) => u.commerce ? u.sub : (u.name.match(/\((.*)\)/) || [])[1] || u.brain_name;
 const short = (u) => u.name.replace(/\s*\(.*\)/, "");
-const avatar = (u, cls = "av") => el("div", { class: cls, style: { background: colorFor(u.id) } }, short(u)[0]);
+const avatar = (u, cls = "av") => u.commerce
+  ? el("div", { class: cls + (u.glyph ? " glyph" : ""), style: { background: u.color } }, u.glyph || u.name[0])
+  : el("div", { class: cls, style: { background: colorFor(u.id) } }, short(u)[0]);
+const HINT = $("hint").textContent;
 function scroll() { const s = $("stream"); s.scrollTo({ top: s.scrollHeight, behavior: "smooth" }); }
 function add(node) { $("messages").append(node); scroll(); return node; }
 const note = (text) => add(el("div", { class: "msg note" }, el("span", {}, text)));
 
 function welcome() {
   const u = state.user;
+  if (u && u.commerce) return commerceWelcome(u);
   const items = u ? SUGGEST[u.id] || GENERIC : [];
   $("messages").replaceChildren(el("div", { class: "welcome rise" }, el("div", { class: "orb" }),
     el("h1", {}, u ? `Hi ${short(u).split(" ")[0]}, ask your ` : "Ask your ", el("span", { class: "grad-text" }, "second brain")),
@@ -151,12 +179,38 @@ function welcome() {
     u ? el("div", { class: "suggest" }, items.map(([q, why]) => el("button", { type: "button", onclick: () => ask(q) }, q, el("small", {}, why)))) : null));
 }
 
+function commerceWelcome(u) {
+  const items = COMMERCE_SUGGEST[u.sid] || COMMERCE_SUGGEST[u.level] || COMMERCE_SUGGEST.hq;
+  const what = u.level === "hq" ? "every platform and merchant" : u.level === "platform" ? `${u.name} and its merchants` : `${u.name} only`;
+  $("messages").replaceChildren(el("div", { class: "welcome rise" }, el("div", { class: "orb" }),
+    el("h1", {}, "Ask ", el("span", { class: "grad-text" }, u.level === "hq" ? "SecondBrain HQ" : u.name)),
+    el("p", {}, `${u.sub} · live platform data. Answers come from what the engine sees right now for ${what}, with sources.`),
+    el("div", { class: "suggest" }, items.map(([q, why]) => el("button", { type: "button", onclick: () => ask(q) }, q, el("small", {}, why))))));
+}
+
+// The live personas: HQ, the three platforms, Desi Living and the first DMart store the engine knows.
+async function commercePersonas() {
+  const list = COMMERCE.map((p) => ({ ...p }));
+  try {
+    const ms = await api("/commerce/api/merchants");
+    const desi = ms.find((m) => m.id === "shopify-0001");
+    if (desi) Object.assign(list.find((p) => p.sid === "shopify-0001"), { name: desi.name, sub: `Shopify · ${desi.city}` });
+    const store = ms.filter((m) => m.platform === "dmart").sort((a, b) => a.id.localeCompare(b.id))[0];
+    if (store) list.push({ id: "commerce:" + store.id, level: "merchant", sid: store.id, name: store.name, sub: `DMart store · ${store.city}`, color: "#00833E", commerce: true });
+  } catch (e) { /* engine offline: the entries stay, asking says so */ }
+  return list;
+}
+
 async function loadUsers() {
   try {
-    state.users = await api("/demo/users");
+    const [people, personas] = await Promise.all([api("/demo/users"), commercePersonas()]);
+    state.users = [...personas, ...people];
     const box = $("people"), groups = {};
-    for (const u of state.users) (groups[u.home_brain.split(".")[1]] ||= []).push(u);
-    box.replaceChildren(...Object.entries(groups).flatMap(([co, users]) => [
+    for (const u of people) (groups[u.home_brain.split(".")[1]] ||= []).push(u);
+    box.replaceChildren(
+      el("div", { class: "co" }, "Platforms (live)", el("span", { class: "live-dot", title: "Live Commerce engine" })),
+      ...personas.map((u) => el("button", { class: "who", "data-id": u.id, onclick: () => pick(u) }, avatar(u), el("div", {}, el("b", {}, u.name), el("small", {}, u.sub)))),
+      ...Object.entries(groups).flatMap(([co, users]) => [
       el("div", { class: "co" }, co === "desiliving" ? "Desi Living" : co === "bharatfleet" ? "BharatFleet Logistics" : co),
       ...users.map((u) => el("button", { class: "who", "data-id": u.id, onclick: () => pick(u) }, avatar(u), el("div", {}, el("b", {}, short(u)), el("small", {}, role(u))))),
     ]));
@@ -170,6 +224,12 @@ function pick(u) {
   state.user = u;
   document.querySelectorAll(".who").forEach((b) => b.classList.toggle("on", b.dataset.id === u.id));
   const url = new URL(location); url.searchParams.set("user", u.id); history.replaceState(null, "", url);
+  $("hint").textContent = u.commerce ? "Answers only from the live platform data in this scope. Other merchants' data never reaches the model." : HINT;
+  if (u.commerce) {
+    SB.live("/live/credentials", { "X-User-Id": "" }, () => {});   // closes the previous person's live notices
+    $("input").placeholder = `Ask ${u.level === "hq" ? "SecondBrain HQ" : u.name} about the live platforms…`;
+    return welcome();
+  }
   document.querySelectorAll(".sb-links a").forEach((a) => { if (a.pathname !== "/" && a.pathname !== "/hq") a.href = a.pathname + "?user=" + encodeURIComponent(u.id); });
   $("input").placeholder = state.mode === "ask" ? `Ask as ${short(u)}…` : "Tell the brain something to remember…";
   welcome();
@@ -214,8 +274,43 @@ function answerNode(r, question) {
   return el("div", { class: "msg a" }, el("div", { class: "av brain-av" }, "✦"), body);
 }
 
+function commerceAnswerNode(r) {
+  const s = r.scope || {};
+  const path = el("div", { class: "path" }, el("span", { class: "muted" }, "Scope:"), el("span", { class: "hop hit" }, "✓ " + (s.label || state.user.name)),
+    el("span", { class: "chip" }, "live data"));
+  const body = el("div", { class: "body" }, path, formatted(r.answer));
+  if (r.sources && r.sources.length) {
+    const list = el("div", { class: "sources hidden" }, r.sources.map((x) => el("div", { class: "src" },
+      el("div", { class: "meta" }, el("span", { class: "chip accent" }, `[${x.tag || "•"}] ${x.kind}`), el("span", { class: "chip" }, x.id)), x.title)));
+    const label = `📎 ${r.sources.length} source${r.sources.length > 1 ? "s" : ""}`;
+    const toggle = el("button", { type: "button", class: "btn ghost sm srcs-toggle", onclick: () => {
+      list.classList.toggle("hidden"); toggle.textContent = list.classList.contains("hidden") ? label : "Hide sources"; } }, label);
+    body.append(toggle, list);
+  }
+  return el("div", { class: "msg a" }, el("div", { class: "av brain-av" }, "✦"), body);
+}
+
+async function askCommerce(question) {
+  const u = state.user;
+  const steps = ["Reading the live platform data", u.level === "merchant" ? `Keeping to ${u.name}'s own data` : "Ranking what needs attention", "Writing the answer"];
+  const label = el("span", {}, steps[0]);
+  const thinking = add(el("div", { class: "thinking" }, el("div", { class: "av brain-av", style: { width: "34px", height: "34px", borderRadius: "50%" } }),
+    el("span", { class: "dots" }, el("i"), el("i"), el("i")), label));
+  let i = 0; const timer = setInterval(() => { if (i < steps.length - 1) label.textContent = steps[++i]; }, 1500);
+  try {
+    const r = await api("/commerce/ask", { method: "POST", body: JSON.stringify({ question, scope: { level: u.level, id: u.sid } }) });
+    thinking.replaceWith(commerceAnswerNode(r)); scroll();
+  } catch (e) { thinking.remove(); note("Error: " + e.message); }
+  finally { clearInterval(timer); }
+}
+
 async function ask(question) {
   if (!state.user) return note("Pick a person on the left first.");
+  if (state.user.commerce) {
+    $("messages").querySelector(".welcome")?.remove();
+    add(el("div", { class: "msg q" }, avatar(state.user), el("div", { class: "bubble" }, question)));
+    return askCommerce(question);
+  }
   $("messages").querySelector(".welcome")?.remove();
   add(el("div", { class: "msg q" }, avatar(state.user), el("div", { class: "bubble" }, question)));
   const u = state.user, steps = u.home_brain.split(".").length === 2 ? ["Searching the company brain"] : [`Searching ${u.brain_name}`, "Checking the company brain", "Writing the answer"];
@@ -230,6 +325,7 @@ async function ask(question) {
 
 async function remember(content) {
   if (!state.user) return note("Pick a person on the left first.");
+  if (state.user.commerce) return note("Remember is for people's notes; the platform views read live data. Pick a person to add a note.");
   $("messages").querySelector(".welcome")?.remove();
   add(el("div", { class: "msg q" }, avatar(state.user), el("div", { class: "bubble" }, "📝 " + content)));
   try {
@@ -256,11 +352,13 @@ document.querySelectorAll("#mode button").forEach((b) => (b.onclick = () => {
 }));
 $("consolidate").onclick = async () => {
   if (!state.user) return note("Pick a person on the left first.");
+  if (state.user.commerce) return note("Pick a person to save notes to long-term memory.");
   try { const r = await api("/consolidate", { method: "POST" }); note(r.consolidated ? `Saved ${r.consolidated} note(s) to long-term memory` : "Nothing waiting in short-term memory"); }
   catch (e) { note("Error: " + e.message); }
 };
 $("new-conversation").onclick = async () => {
   if (!state.user) return;
+  if (state.user.commerce) return welcome();
   try { await api("/conversation/reset", { method: "POST" }); welcome(); } catch (e) { note("Error: " + e.message); }
 };
 api("/health").then((h) => (modelInfo.textContent = `${h.llm} · ${h.embedding_model}`)).catch(() => {});

@@ -23,7 +23,9 @@ order lines for all series at once (numpy) using the exact share of the day's de
 falls in that slice of the intraday profile, and publishes one ``orders`` message per
 merchant that sold something. If generating and publishing take longer than the tick
 allows, the sim clock slows instead of the loop drifting, and ``_clock.speed`` reports the
-speed actually achieved.
+speed actually achieved. ``{"cmd": "run_days", "days": N}`` (the HQ time machine) runs at the
+fastest speed until N sim days have passed, then pauses and goes back to the speed it had;
+``_clock.run_until`` shows the target while it runs.
 
     uv run python -m secondbrain.commerce.simulator --autostart
 """
@@ -50,6 +52,8 @@ log = logging.getLogger(__name__)
 SIM_START = datetime.fromisoformat(contract.SIM_START)
 DAY = 86400.0
 TICK = 0.1
+FASTEST = max(contract.SPEEDS, key=contract.SPEEDS.get)   # the time machine's speed ("1day")
+MAX_RUN_DAYS = 60
 CATS = list(CATEGORIES)
 PIDS = [p.id for p in PLATFORMS]
 
@@ -422,6 +426,8 @@ class Simulator:
         self.requested = speed if speed in contract.SPEEDS else contract.DEFAULT_SPEED
         self.factor = 1.0
         self.running = False
+        self.run_until: float | None = None   # run_days: sim seconds at which the clock pauses
+        self.resume_speed: str | None = None   # the speed to go back to after a run_days
         self.seq = 0
         m = self.model
         self.topics = [contract.merchant_topic(x.platform, x.id, "orders") for x in world.merchants]
@@ -459,18 +465,58 @@ class Simulator:
         if kind == "start":
             self.running = True
         elif kind == "pause":
+            self._end_run()
             self.running = False
         elif kind == "speed" and cmd.get("speed") in contract.SPEEDS:
+            self._end_run()
             self.requested, self.factor = cmd["speed"], 1.0
+        elif kind == "run_days":
+            self._run_days(cmd.get("days"))
         elif kind == "apply_offer":
             self._apply_offer(cmd)
         elif kind == "reset":
+            self._end_run()
             self.running = False
             self.catching_up = True
             self.reset_state()
             self.publish_setup()
         else:
             log.warning("ignored control %s", cmd)
+
+    def _run_days(self, days) -> None:
+        """The HQ time machine: run at the fastest speed for ``days`` sim days, then pause."""
+        try:
+            days = int(days)
+        except (TypeError, ValueError):
+            days = 0
+        if not 1 <= days <= MAX_RUN_DAYS:
+            log.warning("ignored run_days %r (1-%d)", days, MAX_RUN_DAYS)
+            return
+        if self.run_until is None:
+            self.resume_speed = self.requested
+        self.run_until = self.state.t + days * DAY
+        self.requested, self.factor = FASTEST, 1.0
+        self.catching_up = False   # the time machine runs past the real time
+        self.running = True
+
+    def _end_run(self) -> None:
+        if self.run_until is not None:
+            self.run_until = None
+            self.requested = self.resume_speed or self.requested
+            self.resume_speed = None
+
+    def step(self, sim_dt: float) -> float:
+        """This tick's sim seconds: catch-up first, never past a run_days target."""
+        sim_dt = self.catch_up_step(sim_dt)
+        if self.run_until is not None:
+            sim_dt = max(min(sim_dt, self.run_until - self.state.t), 0.0)
+        return sim_dt
+
+    def finish_step(self) -> None:
+        """After advancing: a run_days that reached its target pauses the clock."""
+        if self.run_until is not None and self.state.t >= self.run_until - 1e-6:
+            self._end_run()
+            self.running = False
 
     def _apply_offer(self, cmd: dict) -> None:
         mi = self.mindex.get(cmd.get("merchant", ""))
@@ -561,7 +607,8 @@ class Simulator:
         return {"sent_ms": contract.wall_ms(), "sim_ts": sim_ts(self.state.t),
                 "speed": round(speed if self.running else 0.0, 1), "requested": self.requested,
                 "requested_speed": contract.SPEEDS[self.requested], "running": self.running,
-                "catching_up": self.running and self.catching_up, "orders_per_sec": round(ops, 1)}
+                "catching_up": self.running and self.catching_up, "orders_per_sec": round(ops, 1),
+                "run_until": sim_ts(self.run_until) if self.run_until is not None else None}
 
     def catch_up_step(self, sim_dt: float) -> float:
         """Until the sim clock reaches the real time, run at catch-up speed (never past now)."""
@@ -665,10 +712,11 @@ def run(merchants: int = 600, customers: int = 120000, seed: int = 7, speed: str
             start = time.perf_counter()
             orders, sim_dt = 0, 0.0
             if sim.running:
-                sim_dt = sim.catch_up_step(contract.SPEEDS[sim.requested] * sim.factor * TICK)
+                sim_dt = sim.step(contract.SPEEDS[sim.requested] * sim.factor * TICK)
                 orders = sim.advance(sim_dt)
                 broker.client.loop_write()
                 sim.adapt(time.perf_counter() - start)
+                sim.finish_step()
             sim.record(start, orders, sim_dt)
             broker.publish(contract.CLOCK, json.dumps(sim.clock_payload(), separators=(",", ":")), 1, False)
             if start - last_log > 10:
