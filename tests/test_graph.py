@@ -51,7 +51,7 @@ def test_graph_edges_point_at_existing_nodes(client):
 
 
 def test_graph_screen_is_served(client):
-    assert "SecondBrain Graph" in client.get("/graph-view").text
+    assert "SecondBrain Network" in client.get("/graph-view").text
 
 
 def test_full_graph_needs_admin_token(client):
