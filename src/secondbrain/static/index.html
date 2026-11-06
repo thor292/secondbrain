@@ -123,7 +123,6 @@ const SUGGEST = {
   kabir: [["What happened with the damaged brass lamps from Noor Metalcraft?", "Supplier history"]],
   tanvi: [["What was Q2 revenue?", "Restricted: not visible"]],
   anand: [["What was Q2 revenue?", "From the restricted PDF"], ["What was gross margin in Q2 FY27?", "From the restricted PDF"]],
-  karan: [["How many days of earned leave do we get?", "BharatFleet's own policy, never Desi Living's"], ["Who is Ananya Reddy?", "Another company's customer: nothing"]],
   meera: [["What are our biggest risks before Diwali?", "Across the whole company"], ["What was Q2 revenue?", "Finance, seen by the CEO"], ["Which carrier handles sofas and what does it cost?", "Carrier contract"], ["What happened with the damaged brass lamps from Noor Metalcraft?", "Supplier history"]],
 };
 // Platforms (live): questions over the Live Commerce engine, one scope each (HQ, a platform, a merchant).
@@ -203,7 +202,8 @@ async function commercePersonas() {
 
 async function loadUsers() {
   try {
-    const [people, personas] = await Promise.all([api("/demo/users"), commercePersonas()]);
+    const [all, personas] = await Promise.all([api("/demo/users"), commercePersonas()]);
+    const people = all.filter((u) => u.home_brain.split(".")[1] === "desiliving");   // the demo's one example company
     state.users = [...personas, ...people];
     const box = $("people"), groups = {};
     for (const u of people) (groups[u.home_brain.split(".")[1]] ||= []).push(u);
@@ -211,7 +211,7 @@ async function loadUsers() {
       el("div", { class: "co" }, "Platforms (live)", el("span", { class: "live-dot", title: "Live Commerce engine" })),
       ...personas.map((u) => el("button", { class: "who", "data-id": u.id, onclick: () => pick(u) }, avatar(u), el("div", {}, el("b", {}, u.name), el("small", {}, u.sub)))),
       ...Object.entries(groups).flatMap(([co, users]) => [
-      el("div", { class: "co" }, co === "desiliving" ? "Desi Living" : co === "bharatfleet" ? "BharatFleet Logistics" : co),
+      el("div", { class: "co" }, co === "desiliving" ? "Desi Living" : co),
       ...users.map((u) => el("button", { class: "who", "data-id": u.id, onclick: () => pick(u) }, avatar(u), el("div", {}, el("b", {}, short(u)), el("small", {}, role(u))))),
     ]));
     const wanted = new URLSearchParams(location.search).get("user");
