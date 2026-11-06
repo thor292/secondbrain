@@ -184,7 +184,7 @@ def test_history_matches_the_model_and_hands_over_to_live(model):
     st = State(model)
     h = st.history
     assert len(h["days"]) == contract.HISTORY_DAYS and h["days"][-1] == -1
-    for i in (0, 30, 55):
+    for i in (-56, -26, -1):   # the last eight weeks (last year's festival weeks run out of stock more)
         d = h["days"][i]
         free = h["units"][i] == h["demand"][i]
         mean = model.day_rate(d) * (1 + model.qty_extra) * (1 - model.promo_discount(d)) ** model.elasticity

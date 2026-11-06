@@ -589,7 +589,7 @@ const KDEF = [
   { k: "ops", label: "Orders / sec", fmt: num, spark: "var(--cyan)" },
   { k: "sig", label: "Signals raised", fmt: num },
   { k: "upl", label: "Uplift from offers", fmt: (v) => plusInr(v), glow: "glow-good" },
-  { k: "acc", label: "Store-day accuracy", fmt: (v) => v.toFixed(1) + "%", tip: "Store-day accuracy: 100% − WAPE of each store's daily sales, scored on days the forecast never saw. 'Naive' repeats last week's sales." },
+  { k: "acc", label: "Store-day accuracy", fmt: (v) => v.toFixed(1) + "%", tip: "Store-day accuracy: 100% − WAPE of each store's daily sales, scored on days the forecast never saw, over products that stayed in stock (a sold-out day shows the shelf, not demand). 'Naive' repeats last week's sales." },
   { k: "hit", label: "Offer hit rate", fmt: (v) => Math.round(v) + "%", tip: "Share of completed offers that sold more than the forecast without the offer" },
 ];
 const K = {};
@@ -623,7 +623,10 @@ const KPI = {
     const a = p ? p.accuracy : st.accuracy, head = accOf(a), bt = st.accuracy?.backtest;
     const naive = naiveOf(a);
     if (head != null) { K.acc.tw.set(100 * head); K.acc.sub.textContent = "store-day" + (naive != null ? ` · naive ${(100 * naive).toFixed(0)}%` : ""); }
-    else if (bt?.wape != null) { K.acc.tw.set(100 * (1 - bt.wape)); K.acc.sub.textContent = `backtest ${bt.days || ""} days · naive ${Math.round(100 * (1 - bt.baseline_wape))}%`; }
+    else if (bt?.wape != null) {   // before the first live day closes: the backfill's last two weeks, same measure
+      const w = bt.merchant_wape ?? bt.wape, nb = bt.merchant_wape != null ? bt.merchant_baseline_wape : bt.baseline_wape;
+      K.acc.tw.set(100 * (1 - w)); K.acc.sub.textContent = `store-day, backtest ${bt.days || ""} days · naive ${Math.round(100 * (1 - nb))}%`;
+    }
     else { K.acc.tw.set(null); K.acc.sub.textContent = "scored after the first full day"; }
     const hit = p ? p.hit_rate : st.learning?.hit_rate;
     K.hit.tw.set(hit != null ? 100 * hit : null);
@@ -1622,7 +1625,7 @@ function makeMock(seedMerchants, realStatus) {
       tot: { rev: 0, ord: 0 }, P: Object.fromEntries(pids.map((p) => [p, { sig: 0, kinds: {}, offers: 0, uplift: 0, hits: 0, judged: 0, ops: 0, ordTick: 0 }])),
       open: new Map(), pending: [], recent: [], lessons: new Map(), outcomes: 0, hits: 0, judged: 0, daysRun: 0, ops: 0, ordTick: 0 };
     for (const m of W) { m.rev = 0; m.ord = 0; m.offers = 0; m.open = 0; }
-    festivalLessons("Dussehra"); // learned from the 56 days of history the merchants brought with them
+    festivalLessons("Dussehra"); // learned from last year's history the merchants brought with them
     // a short warm start (the last three days up to now) so the market has a history
     while (st.t < nowIST) step(Math.min(0.5, (nowIST - st.t) / 36e5), null);
   }

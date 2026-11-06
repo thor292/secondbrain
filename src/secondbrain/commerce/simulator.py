@@ -15,7 +15,7 @@ meant to catch, all hidden from it:
   demand by ``(1 - discount) ** elasticity`` until ``until`` (what the engine learns);
 - customers who lapse (win-back signals).
 
-The 56-day backfill runs the same model day by day, stock and reorders included, so
+The backfill (14 months, last year's festivals included) runs the same model day by day, stock and reorders included, so
 history and live are one continuous world and the catalog's stock is where history ended.
 
 Live, a wall tick every 100 ms advances the sim clock by speed x 0.1 s, draws Poisson
@@ -402,7 +402,8 @@ def backfill(model: DemandModel, st: State) -> dict:
 def history_payload(model: DemandModel, hist: dict, mi: int) -> dict:
     a, b = model.offsets[mi], model.offsets[mi + 1]
     return {"days": [sim_date(d).isoformat() for d in hist["days"]], "skus": model.sku[a:b],
-            "units": hist["units"][:, a:b].tolist(), "prices": hist["prices"][:, a:b].tolist()}
+            "units": hist["units"][:, a:b].tolist(), "prices": hist["prices"][:, a:b].tolist(),
+            "sold_out": (hist["units"][:, a:b] < hist["demand"][:, a:b]).astype(int).tolist()}
 
 
 def stock_payload(model: DemandModel, st: State, mi: int, t: float, restocked: np.ndarray | None = None) -> dict:

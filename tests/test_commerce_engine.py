@@ -7,7 +7,7 @@ import pytest
 
 from secondbrain.commerce import contract as C
 from secondbrain.commerce.engine import Engine, create_app
-from secondbrain.commerce.forecast import _PRIOR, FESTIVAL, Forecaster, LiveAccuracy
+from secondbrain.commerce.forecast import _PRIOR, Forecaster, LiveAccuracy
 from secondbrain.commerce.offers import (Cooldowns, Elasticity, Offer, OfferBook, choose_defence, choose_discount,
                                          format_inr, margin_floor, restock_plan)
 from secondbrain.commerce.state import Registry
@@ -50,9 +50,9 @@ def test_forecaster_recovers_weekday_pattern_and_festival_lift():
     fc, rows = fitted(days, Y)
     season = fc.st.season[rows].mean(axis=0)
     assert np.allclose(season, WEEKDAY / WEEKDAY.mean(), atol=0.06)
-    lift = fc.pool.mult()[fc.cat[rows[0]], FESTIVAL]
-    assert lift == pytest.approx(1.6, abs=0.12)
-    assert fc.pool.days[fc.cat[rows[0]], FESTIVAL] == 1
+    lift, seen = fc.festival_lift("Dussehra")
+    assert lift[fc.cat[rows[0]]] == pytest.approx(1.6, abs=0.12)
+    assert seen[fc.cat[rows[0]]] == 1
     nxt = date(2026, 10, 25)
     assert fc.f_day[rows[0]] == fc.day_index(nxt)
     expected = 30 * WEEKDAY[nxt.weekday()]

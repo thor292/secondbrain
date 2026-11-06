@@ -14,10 +14,11 @@ Model (Holt-Winters style, multiplicative, no trend):
   one-step-ahead errors on the backfill.
 - weekday: smoothed ratios shrunk towards the category's pooled pattern, so a product that
   sells two a day borrows its weekly shape from its category.
-- event: festival, the days around it, month end and paydays. The engine knows the dates
-  (``contract.FESTIVALS``); it learns the size by pooling every product of a category on those
-  days, shrunk towards 1 until seen (the backfill has paydays but no festival, so festival lifts
-  are learned live, starting with Dussehra).
+- event: two multipliers. A calendar one (month end, paydays) and a festival one for every day
+  from four weeks before a festival to three weeks after it: the build-up, the day itself and the
+  slump after. The engine knows the dates (``contract.FESTIVALS``, last year's included); it
+  learns each size by pooling every product of a category on those days, shrunk towards 1 until
+  seen. The backfill covers a year, so this year's Diwali is forecast from last year's.
 - price effect: (price / list price) ** elasticity, so offer days don't inflate the level.
 
 Days that closed out of stock below forecast are censored (lost sales don't pull the level down).
@@ -26,9 +27,10 @@ Days that closed out of stock below forecast are censored (lost sales don't pull
 Nowcast: a learned hour-of-day profile per platform turns the day's forecast into "expected
 units by now", so a drop shows at 2 pm, not at midnight.
 
-Accuracy: every closed day is scored against the forecast made at the previous day's close:
-WAPE per series-day overall, per platform, at merchant level and against seasonal naive (same
-weekday last week).
+Accuracy: every closed day is scored against the forecast made at the previous day's close, on
+the products that stayed in stock (a sold-out day records the shelf, not demand; the standard
+retail measure): WAPE per series-day overall, per platform, at merchant level and against
+seasonal naive (same weekday last week).
 """
 
 from dataclasses import dataclass
@@ -40,9 +42,14 @@ import numpy as np
 from secondbrain.commerce.contract import FESTIVALS
 from secondbrain.forecasting.metrics import wape
 
-EVENTS = ("normal", "festival", "pre_festival_1", "pre_festival_2", "post_festival",
-          "month_end", "payday_1", "payday_2", "payday_3", "payday_4_5")
-FESTIVAL, PRE1, PRE2, POST, MONTH_END, PAYDAY = 1, 2, 3, 4, 5, 6
+EVENTS = ("normal", "month_end", "payday_1", "payday_2", "payday_3", "payday_4_5")
+MONTH_END, PAYDAY = 1, 2
+# Festival days by distance from the festival: days before it (0 = the day itself), then days after.
+BEFORE = ((0, 0), (1, 1), (2, 2), (3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 10), (11, 14), (15, 20), (21, 28))
+AFTER = ((1, 1), (2, 2), (3, 3), (4, 5), (6, 8), (9, 14), (15, 21))
+FEST_NAMES = tuple(dict.fromkeys(sorted(FESTIVALS.values())))
+FEST_KINDS = ("none",) + tuple(f"{n}:-{a}" if a else f"{n}:day" for n in FEST_NAMES for a, _ in BEFORE) \
+    + tuple(f"{n}:+{a}" for n in FEST_NAMES for a, _ in AFTER)
 ALPHAS = np.array([0.05, 0.1, 0.2, 0.35])
 GAMMA = 0.15          # weekday smoothing
 SEASON_PSEUDO = 8.0   # units of evidence before a series' own weekday shape beats its category's
@@ -51,20 +58,15 @@ RESID_BETA = 0.1      # residual / accuracy smoothing
 Z80 = 1.2816
 HORIZON = 14
 LEVEL_FLOOR = 0.02
+SENS_PSEUDO = 40.0    # units of festival-day evidence before a merchant's own festival sensitivity moves from 1
+SENS_RANGE = (0.6, 1.6)
+FEST_FLOOR = 0.3      # a festival never takes more than 70% off a day (keeps the filter stable after big dips)
 
 
 @lru_cache(maxsize=4096)
 def day_kind(day: date) -> int:
-    """Which event multiplier applies; festivals win over paydays."""
-    if day in FESTIVALS:
-        return FESTIVAL
-    if day + timedelta(days=1) in FESTIVALS:
-        return PRE1
-    if day + timedelta(days=2) in FESTIVALS or day + timedelta(days=3) in FESTIVALS:
-        return PRE2
-    if day - timedelta(days=1) in FESTIVALS:
-        return POST
-    if (day + timedelta(days=1)).day == 1:
+    """Which calendar multiplier applies: the last week of the month (money runs short), paydays, or none."""
+    if day.day >= 26:
         return MONTH_END
     if day.day <= 3:
         return PAYDAY + day.day - 1
@@ -73,20 +75,44 @@ def day_kind(day: date) -> int:
     return 0
 
 
+def _bucket(buckets: tuple, dist: int) -> int | None:
+    return next((k for k, (a, b) in enumerate(buckets) if a <= dist <= b), None)
+
+
+@lru_cache(maxsize=4096)
+def fest_kind(day: date) -> int:
+    """Which festival multiplier applies: the nearest festival within four weeks before or three after."""
+    best = None
+    for fdate, name in FESTIVALS.items():
+        dist = (fdate - day).days
+        if 0 <= dist <= BEFORE[-1][1]:
+            key, k = (dist, 0), FEST_KINDS.index(f"{name}:-{BEFORE[_bucket(BEFORE, dist)][0]}" if dist else f"{name}:day")
+        elif 0 < -dist <= AFTER[-1][1]:
+            key, k = (-dist, 1), FEST_KINDS.index(f"{name}:+{AFTER[_bucket(AFTER, -dist)][0]}")
+        else:
+            continue
+        if best is None or key < best[0]:
+            best = (key, k)
+    return best[1] if best else 0
+
+
+FESTIVAL_DAY = {n: FEST_KINDS.index(f"{n}:day") for n in FEST_NAMES}
+
+
 class EventPool:
     """Per category x event kind: pooled actual vs baseline units, so the lift is learned once per category."""
 
-    def __init__(self, n_cat: int = 16):
-        self.num = np.zeros((n_cat, len(EVENTS)))
-        self.den = np.zeros((n_cat, len(EVENTS)))
-        self.days = np.zeros((n_cat, len(EVENTS)), dtype=int)
+    def __init__(self, n_cat: int = 16, n_kinds: int = len(EVENTS)):
+        self.num = np.zeros((n_cat, n_kinds))
+        self.den = np.zeros((n_cat, n_kinds))
+        self.days = np.zeros((n_cat, n_kinds), dtype=int)
 
     def grow(self, n_cat: int) -> None:
         if n_cat > len(self.num):
-            pad = n_cat - len(self.num) + 8
-            self.num = np.vstack([self.num, np.zeros((pad, len(EVENTS)))])
-            self.den = np.vstack([self.den, np.zeros((pad, len(EVENTS)))])
-            self.days = np.vstack([self.days, np.zeros((pad, len(EVENTS)), dtype=int)])
+            pad, k = n_cat - len(self.num) + 8, self.num.shape[1]
+            self.num = np.vstack([self.num, np.zeros((pad, k))])
+            self.den = np.vstack([self.den, np.zeros((pad, k))])
+            self.days = np.vstack([self.days, np.zeros((pad, k), dtype=int)])
 
     def mult(self) -> np.ndarray:
         m = (self.num + EVENT_PSEUDO) / (self.den + EVENT_PSEUDO)
@@ -100,9 +126,37 @@ class EventPool:
         self.days[np.unique(cat), kind] += 1
 
     def copy(self) -> "EventPool":
-        p = EventPool(len(self.num))
+        p = EventPool(*self.num.shape)
         p.num, p.den, p.days = self.num.copy(), self.den.copy(), self.days.copy()
         return p
+
+
+class FestSens:
+    """Per merchant: how strongly its sales follow the category's festival lift (1 = like the category).
+    Least squares of (sales - base) on base x (lift - 1) over festival days, shrunk towards 1."""
+
+    def __init__(self, n: int = 64):
+        self.num = np.zeros(n)
+        self.den = np.zeros(n)
+
+    def grow(self, n: int) -> None:
+        if n > len(self.num):
+            pad = n - len(self.num) + 64
+            self.num, self.den = np.concatenate([self.num, np.zeros(pad)]), np.concatenate([self.den, np.zeros(pad)])
+
+    def k(self, mer: np.ndarray) -> np.ndarray:
+        return np.clip((self.num[mer] + SENS_PSEUDO) / (self.den[mer] + SENS_PSEUDO), *SENS_RANGE)
+
+    def learn(self, mer: np.ndarray, y: np.ndarray, base: np.ndarray, lift: np.ndarray) -> None:
+        g = base * (lift - 1)
+        n = len(self.num)
+        self.num += np.bincount(mer, (y - base) * (lift - 1), n)
+        self.den += np.bincount(mer, g * (lift - 1), n)
+
+    def copy(self) -> "FestSens":
+        f = FestSens(len(self.num))
+        f.num, f.den = self.num.copy(), self.den.copy()
+        return f
 
 
 @dataclass
@@ -135,49 +189,66 @@ class State:
             setattr(self, f, np.concatenate([getattr(self, f), getattr(extra, f)]))
 
 
-def reseason(st: State, rows: np.ndarray, cat: np.ndarray, pool_A: np.ndarray, pool_B: np.ndarray) -> None:
-    """Weekday factors: own evidence shrunk towards the category's pooled ratios, normalised to mean 1."""
-    n_cat = len(pool_A)
+def reseason(st: State, rows: np.ndarray, grp: np.ndarray, pool_A: np.ndarray, pool_B: np.ndarray) -> None:
+    """Weekday factors: own evidence shrunk towards the group's pooled ratios (platform x category: a
+    hypermarket's weekend is not an online store's), normalised to mean 1."""
+    n_grp = len(pool_A)
     A, B = st.A[rows], st.B[rows]
-    pA = pool_A + np.stack([np.bincount(cat, A[:, w], n_cat) for w in range(7)], axis=1)
-    pB = pool_B + np.stack([np.bincount(cat, B[:, w], n_cat) for w in range(7)], axis=1)
+    pA = pool_A + np.stack([np.bincount(grp, A[:, w], n_grp) for w in range(7)], axis=1)
+    pB = pool_B + np.stack([np.bincount(grp, B[:, w], n_grp) for w in range(7)], axis=1)
     spool = np.divide(pA, pB, out=np.ones_like(pA), where=pB > 1e-9)
     spool /= spool.mean(axis=1, keepdims=True)
-    s = (A / GAMMA + SEASON_PSEUDO * spool[cat]) / (B / GAMMA + SEASON_PSEUDO)
+    s = (A / GAMMA + SEASON_PSEUDO * spool[grp]) / (B / GAMMA + SEASON_PSEUDO)
     st.season[rows] = s / s.mean(axis=1, keepdims=True)
 
 
 def step(st: State, rows: np.ndarray, cat: np.ndarray, day: date, y: np.ndarray, pmult: np.ndarray,
-         censored: np.ndarray, pool: EventPool, pool_A: np.ndarray, pool_B: np.ndarray) -> np.ndarray:
-    """One closed day for ``rows``; returns the one-step-ahead forecast it was judged against."""
-    wd, kind = day.weekday(), day_kind(day)
+         censored: np.ndarray, pools: tuple, pool_A: np.ndarray, pool_B: np.ndarray,
+         grp: np.ndarray | None = None, mer: np.ndarray | None = None) -> np.ndarray:
+    """One closed day for ``rows``; returns the one-step-ahead forecast it was judged against.
+    pools: (calendar EventPool, festival EventPool, FestSens)."""
+    pool, fpool, sens = pools
+    wd, kind, fk = day.weekday(), day_kind(day), fest_kind(day)
     level, s = st.level[rows], st.season[rows, wd]
     base = level * s
-    pred = base * pool.mult()[cat, kind] * pmult
+    cal = pool.mult()[cat, kind]
+    lift = fpool.mult()[cat, fk]
+    k = sens.k(mer) if mer is not None and fk else 1.0
+    fest = np.maximum(1 + k * (lift - 1), FEST_FLOOR)
+    pred = base * cal * fest * pmult
     r2 = np.minimum((y - pred) ** 2 / (pred + 1.0), 25.0)
     st.var_r[rows] += RESID_BETA * (r2 - st.var_r[rows])
     st.ew_abs[rows] += RESID_BETA * (np.abs(y - pred) - st.ew_abs[rows])
     st.ew_y[rows] += RESID_BETA * (y - st.ew_y[rows])
     ok = ~(censored | ((y == 0) & (pred >= 3)))  # a zero day against a forecast of 3+ is a stockout, not demand
-    if kind and ok.any():
-        pool.learn(kind, cat[ok], (y / pmult)[ok], base[ok])
-    e = pool.mult()[cat, kind] * pmult
+    if ok.any():
+        if fk:
+            # the category lift on the day's mean across merchants, then each merchant's sensitivity to it
+            fpool.learn(fk, cat[ok], (y / pmult)[ok], (base * cal)[ok])
+            if mer is not None:
+                sens.learn(mer[ok], (y / pmult)[ok], (base * cal)[ok], fpool.mult()[cat, fk][ok])
+        if kind:
+            pool.learn(kind, cat[ok], (y / pmult)[ok], (base * fest)[ok])
+    k = sens.k(mer) if mer is not None and fk else 1.0
+    e = pool.mult()[cat, kind] * np.maximum(1 + k * (fpool.mult()[cat, fk] - 1), FEST_FLOOR) * pmult
     x = y / (s * e)
     st.level[rows] = np.maximum(np.where(ok, level + st.alpha[rows] * (x - level), level), LEVEL_FLOOR)
     st.A[rows, wd] = np.where(ok, (1 - GAMMA) * st.A[rows, wd] + GAMMA * y / e, st.A[rows, wd])
     st.B[rows, wd] = np.where(ok, (1 - GAMMA) * st.B[rows, wd] + GAMMA * level, st.B[rows, wd])
-    reseason(st, rows, cat, pool_A, pool_B)
+    reseason(st, rows, cat if grp is None else grp, pool_A, pool_B)
     return pred
 
 
 class Forecaster:
     """All series' state, daily history and next-day forecasts. Day indices count from ``base_day``."""
 
-    def __init__(self, base_day: date, capacity: int = 1024, days: int = 160):
+    def __init__(self, base_day: date, capacity: int = 1024, days: int = 480):
         self.base_day = base_day
         self.n = 0
         self.st = State.zeros(capacity)
         self.cat = np.zeros(capacity, dtype=np.int64)
+        self.grp = np.zeros(capacity, dtype=np.int64)            # weekday-shape group: platform x category
+        self.mer = np.zeros(capacity, dtype=np.int64)            # merchant, for its festival sensitivity
         self.elast = np.full(capacity, -1.5)
         self.fitted = np.zeros(capacity, dtype=bool)
         self.start = np.full(capacity, -1, dtype=np.int64)      # first day with data
@@ -195,9 +266,14 @@ class Forecaster:
         self.disp_sums = np.zeros(5)                            # moments for var(y) = a f + b f^2
         self.categories: list[str] = []
         self.cat_index: dict[str, int] = {}
+        self.grp_index: dict[str, int] = {}
+        self.mer_index: dict[str, int] = {}
         self.pool = EventPool()
+        self.fpool = EventPool(n_kinds=len(FEST_KINDS))
+        self.sens = FestSens()
         self.price_ev = {k: np.zeros(0) for k in ("y", "base", "lr", "days", "y0", "base0")}
-        self.backtest = {"abs": 0.0, "y": 0.0, "naive_abs": 0.0, "naive_y": 0.0, "days": 0}
+        self.backtest = {"abs": 0.0, "y": 0.0, "naive_abs": 0.0, "naive_y": 0.0, "days": 0,
+                         "m_abs": 0.0, "m_y": 0.0, "m_naive_abs": 0.0}
 
     # ------------------------------------------------------------------ series
 
@@ -212,20 +288,26 @@ class Forecaster:
             self.cat_index[name] = len(self.categories)
             self.categories.append(name)
             self.pool.grow(len(self.categories))
+            self.fpool.grow(len(self.categories))
         return self.cat_index[name]
 
-    def add_series(self, category: str, elasticity: float) -> int:
+    def add_series(self, category: str, elasticity: float, group: str | None = None, merchant: str = "") -> int:
+        """group: who shares a weekday shape (default the category; the engine passes platform/category);
+        merchant: whose festival sensitivity it shares."""
         if self.n == len(self.cat):
             self._grow(2 * self.n)
         i = self.n
         self.n += 1
         self.cat[i] = self.category(category)
+        self.grp[i] = self.grp_index.setdefault(group or category, len(self.grp_index))
+        self.mer[i] = self.mer_index.setdefault(merchant, len(self.mer_index))
+        self.sens.grow(len(self.mer_index))
         self.elast[i] = elasticity
         return i
 
     def _grow(self, cap: int) -> None:
         self.st.grow(cap)
-        for name in ("cat", "elast", "fitted", "start", "f_day", "f_next", "lo_next", "hi_next",
+        for name in ("cat", "grp", "mer", "elast", "fitted", "start", "f_day", "f_next", "lo_next", "hi_next",
                      "live_abs", "live_y"):
             a = getattr(self, name)
             fill = {"elast": -1.5, "start": -1, "f_day": -1}.get(name, 0)
@@ -242,15 +324,20 @@ class Forecaster:
             self.ratio = np.hstack([self.ratio, np.ones((n, extra), dtype=np.float32)])
             self.cens = np.hstack([self.cens, np.zeros((n, extra), dtype=bool)])
 
-    def set_history(self, rows: np.ndarray, day_idx: np.ndarray, units: np.ndarray, ratio: np.ndarray) -> None:
-        """Backfill: units and price ratios with shape (days, len(rows)), as the history message sends them."""
+    def set_history(self, rows: np.ndarray, day_idx: np.ndarray, units: np.ndarray, ratio: np.ndarray,
+                    sold_out: np.ndarray | None = None) -> None:
+        """Backfill: units, price ratios and sold-out days with shape (days, len(rows)), as the history message
+        sends them."""
         keep = day_idx >= 0
-        day_idx, units, ratio = day_idx[keep], units[keep], ratio[keep]
+        if sold_out is None:
+            sold_out = np.zeros(units.shape, dtype=bool)
+        day_idx, units, ratio, sold_out = day_idx[keep], units[keep], ratio[keep], sold_out[keep]
         if not len(day_idx):
             return
         self.ensure_day(int(day_idx.max()))
         self.hist[np.ix_(rows, day_idx)] = units.T
         self.ratio[np.ix_(rows, day_idx)] = ratio.T
+        self.cens[np.ix_(rows, day_idx)] = sold_out.T
         first = int(day_idx.min())
         self.start[rows] = np.where(self.start[rows] < 0, first, np.minimum(self.start[rows], first))
 
@@ -270,32 +357,39 @@ class Forecaster:
         P = self.pmult(rows, R)
         C = self.cens[rows, t0:through + 1]
         off = self.start[rows] - t0
-        cat = self.cat[rows]
+        cat, grp, mer = self.cat[rows], self.grp[rows], self.mer[rows]
         others = np.flatnonzero(self.fitted[:self.n])
         pool_A = self._pool(others, self.st.A)
         pool_B = self._pool(others, self.st.B)
         init = self._init_state(Y, P, off, t0)
         T = Y.shape[1]
         if T >= 21:
-            init.alpha[:] = self._choose_alpha(init, Y, P, C, off, cat, t0, pool_A, pool_B)
+            init.alpha[:] = self._choose_alpha(init, Y, P, C, off, cat, grp, mer, t0, pool_A, pool_B)
         st = init
         bt_from = max(T - 14, 0)
         for t in range(T):
             act = np.flatnonzero(off <= t)
             d = self.day(t0 + t)
-            pred = step(st, act, cat[act], d, Y[act, t], P[act, t], C[act, t], self.pool, pool_A, pool_B)
-            self._price_evidence(act, cat[act], Y[act, t], pred / P[act, t], R[act, t], off[act] <= t - 14)
+            pred = step(st, act, cat[act], d, Y[act, t], P[act, t], C[act, t], self.pools, pool_A, pool_B,
+                        grp[act], mer[act])
+            self._price_evidence(act, cat[act], Y[act, t], pred / P[act, t], R[act, t],
+                                 (off[act] <= t - 14) & ~C[act, t])   # a sold-out day understates demand
             warm = off[act] <= t - 14
             self._disp_add(pred[warm], Y[act[warm], t])
             if t >= bt_from and t >= 7:
-                ok = off[act] <= t - 14
+                ok = (off[act] <= t - 14) & ~C[act, t]   # in-stock days, as live
                 if ok.any():
-                    y, a = Y[act[ok], t], act[ok]
-                    self.backtest["abs"] += float(np.abs(y - pred[ok]).sum())
-                    self.backtest["y"] += float(y.sum())
-                    self.backtest["naive_abs"] += float(np.abs(y - Y[a, t - 7]).sum())
-                    self.backtest["naive_y"] += float(y.sum())
-                    self.backtest["days"] = max(self.backtest["days"], T - bt_from)
+                    y, a, bt = Y[act[ok], t], act[ok], self.backtest
+                    bt["abs"] += float(np.abs(y - pred[ok]).sum())
+                    bt["y"] += float(y.sum())
+                    bt["naive_abs"] += float(np.abs(y - Y[a, t - 7]).sum())
+                    bt["naive_y"] += float(y.sum())
+                    m, nm = mer[a], len(self.mer_index)
+                    my = np.bincount(m, y, nm)
+                    bt["m_abs"] += float(np.abs(my - np.bincount(m, pred[ok], nm)).sum())
+                    bt["m_naive_abs"] += float(np.abs(my - np.bincount(m, Y[a, t - 7], nm)).sum())
+                    bt["m_y"] += float(y.sum())
+                    bt["days"] = max(bt["days"], T - bt_from)
         self.st.put(rows, st)
         self.fitted[rows] = True
         self.predict_next(rows, through + 1)
@@ -352,10 +446,10 @@ class Forecaster:
         return float(np.clip(a, 1.0, 6.0)), float(np.clip(b, 0.005, 0.4))
 
     def _pool(self, rows: np.ndarray, M: np.ndarray) -> np.ndarray:
-        n_cat = len(self.pool.num)
+        n_grp = len(self.grp_index)
         if not len(rows):
-            return np.zeros((n_cat, 7))
-        return np.stack([np.bincount(self.cat[rows], M[rows, w], n_cat) for w in range(7)], axis=1)
+            return np.zeros((n_grp, 7))
+        return np.stack([np.bincount(self.grp[rows], M[rows, w], n_grp) for w in range(7)], axis=1)
 
     def _init_state(self, Y: np.ndarray, P: np.ndarray, off: np.ndarray, t0: int) -> State:
         n, T = Y.shape
@@ -380,19 +474,19 @@ class Forecaster:
         st.var_r[:] = 1.0
         return st
 
-    def _choose_alpha(self, init: State, Y, P, C, off, cat, t0, pool_A, pool_B) -> np.ndarray:
+    def _choose_alpha(self, init: State, Y, P, C, off, cat, grp, mer, t0, pool_A, pool_B) -> np.ndarray:
         """Run every alpha side by side (rows tiled) on a copy of the pools; best per category by WAPE."""
         k, n = len(ALPHAS), len(off)
         st = State(*(np.concatenate([getattr(init, f)] * k) for f in init.__dataclass_fields__))
         st.alpha = np.repeat(ALPHAS, n)
-        cat_k, off_k = np.tile(cat, k), np.tile(off, k)
+        cat_k, grp_k, mer_k, off_k = np.tile(cat, k), np.tile(grp, k), np.tile(mer, k), np.tile(off, k)
         Yk, Pk, Ck = np.tile(Y, (k, 1)), np.tile(P, (k, 1)), np.tile(C, (k, 1))
-        pool = self.pool.copy()
+        pools = (self.pool.copy(), self.fpool.copy(), self.sens.copy())
         err = np.zeros(k * n)
         for t in range(Y.shape[1]):
             act = np.flatnonzero(off_k <= t)
             pred = step(st, act, cat_k[act], self.day(t0 + t), Yk[act, t], Pk[act, t], Ck[act, t],
-                        pool, pool_A * k, pool_B * k)
+                        pools, pool_A * k, pool_B * k, grp_k[act], mer_k[act])
             scored = off_k[act] <= t - 14
             err[act[scored]] += np.abs(Yk[act[scored], t] - pred[scored])
         n_cat = len(self.pool.num)
@@ -414,6 +508,7 @@ class Forecaster:
         self.start[:n] = np.where(self.start[:n] < 0, day_idx, self.start[:n])
         rows = np.flatnonzero(self.fitted[:n])
         scored = rows[self.f_day[rows] == day_idx]
+        scored = scored[~censored[scored]]   # scored on in-stock days: a sold-out day shows the shelf, not demand
         out = {"rows": scored, "y": y[scored], "f": self.f_next[scored], "lo": self.lo_next[scored],
                "hi": self.hi_next[scored]}
         out["naive"] = self.hist[scored, day_idx - 7].astype(float) if day_idx >= 7 else np.zeros(len(scored))
@@ -429,8 +524,8 @@ class Forecaster:
         if len(rows):
             under = censored[rows] & (y[rows] < self.f_next[rows])
             step(self.st, rows, self.cat[rows], self.day(day_idx), y[rows].astype(float),
-                 self.pmult(rows, ratio[rows].astype(float)), under, self.pool,
-                 np.zeros((len(self.pool.num), 7)), np.zeros((len(self.pool.num), 7)))
+                 self.pmult(rows, ratio[rows].astype(float)), under, self.pools,
+                 np.zeros((len(self.grp_index), 7)), np.zeros((len(self.grp_index), 7)), self.grp[rows], self.mer[rows])
         cold = np.flatnonzero(~self.fitted[:n] & (self.start[:n] >= 0))
         if len(cold):
             self.fit(cold, day_idx)
@@ -441,7 +536,20 @@ class Forecaster:
     def base(self, rows: np.ndarray, day_idx: int) -> np.ndarray:
         """No-offer forecast of rows for one day."""
         d = self.day(day_idx)
-        return self.st.level[rows] * self.st.season[rows, d.weekday()] * self.pool.mult()[self.cat[rows], day_kind(d)]
+        c, fk = self.cat[rows], fest_kind(d)
+        fest = 1.0 if not fk else np.maximum(1 + self.sens.k(self.mer[rows]) * (self.fpool.mult()[c, fk] - 1), FEST_FLOOR)
+        return self.st.level[rows] * self.st.season[rows, d.weekday()] * self.pool.mult()[c, day_kind(d)] * fest
+
+    @property
+    def pools(self) -> tuple:
+        return self.pool, self.fpool, self.sens
+
+    def festival_lift(self, name: str | None = None) -> tuple[np.ndarray, np.ndarray]:
+        """Per category: the learned multiplier on a festival's day (all festivals' days pooled when no
+        name), and how many category-days it was learned from."""
+        ks = [FESTIVAL_DAY[name]] if name in FESTIVAL_DAY else list(FESTIVAL_DAY.values())
+        num, den = self.fpool.num[:, ks].sum(1), self.fpool.den[:, ks].sum(1)
+        return (num + EVENT_PSEUDO) / (den + EVENT_PSEUDO), self.fpool.days[:, ks].sum(1)
 
     def interval(self, rows: np.ndarray, f: np.ndarray, h: int = 1) -> tuple[np.ndarray, np.ndarray]:
         sd = np.sqrt(self.st.var_r[rows] * (f + 1.0) * (1 + (h - 1) * self.st.alpha[rows] ** 2))
@@ -470,8 +578,9 @@ class Forecaster:
         days = "MTWTFSS"
         peak = days[int(s.argmax())]
         parts = [f"Holt-Winters (level a={self.st.alpha[i]:.2f}, weekday x{s.min():.2f}-{s.max():.2f}, peak {peak})"]
-        if self.pool.days[self.cat[i], FESTIVAL]:
-            parts.append(f"festival x{m[FESTIVAL]:.2f}")
+        lift, seen = self.festival_lift()
+        if seen[self.cat[i]]:
+            parts.append(f"festival day x{lift[self.cat[i]]:.2f}")
         parts.append(f"payday x{m[PAYDAY]:.2f}")
         return ", ".join(parts)
 
@@ -589,8 +698,11 @@ class LiveAccuracy:
         self.m_abs += np.abs(my - mf).sum()
         self.m_y += my.sum()
         self.m_naive_abs += np.abs(np.bincount(m[ok], y[ok], nm) - np.bincount(m[ok], s["naive"][ok], nm)).sum()
+        my_ok, mn_ok = np.bincount(m[ok], y[ok], nm), np.bincount(m[ok], s["naive"][ok], nm)
         self.last = {"wape": round(wape(y, f), 4),
                      "baseline_wape": round(wape(y[ok], s["naive"][ok]), 4) if ok.any() else None,
+                     "merchant_wape": round(wape(my, mf), 4),
+                     "merchant_baseline_wape": round(wape(my_ok, mn_ok), 4) if ok.any() else None,
                      "series": len(rows), "units": int(y.sum())}
 
     def summary(self, platform_ids: list[str], backtest: dict) -> dict:
@@ -609,5 +721,7 @@ class LiveAccuracy:
             "last_day": self.last or None,
             "backtest": {"wape": r(backtest["abs"], backtest["y"]),
                          "baseline_wape": r(backtest["naive_abs"], backtest["naive_y"]),
+                         "merchant_wape": r(backtest.get("m_abs", 0.0), backtest.get("m_y", 0.0)),
+                         "merchant_baseline_wape": r(backtest.get("m_naive_abs", 0.0), backtest.get("m_y", 0.0)),
                          "days": backtest["days"]},
         }

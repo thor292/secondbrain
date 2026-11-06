@@ -32,7 +32,7 @@ from datetime import date, datetime, timedelta
 import numpy as np
 
 from secondbrain.commerce import contract as C
-from secondbrain.commerce.forecast import FESTIVAL, Forecaster, HourProfile, LiveAccuracy
+from secondbrain.commerce.forecast import Forecaster, HourProfile, LiveAccuracy
 from secondbrain.commerce.offers import (AUTO_KINDS, CYCLE_DAYS, EXCESS_COST, KEEP_DAYS, KEEP_PROB, SPOIL_COST,
                                          Z_ASSURED, choose_defence,
                                          WINBACK_RESPONSE, Cooldowns, Offer, OfferBook, autopilot_merchant,
@@ -219,7 +219,8 @@ class Engine:
         for p in msg.get("products", []):
             i, created = self.reg.series(m, p)
             if created:
-                j = self.fc.add_series(p.get("category", "Other"), self.book.elasticity.value(merchant, p.get("category", "Other")))
+                cat = p.get("category", "Other")
+                j = self.fc.add_series(cat, self.book.elasticity.value(merchant, cat), f"{platform}/{cat}", merchant)
                 assert i == j
         self.reg.has_catalog.add(m)
         if m in self.pending_history:
@@ -245,7 +246,9 @@ class Engine:
         prices = np.asarray(msg.get("prices") or np.zeros_like(units), float)
         prices = prices[:, cols] if prices.ndim == 2 and prices.shape[1] == len(skus) else np.zeros_like(units)
         ratio = np.where((units > 0) & (prices > 0), prices / np.maximum(self.reg.price[rows], 1e-9), 1.0)
-        self.fc.set_history(rows, days, units, ratio)
+        out = np.asarray(msg.get("sold_out") or np.zeros_like(units), float)
+        out = out[:, cols] > 0 if out.shape == (len(days), len(skus)) else np.zeros_like(units, dtype=bool)
+        self.fc.set_history(rows, days, units, ratio, out)
         self.fc.fitted[rows] = False
         self.unfitted.update(rows.tolist())
         self.last_history = time.time()
@@ -841,8 +844,9 @@ class Engine:
         if days_to > FESTIVAL_DAYS:
             return []
         reg, fc = self.reg, self.fc
-        mult = fc.pool.mult()[fc.cat[rows], FESTIVAL]
-        learned = (fc.pool.days[fc.cat[rows], FESTIVAL] > 0) & (mult >= FESTIVAL_MIN_LIFT)
+        lift, seen = fc.festival_lift(fname)
+        mult = lift[fc.cat[rows]]
+        learned = (seen[fc.cat[rows]] > 0) & (mult >= FESTIVAL_MIN_LIFT)
         if not learned.any():
             return []
         rows, H, mult = rows[learned], H[learned], mult[learned]
@@ -861,7 +865,7 @@ class Engine:
             units = int(math.ceil(short[j] / 5) * 5)
             late = reg.lead[i] >= days_to
             detail = (f"Learned festival lift for {cat_names[fc.cat[i]]}: x{mult[j]:.2f} (from "
-                      f"{fc.pool.days[fc.cat[i], FESTIVAL]} festival day(s) so far). Forecast {demand[j]:.0f} units "
+                      f"{fname} last year, {seen[fc.cat[i]]} category-day(s) of data). Forecast {demand[j]:.0f} units "
                       f"through {fname} vs {stock[j]:.0f} in stock: order {units} units now "
                       f"({format_inr(units * reg.cost[i])} at cost, {format_inr(short[j] * reg.price[i])} of festival sales)."
                       + (f" Lead time is {reg.lead[i]:.0f} days, so expedite." if late else ""))
@@ -1169,9 +1173,8 @@ class Engine:
         }
 
     def _festival_lifts(self) -> dict:
-        m = self.fc.pool.mult()
-        return {c: round(float(m[k, FESTIVAL]), 3) for k, c in enumerate(self.fc.categories)
-                if self.fc.pool.days[k, FESTIVAL]}
+        m, seen = self.fc.festival_lift()
+        return {c: round(float(m[k]), 3) for k, c in enumerate(self.fc.categories) if seen[k]}
 
     # ------------------------------------------------------------------ API views
 

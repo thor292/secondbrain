@@ -38,16 +38,22 @@ simulator --(MQTT ingest broker)--> engine --(live broker, permission-checked)--
     festivals (Dhanteras, Diwali, the wedding season), slow trends, stock that runs
     out and gets restocked, and price sensitivity per category.
   - It also injects unexpected events: competitor price cuts and viral surges.
-  - Orders stream over MQTT, one message per merchant per tick, after a 56-day
-    history backfill. It runs in its own process.
+  - Orders stream over MQTT, one message per merchant per tick, after a 14-month
+    history backfill (sales, prices and sold-out days), so last year's Dussehra, Diwali
+    and wedding season are in the data. It runs in its own process.
 - **Engine** (`commerce/engine.py`, `forecast.py`, `offers.py`, `state.py`): learns
   only from the messages, so a real platform feed can replace the simulator.
   - **Streaming forecast for every merchant × product** (16k series): level ×
-    weekday pattern × learned festival and payday effects × price effect, fitted on
-    the backfill and updated at every day close.
+    weekday pattern (per platform: a hypermarket's weekend is not an online store's) ×
+    payday and month-end effects × festival effect × price effect, fitted on the
+    backfill and updated at every day close. The festival effect covers every day from
+    four weeks before a festival to three weeks after (build-up, the day, the slump),
+    learned per category from last year, scaled by how festival-sensitive each
+    merchant was.
   - **Intraday nowcast:** "expected by now", checked continuously.
   - **Live accuracy:** every day is scored against the forecast made the evening
-    before, and against a naive baseline (same weekday last week).
+    before, and against a naive baseline (same weekday last week), on products that
+    stayed in stock (a sold-out day shows the shelf, not demand).
   - **Decision signals:** discounts, restocks, demand surges, festival preparation,
     perishable clearance and win-back coupons. Each carries the amount, the expected
     effect, a confidence and the evidence.
@@ -61,7 +67,8 @@ The message contract is in `commerce/contract.py`.
 
 ## The numbers, and what they mean
 
-Measured on an M1 Pro laptop, 600 merchants, a day every 6 seconds:
+Measured on an M1 Pro laptop, 600 merchants, fast-forwarding 21 days from
+Dhanteras (6 Nov 2026) through Diwali and into the wedding season:
 
 | | |
 |---|---|
@@ -69,11 +76,22 @@ Measured on an M1 Pro laptop, 600 merchants, a day every 6 seconds:
 | Engine capacity | ~150-200k orders/s on one core (busy ~20% at demo load) |
 | Order → decision signal | ~0.1 s end to end, of which the broker hop ~20 ms, processing < 1 ms |
 | Signal → screen | ~5 ms |
-| Forecast accuracy, store-day | ~89-91% (100% − WAPE), naive baseline ~85-88% |
-| Forecast accuracy, product-day | ~62%, naive baseline ~49% |
-| 80% forecast range held | ~89% of the time |
-| Offers that delivered their promised uplift | ~80% (each offer states an 80% lower bound) |
-| Signal mix | about half offers (discounts, win-back coupons, clearance, festival offers), then restocks, festival stock-ups and demand surges; ~25-35 a sim day |
+| Forecast accuracy, store-day | ~89% (100% − WAPE), naive baseline ~77% |
+| By platform, store-day | Shopify ~76%, Reliance Retail ~89%, DMart ~90% |
+| Forecast accuracy, product-day | ~64%, naive baseline ~45% |
+| Diwali week, worst store-day error | ~16% (naive up to 58%) |
+| 80% forecast range held | ~90% of the time |
+| Offers that delivered their promised uplift | ~75-85% (each offer states an 80% lower bound) |
+| Signal mix | restocks, festival stock-ups and pre-festival offers, win-back coupons, demand surges, clearance of perishables; discounts once Diwali demand has passed |
+
+For scale, a forecast that knew the simulator's true demand would score ~83%
+(Shopify), ~94% (Reliance) and ~96% (DMart) store-day: the rest is noise no
+model can predict. Shopify is lowest because its D2C brands sell one or two
+units of a product a day.
+
+During Dhanteras and Diwali the brain raises stock-ups and holds price: demand
+is already high, so a discount would give margin away. Offers pick up after the
+festival (clearance, slow movers, price-sensitive high-margin products).
 
 Product-level daily accuracy is always the hardest number in retail. A
 single product in a single store sells a handful of units a day, with about
@@ -99,8 +117,9 @@ simulation almost all of them revert, so it rarely spends a discount on them.
 
 - Start the engine before the simulator. `python -m secondbrain.commerce` does
   this. The history backfill is not retained, so an engine started late learns
-  from the first live day instead.
-- A day every 6 seconds is the most impressive speed: Dhanteras and Diwali
-  arrive within a few minutes from the 20 October start. Use 1 hr/s to watch
+  from the first live day instead. Fitting 14 months for 16k series takes ~10 s
+  at startup.
+- A day every 6 seconds is the most impressive speed: the simulation starts
+  today, so Diwali and the wedding season arrive within a minute or two. Use 1 hr/s to watch
   individual signals and click *Apply offer*.
 - The page needs internet for the font and mqtt.js, like the other pages.

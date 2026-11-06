@@ -25,7 +25,6 @@ from statistics import median
 import numpy as np
 
 from secondbrain.commerce import contract as C
-from secondbrain.commerce.forecast import FESTIVAL
 from secondbrain.commerce.offers import WINBACK_RESPONSE
 from secondbrain.money import group, inr_short
 
@@ -391,15 +390,15 @@ def _festival_lessons(eng, applies, sold, lesson) -> None:
     idx = np.array([fc.day_index(d) for d, _ in seen])
     n = reg.n
     start = fc.start[:n]
-    mult = fc.pool.mult()
+    mult, seen_days = fc.festival_lift()
     signals = {}
     for (m, kind, cat), c in eng.sig_count.items():
         if kind == "festival":
             signals[cat] = signals.get(cat, 0) + c
     for k, cat in enumerate(fc.categories):
-        if not applies.get(cat) or not fc.pool.days[k, FESTIVAL]:
+        if not applies.get(cat) or not seen_days[k]:
             continue
-        lift = float(mult[k, FESTIVAL])
+        lift = float(mult[k])
         if abs(lift - 1) < MIN_FEST_LIFT:
             continue
         rows = np.flatnonzero((fc.cat[:n] == k) & (start >= 0))
@@ -408,7 +407,7 @@ def _festival_lessons(eng, applies, sold, lesson) -> None:
         teachers = set(reg.s_merch[rows[had.any(axis=1)]].tolist())
         if not days_seen or not teachers:
             continue
-        names = ", ".join(name for (d, name), ok in zip(seen, had.any(axis=0)) if ok)
+        names = ", ".join(dict.fromkeys(name for (d, name), ok in zip(seen, had.any(axis=0)) if ok))
         more = "more" if lift > 1 else "less"
         title = (f"{cat} sells {abs(lift - 1):.0%} {more} on festival days, learned from {names} across "
                  f"{_merchants_word(len(teachers))}")

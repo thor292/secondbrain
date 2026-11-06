@@ -588,7 +588,7 @@ const KDEF = [
   { k: "sig", label: "Signals raised", fmt: num },
   { k: "off", label: "Offers applied", fmt: num },
   { k: "upl", label: "Uplift from offers", fmt: (v) => inr(v), glow: "glow-good" },
-  { k: "acc", label: "Forecast accuracy · store-day", fmt: (v) => v.toFixed(1) + "%", tip: "100% − WAPE of each store's daily sales, on days the forecast never saw; the subline is the stricter product-level score" },
+  { k: "acc", label: "Forecast accuracy · store-day", fmt: (v) => v.toFixed(1) + "%", tip: "100% − WAPE of each store's daily sales, on days the forecast never saw, over products that stayed in stock; the subline is the stricter product-level score" },
   { k: "lat", label: "End-to-end latency p50", fmt: (v) => (v < 10 ? v.toFixed(1) : Math.round(v)) + " ms", tip: "Order sent by the platform → signal published" },
 ];
 const K = {};

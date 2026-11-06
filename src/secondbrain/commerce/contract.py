@@ -30,8 +30,10 @@ Ingest topics (simulator publishes, engine subscribes; QoS 0 for orders, 1 other
     {"products": [{"sku", "name", "category", "price", "cost", "stock", "lead_days", "perishable": bool}]}
 
 ``commerce/v1/{platform}/{merchant}/history`` - backfill, sent once at start:
-    {"days": ["2026-08-25", ...], "skus": [...], "units": [[per day, per sku]], "prices": [[...]]}
-    ``units[d][s]`` is units of ``skus[s]`` sold on ``days[d]``; ``prices`` the average price paid.
+    {"days": ["2025-09-12", ...], "skus": [...], "units": [[per day, per sku]], "prices": [[...]],
+     "sold_out": [[0 | 1]]}
+    ``units[d][s]`` is units of ``skus[s]`` sold on ``days[d]``; ``prices`` the average price paid;
+    ``sold_out`` 1 when the product ran out that day (sales below demand).
 
 ``commerce/v1/{platform}/{merchant}/orders`` - live orders, one message per merchant per tick:
     {"sent_ms", "sim_ts", "orders": [{"id", "customer", "sku", "qty", "price", "offer": signal id | null}]}
@@ -178,11 +180,17 @@ def ist_now() -> datetime:
 # chosen speed. Pinned in tests with SB_COMMERCE_SIM_START.
 SIM_START = os.environ.get("SB_COMMERCE_SIM_START") or ist_now().strftime("%Y-%m-%dT00:00:00")
 CATCH_UP_SPEED = 14400
-HISTORY_DAYS = 56
+HISTORY_DAYS = 420   # 14 months: last year's festival season included
 
 # Festivals both sides know in advance, like a merchant's sale calendar.
 # The simulator decides how strongly each one moves demand; the engine has to learn it.
-FESTIVALS = {
+FESTIVALS = {   # last year's too: the history backfill covers them, so this year's are forecast from them
+    date(2025, 10, 2): "Dussehra",
+    date(2025, 10, 18): "Dhanteras",
+    date(2025, 10, 20): "Diwali",
+    date(2025, 10, 23): "Bhai Dooj",
+    date(2025, 11, 5): "Wedding season",     # the same 16 days after Diwali as this year
+    date(2025, 12, 25): "Christmas",
     date(2026, 10, 20): "Dussehra",
     date(2026, 11, 6): "Dhanteras",
     date(2026, 11, 8): "Diwali",
