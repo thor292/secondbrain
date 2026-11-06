@@ -340,6 +340,8 @@ class State:
 
     def _take_stock(self, series: np.ndarray, qty: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Stockouts cap sales: lines past what is on the shelf shrink or are lost."""
+        if not len(series):  # a quiet tick (real time at night)
+            return series, qty
         cs = np.cumsum(qty)
         first = np.r_[True, series[1:] != series[:-1]]
         group_start = np.maximum.accumulate(np.where(first, np.arange(len(series)), 0))
@@ -354,6 +356,8 @@ class State:
         """Group a merchant's lines into baskets and give each basket a customer, due customers first."""
         w = self.model.world
         n = len(merchant)
+        if not n:
+            return np.empty(0, dtype=np.int64)
         first = np.r_[True, merchant[1:] != merchant[:-1]]
         pos = np.arange(n) - np.maximum.accumulate(np.where(first, np.arange(n), 0))
         basket_size = np.array([m.basket for m in w.merchants])[merchant]
@@ -414,6 +418,7 @@ class Simulator:
         self.world = world
         self.model = DemandModel(world)
         self.publish = publish
+        self.catching_up = True
         self.requested = speed if speed in contract.SPEEDS else contract.DEFAULT_SPEED
         self.factor = 1.0
         self.running = False
@@ -461,6 +466,7 @@ class Simulator:
             self._apply_offer(cmd)
         elif kind == "reset":
             self.running = False
+            self.catching_up = True
             self.reset_state()
             self.publish_setup()
         else:
@@ -555,7 +561,17 @@ class Simulator:
         return {"sent_ms": contract.wall_ms(), "sim_ts": sim_ts(self.state.t),
                 "speed": round(speed if self.running else 0.0, 1), "requested": self.requested,
                 "requested_speed": contract.SPEEDS[self.requested], "running": self.running,
-                "orders_per_sec": round(ops, 1)}
+                "catching_up": self.running and self.catching_up, "orders_per_sec": round(ops, 1)}
+
+    def catch_up_step(self, sim_dt: float) -> float:
+        """Until the sim clock reaches the real time, run at catch-up speed (never past now)."""
+        if not self.catching_up:
+            return sim_dt
+        behind = (contract.ist_now() - SIM_START).total_seconds() - self.state.t
+        if not 2 < behind < 86400:  # caught up (within a tick or two of now), or a pinned start that isn't today
+            self.catching_up = False
+            return sim_dt
+        return min(max(sim_dt, contract.CATCH_UP_SPEED * self.factor * TICK), behind)
 
     def adapt(self, work: float) -> None:
         """Slow the sim clock when a tick's work no longer fits the tick budget; recover when it does."""
@@ -649,7 +665,7 @@ def run(merchants: int = 600, customers: int = 120000, seed: int = 7, speed: str
             start = time.perf_counter()
             orders, sim_dt = 0, 0.0
             if sim.running:
-                sim_dt = contract.SPEEDS[sim.requested] * sim.factor * TICK
+                sim_dt = sim.catch_up_step(contract.SPEEDS[sim.requested] * sim.factor * TICK)
                 orders = sim.advance(sim_dt)
                 broker.client.loop_write()
                 sim.adapt(time.perf_counter() - start)

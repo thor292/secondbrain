@@ -6,6 +6,9 @@ Start them first: ``docker compose up -d --wait``.
 import os
 from pathlib import Path
 
+# Live Commerce starts at today's date; tests pin it so dates in assertions hold.
+os.environ.setdefault("SB_COMMERCE_SIM_START", "2026-10-20T00:00:00")
+
 import psycopg
 import pytest
 from fastapi.testclient import TestClient

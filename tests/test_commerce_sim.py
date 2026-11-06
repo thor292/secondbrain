@@ -319,3 +319,11 @@ def test_streams_over_the_broker():
     assert len(got["catalog"]) == 30 and len(got["history"]) == 30
     assert got["orders"] and got["orders"][0]["orders"][0]["sku"]
     assert any(k["running"] and k["speed"] > 0 for k in got["clock"])
+
+
+def test_quiet_real_time_ticks_dont_crash(sim):
+    """At real time a 100 ms tick often has no orders at all, at night none for hours."""
+    sim.handle({"cmd": "start"})
+    for _ in range(50):
+        sim.advance(0.1)  # 3am: nobody orders
+    assert sim.clock_payload()["running"]

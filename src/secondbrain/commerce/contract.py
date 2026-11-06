@@ -101,7 +101,8 @@ Engine HTTP API (ENGINE_PORT; the app proxies it at /commerce/api/...)
 
 import os
 import time
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 INGEST_HOST = "localhost"
 INGEST_PORT = 51883
@@ -126,7 +127,19 @@ SPEEDS = {
 }
 DEFAULT_SPEED = "1h"
 
-SIM_START = "2026-10-20T00:00:00"
+IST = ZoneInfo("Asia/Kolkata")
+
+
+def ist_now() -> datetime:
+    """The real time in India, without timezone (sim times are IST implied)."""
+    return datetime.now(IST).replace(tzinfo=None)
+
+
+# Live means today: the simulated day starts at today's midnight (IST), and on Start the
+# simulator replays today's orders up to the real time (CATCH_UP_SPEED), then runs at the
+# chosen speed. Pinned in tests with SB_COMMERCE_SIM_START.
+SIM_START = os.environ.get("SB_COMMERCE_SIM_START") or ist_now().strftime("%Y-%m-%dT00:00:00")
+CATCH_UP_SPEED = 14400
 HISTORY_DAYS = 56
 
 # Festivals both sides know in advance, like a merchant's sale calendar.

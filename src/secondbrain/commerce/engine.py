@@ -257,6 +257,7 @@ class Engine:
         self.speed = msg.get("requested", msg.get("speed", self.speed))  # the label the wall shows
         self.speed_actual = msg.get("speed")
         self.running = bool(msg.get("running", self.running))
+        self.catching_up = bool(msg.get("catching_up"))
         self.last_clock_sent = msg.get("sent_ms", self.last_clock_sent)
         if msg.get("sim_ts"):
             self._advance(datetime.fromisoformat(msg["sim_ts"]))
@@ -1085,7 +1086,8 @@ class Engine:
         L = self.lat
         return {
             "sent_ms": C.wall_ms(), "sim_ts": self.now.isoformat(timespec="seconds") if self.now else None,
-            "speed": self.speed, "speed_actual": self.speed_actual, "running": self.running, "merchants": self.reg.nm, "customers": self.customers_world,
+            "speed": self.speed, "speed_actual": self.speed_actual, "running": self.running,
+            "catching_up": getattr(self, "catching_up", False), "merchants": self.reg.nm, "customers": self.customers_world,
             "series": self.reg.n, "orders_total": self.totals["orders"], "units_total": round(self.totals["units"]),
             "revenue_total": round(self.totals["revenue"], 2), "orders_per_sec": round(r["orders"], 1),
             "revenue_per_sec": round(r["revenue"], 2), "msgs_per_sec": round(r["msgs"], 1),

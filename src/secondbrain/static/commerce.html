@@ -558,7 +558,14 @@ const HEAD = {
     S.sim.shown = t;
     const d = new Date(t);
     const ds = `${DOW[d.getUTCDay()]}, ${d.getUTCDate()} ${MON[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
-    if (this._d !== ds) { this._d = ds; $("clk-d").textContent = ds + " · IST"; }
+    // Live means today: say how the simulated clock relates to the real time in India.
+    const real = Date.now() + 19800000, gap = t - real, dayOf = (ms) => new Date(ms).toISOString().slice(0, 10);
+    const rel = S.stats?.catching_up ? "syncing today's orders so far…"
+      : Math.abs(gap) < 120000 ? "● live now"
+      : dayOf(t) === dayOf(real) ? "today"
+      : gap > 0 ? `fast-forward +${Math.max(1, Math.round(gap / 864e5))} day${Math.round(gap / 864e5) > 1 ? "s" : ""}`
+      : "earlier";
+    if (this._d !== ds + rel) { this._d = ds + rel; $("clk-d").textContent = `${ds} · IST · ${rel}`; }
     const hm = pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()), sec = pad(d.getUTCSeconds());
     if (this._t !== hm + sec) { this._t = hm + sec; $("clk-t").innerHTML = `${hm}<small>:${sec}</small>`; }
   },

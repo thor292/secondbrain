@@ -48,8 +48,11 @@ def main() -> None:
     while sim.poll() is None and engine.poll() is None:
         time.sleep(0.5)
     stop()
-    sim.wait()
-    engine.wait()
+    for p in (sim, engine):
+        try:
+            p.wait(timeout=5)
+        except subprocess.TimeoutExpired:  # never leave a stray engine holding the API port
+            p.kill()
 
 
 if __name__ == "__main__":
