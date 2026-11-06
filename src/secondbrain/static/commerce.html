@@ -1,0 +1,1777 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecondBrain Live Commerce</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='7' fill='%2333d6f2'/></svg>">
+<link rel="stylesheet" href="/static/sb.css">
+<style>
+  /* Live Commerce wall. Page-only styles; the tokens come from sb.css. */
+  .wall { max-width: 1680px; padding-bottom: 90px; }
+  .sb-nav .live-badge { display: none; } /* the page shows its own badge in the header */
+  .mono { font-variant-numeric: tabular-nums; }
+
+  /* ---------- 1. header ---------- */
+  .lc-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px 28px; align-items: center; margin-bottom: 18px; }
+  .lc-head h1 { font-size: 42px; margin: 4px 0 0; letter-spacing: -0.035em; font-weight: 800; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; line-height: 1.05; }
+  .lc-sub { color: var(--muted); font-size: 14px; margin-top: 6px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .lc-sub .pl { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--text); }
+  .lc-sub .pl i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .mode { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; letter-spacing: .04em; padding: 5px 11px; border-radius: 999px;
+          border: 1px solid var(--border); color: var(--muted); vertical-align: middle; }
+  .mode::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+  .mode.on { color: var(--good); border-color: rgba(52, 211, 153, .35); background: var(--good-soft); }
+  .mode.on::before { background: var(--good); animation: ping 2s infinite; }
+  .mode.demo { color: var(--warn); border-color: rgba(251, 191, 36, .4); background: var(--warn-soft); }
+  .mode.demo::before { background: var(--warn); animation: ping 2s infinite; }
+  .golive { font-size: 12px; }
+  .lc-ctrl { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; justify-content: flex-end; }
+  .clock { text-align: right; min-width: 210px; }
+  .clock .d { font-size: 12px; color: var(--muted); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+  .clock .t { font-size: 38px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; line-height: 1.05; }
+  .clock .t small { font-size: 20px; color: var(--muted); font-weight: 700; }
+  .fest { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; padding: 4px 11px; border-radius: 999px; font-size: 12.5px; font-weight: 700;
+          color: #f5c451; background: rgba(245, 196, 81, .12); border: 1px solid rgba(245, 196, 81, .35); box-shadow: 0 0 22px -6px rgba(245, 196, 81, .6); }
+  @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .fest { color: #a16207; background: rgba(202, 138, 4, .12); border-color: rgba(202, 138, 4, .4); box-shadow: none; } }
+  .ctrlcol { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+  .seg button { padding: 7px 12px; font-size: 13px; white-space: nowrap; }
+  @media (max-width: 640px) { .seg { flex-wrap: wrap; } .seg button { padding: 6px 9px; font-size: 12px; } }
+  .start-btn { font-size: 17px; padding: 13px 26px; border-radius: 14px; animation: startglow 1.8s ease-in-out infinite; }
+  @keyframes startglow { 50% { box-shadow: 0 0 0 8px rgba(139, 123, 255, .12), 0 12px 40px -6px rgba(51, 214, 242, .8); } }
+  @media (max-width: 900px) {
+    .lc-head { grid-template-columns: 1fr; } .lc-ctrl { justify-content: flex-start; } .clock { text-align: left; } .ctrlcol { align-items: flex-start; }
+    .lc-head h1 { font-size: 32px; } .clock .t { font-size: 30px; }
+  }
+
+  /* ---------- 2. KPI strip ---------- */
+  .kstrip { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 12px; }
+  .kstrip .kpi { padding: 14px 16px; min-height: 108px; }
+  .kstrip .kpi .v { font-size: 27px; white-space: nowrap; }
+  .kstrip .kpi .d { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: relative; z-index: 1; }
+  .kstrip .kpi .spark { width: 70%; height: 40px; opacity: .5; }
+  .kpi.flash { animation: kflash .7s ease; }
+  @keyframes kflash { 0% { border-color: var(--pink); box-shadow: 0 0 26px -6px var(--pink); } }
+  @media (max-width: 1450px) { .kstrip { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  @media (max-width: 640px) { .kstrip { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } .kstrip .kpi .v { font-size: 22px; } .kstrip .kpi { min-height: 96px; padding: 12px 13px; } }
+
+  /* ---------- layout ---------- */
+  .g2 { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 16px; margin-top: 16px; }
+  .g2b { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 16px; margin-top: 16px; }
+  @media (max-width: 1150px) { .g2, .g2b { grid-template-columns: minmax(0, 1fr); } }
+  .card.tight { padding: 18px; }
+  .hd { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+  .hd h2 { margin: 2px 0 0; font-size: 19px; letter-spacing: -0.01em; }
+  .hd p { margin: 2px 0 0; color: var(--muted); font-size: 13.5px; }
+
+  /* ---------- 3. map ---------- */
+  .mapcard { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 10px; }
+  .mapbox { position: relative; height: 610px; }
+  .mapbox svg, .mapbox canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .mapbox canvas { cursor: crosshair; }
+  .india { fill: url(#indiaFill); stroke: url(#indiaStroke); stroke-width: 1.6; stroke-linejoin: round; }
+  .india-glow { fill: none; stroke: var(--cyan); stroke-opacity: .25; stroke-width: 7; filter: blur(5px); }
+  .maptip { position: absolute; pointer-events: none; z-index: 3; background: var(--panel-solid); border: 1px solid var(--border-hi); border-radius: 12px;
+            padding: 9px 12px; font-size: 12.5px; box-shadow: var(--shadow); min-width: 170px; opacity: 0; transition: opacity .12s; }
+  .maptip b { display: block; font-size: 13.5px; } .maptip .muted { font-size: 12px; }
+  .legend-col { display: flex; flex-direction: column; gap: 10px; }
+  .plat { padding: 12px 13px; border-radius: 14px; background: var(--panel); border: 1px solid var(--border); position: relative; overflow: hidden; }
+  .plat::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--pc); box-shadow: 0 0 14px var(--pc); }
+  .plat .nm { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; }
+  .plat .nm i { width: 10px; height: 10px; border-radius: 50%; background: var(--pc); box-shadow: 0 0 10px var(--pc); }
+  .plat .meta { font-size: 12px; color: var(--muted); margin-top: 1px; }
+  .plat .ops { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: 4px; letter-spacing: -0.02em; }
+  .plat .ops small { font-size: 12px; color: var(--muted); font-weight: 600; letter-spacing: 0; }
+  .plat .spark { position: absolute; right: 0; bottom: 0; width: 55%; height: 34px; opacity: .7; }
+  .mapnote { font-size: 12px; color: var(--faint); line-height: 1.45; margin-top: auto; }
+  .mapnote b { color: var(--muted); }
+  @media (max-width: 760px) {
+    .mapcard { grid-template-columns: minmax(0, 1fr); } .mapbox { height: 430px; order: -1; }
+    .legend-col { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; } .mapnote { grid-column: 1 / -1; }
+    .plat { padding: 10px; } .plat .ops { font-size: 17px; } .plat .nm { font-size: 12.5px; } .plat .spark { display: none; }
+  }
+
+  /* ---------- 5. signals feed ---------- */
+  .feedcard { display: flex; flex-direction: column; max-height: 680px; }
+  .feed-meta { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  .feed-meta .chip { font-size: 12px; padding: 3px 9px; }
+  .feed { overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; gap: 10px; padding-right: 4px; flex: 1; min-height: 300px; }
+  .slot { flex: none; }
+  .sig { --u: var(--cyan); position: relative; overflow: hidden; background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+         padding: 13px 14px 12px 18px; cursor: pointer; transition: border-color .2s, box-shadow .3s; }
+  .sig::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--u); box-shadow: 0 0 18px var(--u); }
+  .sig::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--u) 22%, transparent) 50%, transparent 70%);
+                transform: translateX(-100%); pointer-events: none; }
+  .sig.fresh::after { animation: sweep 1.1s ease-out .2s; }
+  @keyframes sweep { to { transform: translateX(100%); } }
+  .sig:hover { border-color: var(--border-hi); }
+  .sig.high { --u: var(--bad); } .sig.medium { --u: var(--warn); } .sig.low { --u: var(--cyan); }
+  .sig.applied { border-color: rgba(52, 211, 153, .45); }
+  .sig .top { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--muted); }
+  .sig .kic { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; font-size: 14px; background: color-mix(in srgb, var(--u) 16%, transparent); flex: none; }
+  .sig .urg { font-size: 10.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--u); }
+  .sig .where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .sig .where b { color: var(--text); font-weight: 600; }
+  .sig .pdot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .sig .when { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--faint); flex: none; }
+  .sig h3 { margin: 8px 0 3px; font-size: 15.5px; line-height: 1.3; letter-spacing: -0.01em; }
+  .sig .det { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .sig .imp { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .sig .imp .chip { font-size: 11.5px; padding: 2px 8px; }
+  .sig .meter { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; margin: 9px 0 8px; font-size: 11.5px; color: var(--muted); }
+  .sig .meter .bar { height: 5px; border-radius: 99px; background: var(--panel-hi); overflow: hidden; }
+  .sig .meter .bar i { display: block; height: 100%; width: 0; border-radius: 99px; background: var(--grad); transition: width 1.1s cubic-bezier(.2, .8, .2, 1); }
+  .sig .meter b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .sig .foot { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+  .sig .lat b { color: var(--cyan); font-variant-numeric: tabular-nums; }
+  .sig .act { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+  .tag { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700; }
+  .tag.auto { color: var(--violet); background: var(--accent-soft); border: 1px solid rgba(139, 123, 255, .35); }
+  .tag.ok { color: var(--good); background: var(--good-soft); border: 1px solid rgba(52, 211, 153, .35); }
+  .tag.wait { color: var(--muted); background: var(--panel-hi); border: 1px solid var(--border); }
+  .sig .res { margin-top: 8px; padding: 7px 10px; border-radius: 10px; font-size: 12.5px; background: var(--panel-hi); animation: pop .45s both; }
+  .sig .res.good { background: var(--good-soft); color: var(--text) !important; } .sig .res.bad { background: var(--bad-soft); color: var(--text) !important; }
+
+  /* ---------- 4. pipeline ---------- */
+  .pipe { position: relative; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; padding: 22px 0 6px; }
+  .pipe canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .pnode { position: relative; z-index: 1; text-align: center; display: flex; flex-direction: column; align-items: center; min-width: 0; }
+  .pnode .ring { width: 66px; height: 66px; border-radius: 20px; display: grid; place-items: center; background: var(--panel-solid); border: 1px solid var(--border-hi);
+                 color: var(--cyan); box-shadow: 0 10px 30px -10px rgba(0, 0, 0, .5); }
+  .pnode .ring svg { width: 30px; height: 30px; }
+  .pnode.end .ring { color: var(--good); } .pnode.sigs .ring { color: var(--pink); } .pnode.fc .ring { color: var(--violet); }
+  .pnode .txt { display: flex; flex-direction: column; align-items: center; min-width: 0; }
+  .pnode b { margin-top: 10px; font-size: 13.5px; white-space: nowrap; }
+  .pnode .pv { font-size: 21px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; line-height: 1.2; margin-top: 2px; }
+  .pnode .pc { font-size: 11.5px; color: var(--faint); }
+  .pnode .pl { margin-top: 5px; font-size: 12px; font-weight: 700; color: var(--cyan); font-variant-numeric: tabular-nums; padding: 2px 9px; border-radius: 99px; background: rgba(51, 214, 242, .1); white-space: nowrap; }
+  .rate { position: absolute; z-index: 2; transform: translate(-50%, -50%); font-size: 11px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums;
+          background: var(--panel-solid); border: 1px solid var(--border); padding: 1px 7px; border-radius: 99px; white-space: nowrap; pointer-events: none; }
+  .lat-wrap { margin-top: 18px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 20px; align-items: center; }
+  .lat-big { font-size: 13px; color: var(--muted); }
+  .lat-big b { display: block; font-size: 34px; color: var(--text); font-weight: 800; letter-spacing: -0.03em; line-height: 1.05; font-variant-numeric: tabular-nums; }
+  .latbar { display: flex; height: 14px; border-radius: 99px; overflow: hidden; background: var(--panel-hi); gap: 2px; }
+  .latbar i { display: block; height: 100%; min-width: 3px; transition: flex-grow .6s ease; }
+  .latleg { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .latleg span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 3px; background: var(--c); margin-right: 6px; vertical-align: -1px; }
+  .latleg b { color: var(--text); font-variant-numeric: tabular-nums; }
+  @media (max-width: 900px) {
+    .pipe { grid-template-columns: minmax(0, 1fr); gap: 36px; padding: 6px 0; }
+    .pnode { flex-direction: row; text-align: left; gap: 14px; align-items: center; }
+    .pnode .ring { width: 52px; height: 52px; border-radius: 16px; flex: none; } .pnode .ring svg { width: 24px; height: 24px; }
+    .pnode .txt { align-items: flex-start; } .pnode b { margin-top: 0; } .pnode .pl { margin-left: auto; }
+    .pnode .pv { font-size: 18px; }
+    .lat-wrap { grid-template-columns: 1fr; }
+  }
+
+  /* ---------- 6. forecast ---------- */
+  .chartbox { position: relative; }
+  .chartbox svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .chartbox text { fill: var(--faint); font-size: 11px; font-family: Inter, system-ui; }
+  .tooltip { position: absolute; pointer-events: none; background: var(--panel-solid); border: 1px solid var(--border-hi); border-radius: 12px; padding: 9px 12px;
+             font-size: 12.5px; box-shadow: var(--shadow); min-width: 150px; opacity: 0; transition: opacity .15s; z-index: 2; }
+  .tooltip b { display: block; font-size: 12px; color: var(--muted); font-weight: 600; margin-bottom: 3px; }
+  .draw { stroke-dasharray: 3000; stroke-dashoffset: 3000; animation: draw 1.6s cubic-bezier(.4, 0, .2, 1) forwards; }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  .fade { animation: fadein 1s .3s both; } @keyframes fadein { from { opacity: 0; } }
+  .fc-today { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+  .fc-today .t { padding: 10px 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--border); min-width: 0; }
+  .fc-today .t .k { font-size: 11.5px; color: var(--muted); font-weight: 600; }
+  .fc-today .t .v { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .fc-today .t .s { font-size: 11.5px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  @media (max-width: 640px) { .fc-today { grid-template-columns: 1fr 1fr; } }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .legend i { display: inline-block; width: 16px; height: 4px; border-radius: 4px; margin-right: 6px; vertical-align: middle; }
+  .follow { cursor: pointer; user-select: none; }
+  .follow.on { color: var(--cyan); border-color: rgba(51, 214, 242, .4); background: rgba(51, 214, 242, .1); }
+  .fc-title { font-size: 17px; font-weight: 700; margin: 2px 0 0; }
+  .fc-empty { height: 300px; display: grid; place-items: center; color: var(--muted); }
+
+  /* ---------- 7. learning ---------- */
+  .learn-top { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .learn-top .t { position: relative; overflow: hidden; padding: 12px 14px; border-radius: 12px; background: var(--panel); border: 1px solid var(--border); }
+  .learn-top .k { font-size: 12px; color: var(--muted); font-weight: 600; }
+  .learn-top .v { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .learn-top .s { font-size: 12px; color: var(--muted); position: relative; z-index: 1; }
+  .learn-top .spark { position: absolute; right: 0; bottom: 0; width: 100%; height: 46px; opacity: .55; }
+  .subh { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); margin: 16px 0 8px; }
+  .el-row { display: grid; grid-template-columns: 96px minmax(0, 1fr) 120px; gap: 10px; align-items: center; font-size: 12.5px; padding: 4px 0; }
+  .el-row .cat { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .el-track { position: relative; height: 18px; }
+  .el-track::before { content: ""; position: absolute; left: 0; right: 0; top: 8px; height: 2px; background: var(--border-hi); border-radius: 2px; }
+  .el-track .span { position: absolute; top: 7px; height: 4px; border-radius: 4px; background: var(--grad); transition: left .8s cubic-bezier(.2, .8, .2, 1), width .8s cubic-bezier(.2, .8, .2, 1); }
+  .el-track .pr, .el-track .ln { position: absolute; top: 3px; width: 12px; height: 12px; border-radius: 50%; transform: translateX(-50%); transition: left .8s cubic-bezier(.2, .8, .2, 1); }
+  .el-track .pr { border: 2px solid var(--faint); background: var(--bg); }
+  .el-track .ln { background: var(--cyan); box-shadow: 0 0 12px var(--cyan); }
+  .el-row .vals { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .el-row .vals b { color: var(--text); }
+  .outs { display: flex; flex-direction: column; gap: 6px; }
+  .out { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 11px; background: var(--panel); border: 1px solid var(--border); font-size: 12.5px; animation: rise .5s both; }
+  .out .ic { width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; font-weight: 800; font-size: 12px; }
+  .out.w .ic { background: var(--good-soft); color: var(--good); } .out.l .ic { background: var(--bad-soft); color: var(--bad); }
+  .out .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .out .nm span { color: var(--muted); }
+  .ubars { display: grid; gap: 3px; margin-top: 4px; }
+  .ubars div { height: 4px; border-radius: 4px; }
+  .out .g { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
+  .out .g small { display: block; font-weight: 500; color: var(--muted); font-size: 11px; }
+
+  /* ---------- 8. ticker ---------- */
+  .ticker { position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; height: 44px; display: flex; align-items: center;
+            background: color-mix(in srgb, var(--bg) 84%, transparent); backdrop-filter: blur(14px); border-top: 1px solid var(--border); }
+  .ticker .lbl { flex: none; height: 100%; display: flex; align-items: center; gap: 8px; padding: 0 16px; font-size: 11px; font-weight: 800; letter-spacing: .12em;
+                 color: var(--good); border-right: 1px solid var(--border); background: linear-gradient(90deg, var(--good-soft), transparent); }
+  .ticker .lbl::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--good); animation: ping 2s infinite; }
+  .ticker .lbl .n { color: var(--muted); font-variant-numeric: tabular-nums; letter-spacing: 0; font-weight: 700; }
+  .ticker .vp { position: relative; flex: 1; height: 100%; overflow: hidden;
+                -webkit-mask-image: linear-gradient(90deg, transparent, #000 30px, #000 calc(100% - 50px), transparent); mask-image: linear-gradient(90deg, transparent, #000 30px, #000 calc(100% - 50px), transparent); }
+  .ticker .track { position: absolute; left: 0; top: 0; height: 100%; display: flex; align-items: center; white-space: nowrap; will-change: transform; }
+  .tk { display: inline-flex; align-items: center; gap: 7px; padding: 0 18px; font-size: 13px; color: var(--muted); border-right: 1px solid var(--border); }
+  .tk i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+  .tk b { color: var(--text); font-weight: 600; } .tk .amt { color: var(--good); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .tk .off { color: var(--pink); font-size: 11px; font-weight: 800; }
+  @media (max-width: 640px) { .ticker .lbl .n { display: none; } .ticker .lbl { padding: 0 10px; } }
+
+  /* ---------- merchant drawer ---------- */
+  .scrim { position: fixed; inset: 0; z-index: 30; background: rgba(3, 6, 14, .5); backdrop-filter: blur(2px); opacity: 0; pointer-events: none; transition: opacity .3s; }
+  .scrim.open { opacity: 1; pointer-events: auto; }
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 31; width: min(640px, 100vw); overflow-y: auto; padding: 22px 22px 70px;
+            background: color-mix(in srgb, var(--panel-solid) 96%, transparent); backdrop-filter: blur(18px); border-left: 1px solid var(--border-hi);
+            box-shadow: -30px 0 80px -20px rgba(0, 0, 0, .6); transform: translateX(105%); transition: transform .42s cubic-bezier(.2, .8, .2, 1); }
+  .drawer.open { transform: none; }
+  .drawer h2 { margin: 6px 0 2px; font-size: 24px; letter-spacing: -0.02em; }
+  .drawer .close { position: absolute; right: 16px; top: 16px; }
+  .dstats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 14px 0; }
+  .dstats > div { padding: 10px 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--border); }
+  .dstats .k { font-size: 11.5px; color: var(--muted); font-weight: 600; } .dstats .v { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  table.prods { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.prods th { text-align: left; font-size: 11.5px; color: var(--muted); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  table.prods td { padding: 8px; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+  table.prods tr { cursor: pointer; transition: background .15s; }
+  table.prods tbody tr:hover { background: var(--panel-hi); }
+  table.prods tr.on { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--violet); }
+  .cov { display: inline-block; min-width: 54px; padding: 1px 8px; border-radius: 99px; font-weight: 700; font-size: 12px; text-align: center; }
+  .cov.low { background: var(--bad-soft); color: var(--bad); } .cov.mid { background: var(--warn-soft); color: var(--warn); } .cov.ok { background: var(--good-soft); color: var(--good); }
+  .tbar { position: relative; height: 6px; border-radius: 99px; background: var(--panel-hi); min-width: 60px; overflow: hidden; }
+  .tbar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 99px; background: var(--cyan); }
+  .dsig { padding: 9px 12px; border-radius: 11px; background: var(--panel); border: 1px solid var(--border); margin-bottom: 6px; font-size: 13px; border-left: 3px solid var(--u, var(--cyan)); cursor: pointer; }
+  .dsig.high { --u: var(--bad); } .dsig.medium { --u: var(--warn); }
+  .dsig .muted { font-size: 12px; }
+
+  /* ---------- gate ---------- */
+  .gate-wrap { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; background: rgba(3, 6, 14, .55); backdrop-filter: blur(8px); padding: 16px; }
+  .gate { width: min(440px, 100%); text-align: center; }
+  .gate form { display: flex; gap: 8px; justify-content: center; margin-top: 16px; }
+  .gate form input { flex: 1; min-width: 0; }
+
+  @media (max-width: 720px) { .wall { padding-left: 16px; padding-right: 16px; } .card { padding: 15px; } .card.tight { padding: 14px; } }
+  @media (prefers-reduced-motion: reduce) { .drawer { transition: none; } }
+</style>
+</head>
+<body>
+<main class="page wall" id="app">
+  <header class="lc-head">
+    <div>
+      <div class="eyebrow">SecondBrain · real-time decision signals</div>
+      <h1>Live Commerce <span id="mode" class="mode">Connecting…</span> <button id="golive" class="btn sm good golive hidden">Engine online: go live</button></h1>
+      <div class="lc-sub" id="sub">Every merchant and customer on Shopify, Reliance Retail and DMart, streaming in as it happens.</div>
+    </div>
+    <div class="lc-ctrl">
+      <div class="clock">
+        <div class="d" id="clk-d">—</div>
+        <div class="t" id="clk-t">--:--<small>:--</small></div>
+        <div id="fest"></div>
+      </div>
+      <div class="ctrlcol">
+        <div class="seg" id="speed"></div>
+        <div id="startwrap"></div>
+      </div>
+    </div>
+  </header>
+
+  <section class="kstrip" id="kpis"></section>
+
+  <div class="g2">
+    <section class="card tight">
+      <div class="hd"><div><div class="eyebrow">Connected merchants</div><h2>Every store, live on one map</h2>
+        <p id="map-sub">Dots pulse as orders land; rings flare when SecondBrain raises a signal.</p></div></div>
+      <div class="mapcard">
+        <div class="legend-col" id="legend"></div>
+        <div class="mapbox" id="mapbox">
+          <svg id="mapsvg" aria-hidden="true">
+            <defs>
+              <linearGradient id="indiaFill" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b7bff" stop-opacity=".10"/><stop offset="1" stop-color="#33d6f2" stop-opacity=".05"/></linearGradient>
+              <linearGradient id="indiaStroke" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b7bff" stop-opacity=".8"/><stop offset="1" stop-color="#33d6f2" stop-opacity=".8"/></linearGradient>
+            </defs>
+            <path class="india-glow" id="india-glow"/><path class="india" id="india"/>
+          </svg>
+          <canvas id="mapcv" role="img" aria-label="Map of India with one dot per connected merchant"></canvas>
+          <div class="maptip" id="maptip"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card tight feedcard">
+      <div class="hd"><div><div class="eyebrow">Decision signals</div><h2>Signals, as they are raised</h2>
+        <p id="feed-sub">Each one measured from the order that triggered it.</p></div></div>
+      <div class="feed-meta" id="feed-meta"></div>
+      <div class="feed" id="feed"><div class="empty" id="feed-empty">Waiting for the first signal…</div></div>
+    </section>
+  </div>
+
+  <section class="card tight" style="margin-top:16px">
+    <div class="hd"><div><div class="eyebrow">The pipeline, live</div><h2>From a customer's order to a merchant's screen</h2>
+      <p>Particles flow at the real throughput. Counters and latencies are measured by the engine, end to end.</p></div></div>
+    <div class="pipe" id="pipe"><canvas id="pipecv"></canvas></div>
+    <div class="lat-wrap">
+      <div class="lat-big">Order to signal on screen<b id="lat-total">— ms</b><span id="lat-p95">p50 · p95 —</span></div>
+      <div><div class="latbar" id="latbar"></div><div class="latleg" id="latleg"></div></div>
+    </div>
+  </section>
+
+  <div class="g2b">
+    <section class="card tight">
+      <div class="hd">
+        <div><div class="eyebrow">Forecast in focus</div><div class="fc-title" id="fc-title">—</div><p id="fc-sub">Actual sales vs the live forecast, with its 80% band.</p></div>
+        <span class="chip follow on" id="follow" title="Follow the newest signal automatically">● Auto-follow signals</span>
+      </div>
+      <div id="fc-host"><div class="fc-empty">Waiting for the first product to forecast…</div></div>
+    </section>
+    <section class="card tight">
+      <div class="hd"><div><div class="eyebrow">It learns</div><h2>Every offer teaches the brain</h2>
+        <p>Expected vs actual uplift when an offer window closes, and what it learned about price sensitivity.</p></div></div>
+      <div id="learn"></div>
+    </section>
+  </div>
+</main>
+
+<div class="ticker" aria-label="Live orders"><div class="lbl">LIVE ORDERS <span class="n" id="tk-n"></span></div><div class="vp" id="tk-vp"><div class="track" id="tk-track"></div></div></div>
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-label="Merchant"></aside>
+
+<script src="/static/sb.js"></script>
+<script>
+"use strict";
+const { el, svg } = SB;
+const $ = (id) => document.getElementById(id);
+const RM = matchMedia("(prefers-reduced-motion: reduce)");
+const reduced = () => RM.matches;
+const LIGHT = matchMedia("(prefers-color-scheme: light)");
+const isLight = () => LIGHT.matches && document.documentElement.dataset.theme !== "dark";
+
+// ---------------------------------------------------------------- contract constants
+const SPEEDS = [["pause", "Pause"], ["1x", "Real time"], ["1min", "1 min/s"], ["1h", "1 hr/s"], ["1day", "1 day/6 s"]];
+const SPEED_VAL = { "1x": 1, "1min": 60, "1h": 3600, "1day": 14400 };
+const FESTIVALS = [["2026-10-20", "Dussehra"], ["2026-11-06", "Dhanteras"], ["2026-11-08", "Diwali"], ["2026-11-11", "Bhai Dooj"], ["2026-11-24", "Wedding season"], ["2026-12-25", "Christmas"]];
+const KIND = { discount: ["🏷️", "Discount"], restock: ["📦", "Restock"], winback: ["💌", "Win-back"], surge: ["📈", "Demand surge"], festival: ["🪔", "Festival"], clearance: ["⏳", "Clearance"] };
+const PLAT = { shopify: ["Shopify", "#95BF47", "#5f8f1d"], reliance: ["Reliance Retail", "#4f8cff", "#2563eb"], dmart: ["DMart", "#f5a524", "#d97706"] };
+const PLAT_EXTRA = [["#f472b6", "#db2777"], ["#33d6f2", "#0e9fbf"], ["#a78bfa", "#7c3aed"]];
+const platCache = {};
+function plat(id) {
+  id = String(id || "");
+  if (platCache[id]) return platCache[id];
+  const k = Object.keys(PLAT).find((p) => id === p || id.startsWith(p));
+  const n = Object.keys(platCache).length;
+  const v = k ? { id, name: PLAT[k][0], dark: PLAT[k][1], light: PLAT[k][2] }
+    : { id, name: id.charAt(0).toUpperCase() + id.slice(1), dark: PLAT_EXTRA[n % 3][0], light: PLAT_EXTRA[n % 3][1] };
+  return (platCache[id] = v);
+}
+const pcol = (id) => (isLight() ? plat(id).light : plat(id).dark);
+
+// ---------------------------------------------------------------- formatting (Indian)
+const num = (v) => Math.round(+v || 0).toLocaleString("en-IN");
+function inr(v, dec) {
+  v = +v || 0; const a = Math.abs(v), s = v < 0 ? "−₹" : "₹";
+  if (a >= 1e7) return s + (a / 1e7).toFixed(dec ?? (a >= 1e9 ? 0 : a >= 1e8 ? 1 : 2)) + " Cr";
+  if (a >= 1e5) return s + (a / 1e5).toFixed(dec ?? 1) + " L";
+  return s + Math.round(a).toLocaleString("en-IN");
+}
+const inrFull = (v) => "₹" + Math.round(+v || 0).toLocaleString("en-IN");
+const pct0 = (v) => (v == null || !isFinite(v) ? "—" : Math.round(v * 100) + "%");
+const ms = (v) => (v == null || !isFinite(v) ? "—" : (v < 10 ? (+v).toFixed(1) : Math.round(v)) + " ms");
+const pad = (n) => String(n).padStart(2, "0");
+const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const parseSim = (s) => (s ? Date.parse(String(s).length <= 10 ? s + "T00:00:00Z" : String(s).replace(/Z$/, "") + "Z") : NaN);
+const dayMs = (iso) => Date.parse(String(iso).slice(0, 10) + "T00:00:00Z");
+const dayDiff = (a, b) => Math.round((dayMs(b) - dayMs(a)) / 864e5);
+const isoDay = (t) => new Date(t).toISOString().slice(0, 10);
+const fmtDayShort = (iso) => { const d = new Date(dayMs(iso)); return `${d.getUTCDate()} ${MON[d.getUTCMonth()]}`; };
+const elastic = (v) => (v == null ? "—" : (v < 0 ? "−" : "") + Math.abs(v).toFixed(2));
+const festIcon = (n) => (/diwali|dhanteras|dooj|dussehra/i.test(n) ? "🪔" : /christmas/i.test(n) ? "🎄" : /wedding/i.test(n) ? "💍" : "✨");
+
+// theme tokens for canvas drawing
+let TK = {};
+function readTokens() {
+  const cs = getComputedStyle(document.documentElement);
+  for (const k of ["text", "muted", "faint", "cyan", "violet", "pink", "good", "bad", "warn", "border", "border-hi", "bg", "panel-solid"]) TK[k] = cs.getPropertyValue("--" + k).trim();
+}
+readTokens();
+LIGHT.addEventListener("change", () => { readTokens(); MAP.layout(); });
+const urgCol = (u) => (u === "high" ? TK.bad : u === "medium" ? TK.warn : TK.cyan);
+function rgba(hex, a) {
+  if (!hex || hex[0] !== "#") return hex;
+  const h = hex.length === 4 ? hex.slice(1).split("").map((c) => c + c).join("") : hex.slice(1, 7);
+  return `rgba(${parseInt(h.slice(0, 2), 16)},${parseInt(h.slice(2, 4), 16)},${parseInt(h.slice(4, 6), 16)},${a})`;
+}
+
+// ---------------------------------------------------------------- small widgets
+const TWEENS = [];
+// A number that eases toward its target every frame (the strip counts, never jumps).
+class Tween {
+  constructor(node, fmt) { this.node = node; this.fmt = fmt; this.v = null; this.t = null; this.txt = ""; TWEENS.push(this); }
+  set(t) {
+    if (t == null || !isFinite(t)) { this.t = null; this.write("—"); return; }
+    if (this.v == null) this.v = reduced() ? t : 0;
+    if (reduced()) this.v = t;
+    this.t = t;
+  }
+  step(dt) {
+    if (this.t == null || this.v == null) return;
+    this.v += (this.t - this.v) * (1 - Math.exp(-dt / 230));
+    if (Math.abs(this.t - this.v) < Math.abs(this.t) * 2e-5 + 1e-3) this.v = this.t;
+    this.write(this.fmt(this.v));
+  }
+  write(s) { if (s !== this.txt) { this.txt = s; this.node.textContent = s; } }
+}
+function makeSpark(color, { w = 120, h = 40, base = false } = {}) {
+  const id = "sp" + Math.random().toString(36).slice(2, 8);
+  const poly = svg("polygon", { fill: `url(#${id})` }), line = svg("polyline", { fill: "none", stroke: color, "stroke-width": 2, "vector-effect": "non-scaling-stroke" });
+  const bl = base ? svg("polyline", { fill: "none", stroke: "var(--faint)", "stroke-width": 1.2, "stroke-dasharray": "3 3", "vector-effect": "non-scaling-stroke" }) : null;
+  const node = svg("svg", { viewBox: `0 0 ${w} ${h}`, preserveAspectRatio: "none", class: "spark" },
+    svg("defs", {}, svg("linearGradient", { id, x1: 0, y1: 0, x2: 0, y2: 1 },
+      svg("stop", { offset: "0%", "stop-color": color, "stop-opacity": 0.45 }), svg("stop", { offset: "100%", "stop-color": color, "stop-opacity": 0 }))), poly, bl, line);
+  return {
+    node,
+    update(vals, baseVals, lo, hi) {
+      if (vals.length < 2) return;
+      const all = baseVals ? vals.concat(baseVals) : vals;
+      const max = hi ?? Math.max(...all), min = lo ?? Math.min(0, ...all), n = vals.length;
+      const x = (i) => (i / (n - 1)) * w, y = (v) => h - 2 - ((v - min) / (max - min || 1)) * (h - 6);
+      const pts = vals.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+      line.setAttribute("points", pts); poly.setAttribute("points", `0,${h} ${pts} ${w},${h}`);
+      if (bl && baseVals) bl.setAttribute("points", baseVals.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" "));
+    },
+  };
+}
+const ICONS = {
+  store: '<path d="M4 10h24l-2-6H6z M5 10v16h22V10 M12 26v-8h8v8"/>',
+  mqtt: '<circle cx="16" cy="18" r="2.5"/><path d="M10 12a8 8 0 0 1 12 0 M6 8a14 14 0 0 1 20 0 M16 20.5V28"/>',
+  stream: '<path d="M4 9h12 M4 16h18 M4 23h10"/><path d="M20 9h8 M25 16h3 M17 23h11" opacity=".55"/>',
+  forecast: '<path d="M4 26V6 M4 26h24"/><path d="M7 21l6-6 5 3 8-9"/><path d="M18 18l8-9v8z" opacity=".35"/>',
+  signal: '<path d="M18 3L7 18h8l-2 11 11-15h-8z"/>',
+  broker: '<circle cx="16" cy="16" r="3"/><path d="M9.5 9.5a9 9 0 0 0 0 13 M22.5 9.5a9 9 0 0 1 0 13 M5.5 5.5a15 15 0 0 0 0 21 M26.5 5.5a15 15 0 0 1 0 21"/>',
+  screen: '<rect x="4" y="6" width="24" height="16" rx="2"/><path d="M12 27h8 M16 22v5"/><path d="M9 17l4-4 3 2 5-5" opacity=".6"/>',
+};
+const icon = (k) => { const s = svg("svg", { viewBox: "0 0 32 32", fill: "none", stroke: "currentColor", "stroke-width": 2, "stroke-linecap": "round", "stroke-linejoin": "round" }); s.innerHTML = ICONS[k]; return s; };
+
+// ---------------------------------------------------------------- state
+const S = {
+  mode: null,              // "live" (broker), "poll" (HTTP only), "mock"
+  merchants: new Map(), list: [],
+  stats: null, statsWall: 0, prevStats: null,
+  sim: { ms: NaN, sentWall: 0, speed: 0, key: null, running: false, shown: NaN },
+  deliv: null,             // measured broker-to-this-screen delivery, ms (EMA)
+  signals: new Map(), sigSeen: 0, sigDropped: 0, outcomes: [],
+  accHist: [], baseHist: [], opsHist: [], revHist: [], platHist: {},
+  rates: [0, 0, 0, 0, 0, 0],
+  tickerOrders: 0,
+};
+
+// ---------------------------------------------------------------- data access
+const token = () => { try { return sessionStorage.getItem("sb-admin-token"); } catch { return null; } };
+let MOCK = null;
+async function api(path, { method = "GET", body } = {}) {
+  if (MOCK) return MOCK.api(path, { method, body });
+  const res = await fetch("/commerce/api" + path, { method, headers: { "Content-Type": "application/json", "X-Admin-Token": token() || "" }, body: body ? JSON.stringify(body) : undefined });
+  if (res.status === 401) { try { sessionStorage.removeItem("sb-admin-token"); } catch {} gate(); throw new Error("Admin token needed"); }
+  if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.detail || res.statusText); }
+  return res.json();
+}
+async function control(cmd) {
+  try { await api("/control", { method: "POST", body: cmd }); }
+  catch (e) { SB.toast("⚠️", "Command not sent", e.message, { tone: "bad" }); }
+}
+
+function onMessage(topic, m) {
+  const i = topic.indexOf("commerce/");
+  if (i < 0 || !m) return;
+  const rest = topic.slice(i + 9);
+  if (rest === "stats") onStats(m);
+  else if (rest === "ticker") onTicker(m);
+  else if (rest.startsWith("signals/")) onSignal(m);
+  else if (rest.startsWith("outcomes/")) onOutcome(m);
+}
+
+// ---------------------------------------------------------------- merchants
+function setMerchants(list) {
+  for (const m of list) {
+    const old = S.merchants.get(m.id);
+    if (old) Object.assign(old, m); else S.merchants.set(m.id, { ...m, pulse: 0 });
+  }
+  S.list = [...S.merchants.values()];
+  MAP.place(); LEGEND.build();
+}
+let merchLoading = false, merchAt = 0;
+async function refreshMerchants(force) {
+  if (merchLoading || (!force && performance.now() - merchAt < 4000)) return;
+  merchLoading = true; merchAt = performance.now();
+  try {
+    const list = await api("/merchants");
+    if (S.mode === "poll") for (const m of list) { const o = S.merchants.get(m.id); if (o && m.orders_today > (o.orders_today || 0)) o.pulse = 1; }
+    setMerchants(list);
+  } catch {}
+  merchLoading = false;
+}
+
+// ---------------------------------------------------------------- 1. header
+const HEAD = {
+  init() {
+    $("speed").replaceChildren(...SPEEDS.map(([k, label]) => el("button", { "data-k": k, onclick: () => this.pick(k) }, label)));
+    const sub = $("sub");
+    sub.replaceChildren(el("span", {}, "Connected:"), ...["shopify", "reliance", "dmart"].map((p) => el("span", { class: "pl" }, el("i", { style: { background: pcol(p) } }), plat(p).name)),
+      el("span", { id: "sub-n" }, ""));
+  },
+  pick(k) {
+    if (k === "pause") { S.sim.running = false; this.render(); control({ cmd: "pause" }); return; }
+    const wasRunning = S.sim.running;
+    S.sim.key = k; S.sim.speed = SPEED_VAL[k]; S.sim.running = true; this.render();
+    control({ cmd: "speed", speed: k }).then(() => { if (!wasRunning) control({ cmd: "start" }); });
+  },
+  render() {
+    const cur = S.sim.running ? S.sim.key : "pause";
+    for (const b of $("speed").children) b.classList.toggle("on", b.dataset.k === cur);
+    const w = $("startwrap");
+    if (S.stats && !S.sim.running) {
+      if (!w.firstChild) w.append(el("button", { class: "btn primary start-btn", onclick: () => { S.sim.running = true; this.render(); control({ cmd: "start" }); } }, "▶ Start the live feed"));
+    } else w.replaceChildren();
+    const f = S.stats?.festival;
+    if (f && f.name) {
+      const d = f.days_to;
+      $("fest").replaceChildren(el("span", { class: "fest" }, festIcon(f.name) + " " + (d <= 0 ? `${f.name} today` : d === 1 ? `${f.name} tomorrow` : `${f.name} in ${d} days`)));
+    } else $("fest").replaceChildren();
+    if (S.stats) $("sub-n").textContent = `· ${num(S.stats.merchants)} merchants · ${num(S.stats.customers)} customers`;
+  },
+  // The simulated clock runs between stats messages: sim time at sent_ms plus speed × elapsed wall time.
+  tick() {
+    if (!isFinite(S.sim.ms)) return;
+    let t = S.sim.ms + (S.sim.running ? S.sim.speed * (Date.now() - S.sim.sentWall) : 0);
+    if (isFinite(S.sim.shown) && t < S.sim.shown && S.sim.shown - t < Math.max(2000, S.sim.speed * 1500)) t = S.sim.shown; // never tick backwards
+    S.sim.shown = t;
+    const d = new Date(t);
+    const ds = `${DOW[d.getUTCDay()]}, ${d.getUTCDate()} ${MON[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+    if (this._d !== ds) { this._d = ds; $("clk-d").textContent = ds + " · IST"; }
+    const hm = pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()), sec = pad(d.getUTCSeconds());
+    if (this._t !== hm + sec) { this._t = hm + sec; $("clk-t").innerHTML = `${hm}<small>:${sec}</small>`; }
+  },
+};
+const simNow = () => (isFinite(S.sim.shown) ? S.sim.shown : S.sim.ms);
+
+function setMode(mode, label) {
+  S.mode = mode;
+  const b = $("mode");
+  b.className = "mode " + (mode === "mock" ? "demo" : label === "off" ? "" : "on");
+  b.textContent = mode === "mock" ? "Demo feed" : label === "off" ? "Reconnecting…" : mode === "poll" ? "Live (HTTP)" : "Live";
+  b.title = mode === "mock" ? "Generated in this browser: the commerce engine is not connected" : "Connected to the Live Commerce engine";
+}
+
+// ---------------------------------------------------------------- 2. KPI strip
+const KDEF = [
+  { k: "ops", label: "Orders / sec", fmt: (v) => num(v), spark: "var(--cyan)" },
+  { k: "rev", label: "Revenue (live)", fmt: (v) => inr(v, 2), glow: "glow", spark: "var(--violet)" },
+  { k: "cust", label: "Customers active today", fmt: num },
+  { k: "sig", label: "Signals raised", fmt: num },
+  { k: "off", label: "Offers applied", fmt: num },
+  { k: "upl", label: "Uplift from offers", fmt: (v) => inr(v), glow: "glow-good" },
+  { k: "acc", label: "Forecast accuracy · store-day", fmt: (v) => v.toFixed(1) + "%", tip: "100% − WAPE of each store's daily sales, on days the forecast never saw; the subline is the stricter product-level score" },
+  { k: "lat", label: "End-to-end latency p50", fmt: (v) => (v < 10 ? v.toFixed(1) : Math.round(v)) + " ms", tip: "Order sent by the platform → signal published" },
+];
+const K = {};
+function initKpis() {
+  $("kpis").replaceChildren(...KDEF.map((d, i) => {
+    const v = el("div", { class: "v" }, "—"), sub = el("div", { class: "d" }, " ");
+    const node = el("div", { class: `kpi ${d.glow || ""}`, title: d.tip }, el("div", { class: "k" }, d.label), v, sub);
+    const sp = d.spark ? makeSpark(d.spark) : null;
+    if (sp) node.append(sp.node);
+    K[d.k] = { node, v, sub, tw: new Tween(v, d.fmt), sp };
+    return node;
+  }));
+}
+function flashKpi(k) { const n = K[k]?.node; if (!n || reduced()) return; n.classList.remove("flash"); void n.offsetWidth; n.classList.add("flash"); }
+
+// ---------------------------------------------------------------- stats
+function onStats(m) {
+  const prev = S.stats, now = performance.now();
+  if (m.sent_ms) { const d = Math.max(0, Date.now() - m.sent_ms); S.deliv = S.deliv == null ? d : S.deliv * 0.8 + d * 0.2; }
+  // pipeline segment rates from counter deltas
+  if (prev && prev.pipeline && m.pipeline) {
+    const dt = Math.max(0.2, (now - S.statsWall) / 1000), p = m.pipeline, q = prev.pipeline;
+    const r = (a, b) => Math.max(0, (a - b) / dt);
+    S.rates = [m.msgs_per_sec ?? 0, r(p.ingested, q.ingested), m.orders_per_sec ?? 0, r(p.forecasts_updated, q.forecasts_updated),
+      r(p.signals_raised, q.signals_raised), r(p.delivered, q.delivered)];
+  } else S.rates = [m.msgs_per_sec || 0, m.msgs_per_sec || 0, m.orders_per_sec || 0, 0, 0, 0];
+  S.prevStats = prev; S.stats = m; S.statsWall = now;
+  const sp = m.speed, key = typeof sp === "string" ? sp : Object.keys(SPEED_VAL).find((k) => SPEED_VAL[k] === sp);
+  S.sim.key = key || S.sim.key || "1h";
+  S.sim.speed = typeof sp === "number" ? sp : SPEED_VAL[key] || 0;
+  S.sim.running = !!m.running;
+  const t = parseSim(m.sim_ts);
+  if (isFinite(t)) { S.sim.ms = t; S.sim.sentWall = m.sent_ms || Date.now(); }
+  if (S.merchants.size === 0 || (m.merchants && m.merchants > S.merchants.size)) refreshMerchants();
+
+  // KPIs
+  K.ops.tw.set(m.orders_per_sec);
+  K.ops.sub.textContent = `${num(m.orders_total)} orders · ${num(m.msgs_per_sec)} msg/s`;
+  K.cust.tw.set(m.active_customers_today);
+  K.cust.sub.textContent = m.customers ? `of ${num(m.customers)} customers` : " ";
+  if (prev && m.signals_total > prev.signals_total) flashKpi("sig");
+  K.sig.tw.set(m.signals_total);
+  const kinds = Object.entries(m.signals_by_kind || {}).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  K.sig.sub.textContent = kinds.length ? kinds.map(([k, n]) => `${KIND[k]?.[0] || "•"} ${num(n)}`).join("  ") : " ";
+  K.off.tw.set(m.offers_applied);
+  K.off.sub.textContent = m.learning?.outcomes != null ? `${num(m.learning.outcomes)} results measured` : " ";
+  K.upl.tw.set(m.uplift_revenue);
+  K.upl.sub.textContent = m.revenue_total ? `${((m.uplift_revenue / m.revenue_total) * 100).toFixed(2)}% of revenue` : " ";
+  const a = m.accuracy || {};
+  if (a.wape != null) {
+    const head = a.merchant_wape ?? a.wape, base = a.merchant_wape != null ? a.merchant_baseline_wape : a.baseline_wape;
+    K.acc.tw.set(100 * (1 - head));
+    K.acc.sub.textContent = `naive ${base != null ? (100 * (1 - base)).toFixed(0) + "%" : "—"} · per product ${(100 * (1 - a.wape)).toFixed(0)}%`;
+  } else { K.acc.tw.set(null); K.acc.sub.textContent = "scored after the first full day"; }
+  const L = m.latency_ms || {};
+  K.lat.tw.set(L.end_to_end_p50);
+  K.lat.sub.textContent = `p95 ${ms(L.end_to_end_p95)} · +${ms(S.deliv)} to screen`;
+
+  // histories (one point per stats message, about 2 a second)
+  const push = (arr, v, n = 120) => { arr.push(+v || 0); if (arr.length > n) arr.shift(); };
+  push(S.opsHist, m.orders_per_sec, 80); push(S.revHist, m.revenue_per_sec, 80);
+  K.ops.sp.update(S.opsHist); K.rev.sp.update(S.revHist);
+  if (a.wape != null && (!S._accAt || now - S._accAt > 1500)) { S._accAt = now; push(S.accHist, 100 * (1 - a.wape), 160); push(S.baseHist, a.baseline_wape != null ? 100 * (1 - a.baseline_wape) : 0, 160); }
+  for (const [pid, p] of Object.entries(m.platforms || {})) { const h = (S.platHist[pid] ||= []); push(h, p.orders_per_sec, 60); }
+
+  HEAD.render(); LEGEND.update(); PIPE.update(); LEARN.update(); FEED.meta();
+}
+
+// ---------------------------------------------------------------- 3. map of India
+// Outline as (longitude, latitude), simplified by hand. Merchant x, y in the contract are
+// lon/lat scaled to 0-1 over the same box: x = (lon − 68) / 29.5, y = (37.5 − lat) / 31.
+const INDIA = [[68.2,23.7],[68.8,24.3],[69.9,24.2],[71.0,24.4],[70.7,25.6],[70.1,26.5],[69.5,27.1],[70.5,28.0],[71.9,27.9],[72.9,29.0],[73.4,29.9],[74.0,30.4],[74.6,31.0],[74.6,31.9],[75.3,32.3],[74.6,32.8],[74.1,33.4],[73.9,34.4],[74.3,35.3],[75.4,36.0],[76.6,35.9],[77.8,35.5],[79.2,35.6],[80.2,35.2],[79.5,34.2],[78.8,33.6],[79.4,32.5],[78.9,31.4],[79.8,30.9],[80.9,30.2],[80.3,29.4],[80.1,28.8],[81.2,28.3],[82.5,27.5],[83.4,27.4],[84.6,27.3],[85.6,26.8],[86.6,26.5],[87.6,26.4],[88.1,26.6],[88.1,27.4],[88.6,28.1],[88.9,27.3],[89.6,26.8],[90.6,26.8],[91.7,26.8],[92.1,27.3],[91.7,27.8],[92.6,27.9],[93.6,28.6],[94.6,29.2],[95.4,29.1],[96.2,29.4],[96.7,28.8],[97.3,28.2],[97.0,27.6],[96.1,27.3],[95.2,26.7],[94.7,25.8],[94.6,25.0],[94.1,23.9],[93.4,23.9],[93.3,22.9],[93.1,22.2],[92.6,21.9],[92.3,22.8],[92.2,23.7],[91.8,23.1],[91.4,22.9],[91.2,23.6],[91.6,24.1],[92.2,24.5],[92.4,24.9],[91.5,25.2],[90.4,25.2],[89.9,25.3],[89.8,25.9],[89.0,26.3],[88.5,26.5],[88.2,26.2],[88.0,25.6],[88.5,25.1],[88.1,24.7],[88.7,24.2],[88.6,23.4],[88.9,22.8],[89.0,22.0],[89.1,21.6],[88.6,21.6],[88.2,21.7],[87.5,21.6],[86.9,21.2],[86.6,20.4],[85.8,19.8],[85.0,19.3],[84.2,18.4],[83.3,17.6],[82.3,16.7],[82.3,16.4],[81.4,16.2],[80.9,15.8],[80.2,15.3],[80.1,14.0],[80.3,13.1],[79.9,12.1],[79.8,11.2],[79.9,10.3],[79.3,10.2],[78.9,9.4],[78.2,8.9],[77.5,8.1],[77.0,8.3],[76.5,9.2],[76.2,10.0],[75.8,11.4],[75.3,12.3],[74.8,13.2],[74.5,14.4],[74.0,15.2],[73.6,16.0],[73.3,17.2],[73.0,18.2],[72.8,19.1],[72.8,20.1],[72.9,21.0],[72.6,21.6],[72.6,22.3],[72.2,21.8],[71.5,21.1],[71.0,20.8],[70.4,20.9],[69.7,21.5],[69.0,22.3],[69.6,22.6],[70.4,22.9],[69.8,22.9],[69.0,22.9],[68.5,23.3]];
+const proj = (lon, lat) => [(lon - 68) / 29.5, (37.5 - lat) / 31];
+const IW = 1000, IH = 1135; // box aspect: 31° of latitude over 29.5° of longitude at cos(22°)
+
+const MAP = {
+  box: $("mapbox"), cv: $("mapcv"), tip: $("maptip"), ctx: null, w: 0, h: 0, s: 1, ox: 0, oy: 0, dpr: 1, bg: null,
+  rings: [], comets: [], hover: null, hub: [0, 0], spin: 0,
+  P(x, y) { return [this.ox + x * IW * this.s, this.oy + y * IH * this.s]; },
+  layout() {
+    const r = this.box.getBoundingClientRect(); if (!r.width) return;
+    this.w = r.width; this.h = r.height; this.dpr = Math.min(2, devicePixelRatio || 1);
+    this.s = Math.min(this.w / IW, this.h / IH) * 0.97; this.ox = (this.w - IW * this.s) / 2; this.oy = (this.h - IH * this.s) / 2;
+    const d = INDIA.map(([lo, la], i) => { const [px, py] = this.P(...proj(lo, la)); return (i ? "L" : "M") + px.toFixed(1) + "," + py.toFixed(1); }).join("") + "Z";
+    $("mapsvg").setAttribute("viewBox", `0 0 ${this.w} ${this.h}`); $("india").setAttribute("d", d); $("india-glow").setAttribute("d", d);
+    this.cv.width = this.w * this.dpr; this.cv.height = this.h * this.dpr;
+    this.ctx = this.cv.getContext("2d");
+    this.hub = this.P(...proj(87.6, 14.6));
+    // Static layer: a dot-matrix fill of the country.
+    const bg = document.createElement("canvas"); bg.width = this.cv.width; bg.height = this.cv.height;
+    const b = bg.getContext("2d"); b.scale(this.dpr, this.dpr);
+    const path = new Path2D(d), step = Math.max(7, 9 * this.s * 1.4);
+    b.fillStyle = isLight() ? "rgba(15,23,42,.13)" : "rgba(139,150,173,.16)";
+    for (let y = this.oy; y < this.oy + IH * this.s; y += step) for (let x = this.ox; x < this.ox + IW * this.s; x += step)
+      if (b.isPointInPath(path, x * this.dpr, y * this.dpr)) { b.beginPath(); b.arc(x, y, 1.05, 0, 6.283); b.fill(); }
+    this.bg = bg;
+    this.place();
+  },
+  place() { for (const m of S.list) { const p = this.P(m.x ?? 0.5, m.y ?? 0.5); m.px = p[0]; m.py = p[1]; } },
+  pulse(id) { const m = S.merchants.get(id); if (!m) return; m.pulse = 1; if (!reduced() && this.comets.length < 60) this.comets.push({ from: [m.px, m.py], to: this.hub, t0: performance.now(), dur: 900, col: pcol(m.platform), kind: "o" }); },
+  flare(s) {
+    const m = S.merchants.get(s.merchant); if (!m) return;
+    m.pulse = 1;
+    if (reduced()) { this.rings.push({ x: m.px, y: m.py, t0: performance.now(), col: urgCol(s.urgency) }); return; }
+    if (this.comets.length < 80) this.comets.push({ from: this.hub, to: [m.px, m.py], t0: performance.now(), dur: 650, col: urgCol(s.urgency), kind: "s", urg: s.urgency });
+    else this.rings.push({ x: m.px, y: m.py, t0: performance.now(), col: urgCol(s.urgency) });
+  },
+  draw(now, dt) {
+    const c = this.ctx; if (!c || !this.w) return;
+    const dark = !isLight(), R = Math.max(2.2, 3.1 * this.s * 1.25);
+    c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    c.clearRect(0, 0, this.w, this.h);
+    c.drawImage(this.bg, 0, 0, this.w, this.h);
+    c.globalCompositeOperation = dark ? "lighter" : "source-over";
+    // comets: orders fly to SecondBrain, signals fly back out to the merchant
+    const [hx, hy] = this.hub;
+    for (let i = this.comets.length - 1; i >= 0; i--) {
+      const k = this.comets[i], t = (now - k.t0) / k.dur;
+      if (t >= 1) { this.comets.splice(i, 1); if (k.kind === "s") this.rings.push({ x: k.to[0], y: k.to[1], t0: now, col: k.col, big: k.urg === "high" }); continue; }
+      const [ax, ay] = k.from, [bx, by] = k.to, cx = (ax + bx) / 2 - (by - ay) * 0.25, cy = (ay + by) / 2 + (bx - ax) * 0.25;
+      const at = (u) => [(1 - u) * (1 - u) * ax + 2 * (1 - u) * u * cx + u * u * bx, (1 - u) * (1 - u) * ay + 2 * (1 - u) * u * cy + u * u * by];
+      const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2, tail = k.kind === "s" ? 0.22 : 0.16;
+      c.beginPath(); for (let j = 0; j <= 6; j++) { const p = at(Math.max(0, e - tail * (1 - j / 6))); j ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1]); }
+      c.strokeStyle = rgba(k.col, k.kind === "s" ? 0.9 : 0.35); c.lineWidth = k.kind === "s" ? 2.2 : 1.1; c.stroke();
+      const p = at(e); c.fillStyle = rgba(k.col, k.kind === "s" ? 1 : 0.7); c.beginPath(); c.arc(p[0], p[1], k.kind === "s" ? 3 : 1.6, 0, 6.283); c.fill();
+    }
+    // merchant dots: cores batched per platform, glows only for pulsing ones
+    const decay = Math.exp(-dt / 480), groups = {};
+    for (const m of S.list) {
+      if (m.px == null) continue;
+      (groups[m.platform] ||= []).push(m);
+      if (m.pulse > 0.02) {
+        const col = pcol(m.platform), p = m.pulse;
+        c.fillStyle = rgba(col, 0.2 * p); c.beginPath(); c.arc(m.px, m.py, R + 8 * p, 0, 6.283); c.fill();
+        m.pulse *= decay;
+      } else m.pulse = 0;
+    }
+    c.globalCompositeOperation = "source-over";
+    for (const [pid, arr] of Object.entries(groups)) {
+      const col = pcol(pid);
+      c.fillStyle = col; c.beginPath();
+      for (const m of arr) { const r = R * (1 + 0.35 * m.pulse); c.moveTo(m.px + r, m.py); c.arc(m.px, m.py, r, 0, 6.283); }
+      c.fill();
+    }
+    c.globalCompositeOperation = dark ? "lighter" : "source-over";
+    // signal rings
+    for (let i = this.rings.length - 1; i >= 0; i--) {
+      const g = this.rings[i], dur = g.big ? 1800 : 1400, t = (now - g.t0) / dur;
+      if (t >= 1 || this.rings.length - i > 50) { this.rings.splice(i, 1); continue; }
+      const e = 1 - Math.pow(1 - t, 3), maxR = (g.big ? 46 : 32) * Math.max(0.45, Math.min(1.2, this.s / 0.5));
+      c.strokeStyle = rgba(g.col, (1 - t) * 0.95); c.lineWidth = 2.2; c.beginPath(); c.arc(g.x, g.y, 4 + maxR * e, 0, 6.283); c.stroke();
+      if (t > 0.18) { const e2 = 1 - Math.pow(1 - (t - 0.18) / 0.82, 3); c.strokeStyle = rgba(g.col, (1 - t) * 0.5); c.lineWidth = 1.2; c.beginPath(); c.arc(g.x, g.y, 3 + maxR * 0.6 * e2, 0, 6.283); c.stroke(); }
+      c.fillStyle = rgba(g.col, (1 - t)); c.beginPath(); c.arc(g.x, g.y, 4, 0, 6.283); c.fill();
+    }
+    c.globalCompositeOperation = "source-over";
+    // the SecondBrain hub
+    if (!reduced()) this.spin += dt / 1000;
+    const pulseR = 18 + 4 * Math.sin(this.spin * 2.4);
+    const grd = c.createRadialGradient(hx, hy, 0, hx, hy, pulseR * 2.2);
+    grd.addColorStop(0, rgba(TK.violet, 0.55)); grd.addColorStop(1, rgba(TK.violet, 0));
+    c.fillStyle = grd; c.beginPath(); c.arc(hx, hy, pulseR * 2.2, 0, 6.283); c.fill();
+    c.strokeStyle = rgba(TK.cyan, 0.8); c.lineWidth = 1.6; c.beginPath(); c.arc(hx, hy, 14, this.spin, this.spin + 4.4); c.stroke();
+    c.strokeStyle = rgba(TK.violet, 0.6); c.beginPath(); c.arc(hx, hy, 19, -this.spin * 0.7, -this.spin * 0.7 + 3.4); c.stroke();
+    c.fillStyle = TK.violet; c.beginPath(); c.arc(hx, hy, 7, 0, 6.283); c.fill();
+    c.fillStyle = TK.text; c.font = "700 12px Inter, system-ui"; c.textAlign = "center"; c.fillText("SecondBrain", hx, hy + 38);
+    c.fillStyle = TK.muted; c.font = "500 10.5px Inter, system-ui"; c.fillText(S.stats ? `${num(S.stats.series)} live forecasts` : "", hx, hy + 52);
+    if (this.hover) { const m = this.hover; c.strokeStyle = TK.text; c.lineWidth = 1.5; c.beginPath(); c.arc(m.px, m.py, R + 5, 0, 6.283); c.stroke(); }
+  },
+  pick(ev) {
+    const r = this.cv.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top;
+    let best = null, bd = 14 * 14;
+    for (const m of S.list) { const d = (m.px - x) ** 2 + (m.py - y) ** 2; if (d < bd) { bd = d; best = m; } }
+    return { m: best, x, y };
+  },
+  init() {
+    this.cv.addEventListener("mousemove", (ev) => {
+      const { m, x, y } = this.pick(ev); this.hover = m;
+      this.cv.style.cursor = m ? "pointer" : "crosshair";
+      if (!m) { this.tip.style.opacity = 0; return; }
+      this.tip.replaceChildren(el("b", {}, m.name), el("div", { class: "muted" }, `${plat(m.platform).name} · ${m.city} · ${m.category || ""}`),
+        el("div", {}, `${num(m.orders_today)} orders today · ${inr(m.revenue_today)}`),
+        m.open_signals ? el("div", { class: "warn" }, `${m.open_signals} open signal${m.open_signals === 1 ? "" : "s"}`) : null);
+      this.tip.style.left = Math.min(this.w - 190, x + 14) + "px"; this.tip.style.top = Math.max(0, y - 20) + "px"; this.tip.style.opacity = 1;
+    });
+    this.cv.addEventListener("mouseleave", () => { this.hover = null; this.tip.style.opacity = 0; });
+    this.cv.addEventListener("click", (ev) => { const { m } = this.pick(ev); if (m) DRAWER.open(m.id); });
+  },
+};
+
+const LEGEND = {
+  rows: {}, built: "",
+  build() {
+    const pids = [...new Set(S.list.map((m) => m.platform))];
+    const ord = ["shopify", "reliance", "dmart"];
+    pids.sort((a, b) => (ord.indexOf(a) + 1 || 9) - (ord.indexOf(b) + 1 || 9));
+    const sig = pids.join(",") + S.list.length + isLight();
+    if (sig === this.built) return;
+    this.built = sig;
+    const kinds = { shopify: "D2C online stores", reliance: "Stores and JioMart", dmart: "Hypermarkets" };
+    $("legend").replaceChildren(...pids.map((pid) => {
+      const n = S.list.filter((m) => m.platform === pid).length;
+      const opsN = el("span", {}, "—"), ops = el("div", { class: "ops" }, opsN, el("small", {}, " orders/s")), sp = makeSpark(pcol(pid), { h: 34 });
+      this.rows[pid] = { ops, sp, tw: new Tween(opsN, (v) => num(v)) };
+      const card = el("div", { class: "plat", style: `--pc: ${pcol(pid)}` },
+        el("div", { class: "nm" }, el("i"), plat(pid).name),
+        el("div", { class: "meta" }, `${num(n)} merchants · ${kinds[pid] || "connected"}`), ops, sp.node);
+      return card;
+    }), el("div", { class: "mapnote" }, el("b", {}, `${num(S.list.length)} merchants`), " streaming orders into one brain. Click any dot to open the store."));
+    this.update();
+  },
+  update() {
+    const P = S.stats?.platforms || {};
+    for (const [pid, r] of Object.entries(this.rows)) {
+      const p = P[pid]; if (!p) continue;
+      r.tw.set(p.orders_per_sec);
+      r.sp.update(S.platHist[pid] || []);
+    }
+  },
+};
+
+// ---------------------------------------------------------------- 4. pipeline
+const STAGES = [
+  { k: "merchants", t: "Merchants", ic: "store", cap: "connected" },
+  { k: "ingest", t: "MQTT ingest", ic: "mqtt", cap: "messages ingested" },
+  { k: "stream", t: "Stream processor", ic: "stream", cap: "orders processed" },
+  { k: "forecast", t: "Forecast engine", ic: "forecast", cap: "forecasts updated", cls: "fc" },
+  { k: "signal", t: "Signal engine", ic: "signal", cap: "signals raised", cls: "sigs" },
+  { k: "broker", t: "Live broker", ic: "broker", cap: "messages delivered" },
+  { k: "screens", t: "Merchant screens", ic: "screen", cap: "to this screen", cls: "end" },
+];
+const PIPE = {
+  box: $("pipe"), cv: $("pipecv"), ctx: null, nodes: [], centers: [], parts: [], acc: [0, 0, 0, 0, 0, 0], flash: [0, 0, 0, 0, 0, 0, 0], rateEls: [], vertical: false, dpr: 1,
+  init() {
+    for (const s of STAGES) {
+      const ring = el("div", { class: "ring" }, icon(s.ic)), pv = el("div", { class: "pv" }, "—"), pl = el("div", { class: "pl" }, "—");
+      const node = el("div", { class: "pnode " + (s.cls || "") }, ring, el("div", { class: "txt" }, el("b", {}, s.t), pv, el("div", { class: "pc" }, s.cap)), pl);
+      this.box.append(node);
+      this.nodes.push({ node, ring, pv, pl, tw: new Tween(pv, s.k === "screens" ? (v) => "+" + ms(v) : (v) => num(v)) });
+    }
+    for (let i = 0; i < 6; i++) { const r = el("div", { class: "rate" }, "—"); this.box.append(r); this.rateEls.push(r); }
+    $("latbar").replaceChildren(...["broker", "process", "signal", "deliv"].map((k) => el("i", { "data-k": k })));
+  },
+  layout() {
+    const br = this.box.getBoundingClientRect(); if (!br.width) return;
+    this.dpr = Math.min(2, devicePixelRatio || 1);
+    this.cv.width = br.width * this.dpr; this.cv.height = br.height * this.dpr; this.ctx = this.cv.getContext("2d");
+    this.w = br.width; this.h = br.height;
+    this.centers = this.nodes.map((n) => { const r = n.ring.getBoundingClientRect(); return [r.left - br.left + r.width / 2, r.top - br.top + r.height / 2, r.width / 2]; });
+    this.vertical = this.centers.length > 1 && Math.abs(this.centers[1][0] - this.centers[0][0]) < 5;
+    this.rateEls.forEach((e, i) => {
+      const a = this.centers[i], b = this.centers[i + 1];
+      if (this.vertical) { e.style.left = a[0] + a[2] + 46 + "px"; e.style.top = (a[1] + b[1]) / 2 + "px"; }
+      else { e.style.left = (a[0] + b[0]) / 2 + "px"; e.style.top = a[1] - a[2] - 14 + "px"; }
+    });
+  },
+  update() {
+    const m = S.stats; if (!m) return;
+    const p = m.pipeline || {}, L = m.latency_ms || {};
+    const vals = [m.merchants, p.ingested, m.orders_total, p.forecasts_updated, p.signals_raised, p.delivered, S.deliv];
+    vals.forEach((v, i) => this.nodes[i].tw.set(v));
+    const lbl = [`${num(m.msgs_per_sec)} msg/s`, `broker ${ms(L.broker_p50)}`, `process ${ms(L.process_p50)}`, `${num(m.series)} series`, `signal ${ms(L.signal_p50)}`,
+      `e2e ${ms(L.end_to_end_p50)}`, `measured here`];
+    lbl.forEach((t, i) => { if (this.nodes[i].pl.textContent !== t) this.nodes[i].pl.textContent = t; });
+    const rl = (r) => (r >= 100 ? num(r) : r >= 10 ? r.toFixed(0) : r.toFixed(1)) + "/s";
+    S.rates.forEach((r, i) => (this.rateEls[i].textContent = rl(r)));
+    // latency budget bar
+    const parts = { broker: L.broker_p50 || 0, process: L.process_p50 || 0, signal: L.signal_p50 || 0, deliv: S.deliv || 0 };
+    const cols = { broker: "var(--cyan)", process: "var(--violet)", signal: "var(--pink)", deliv: "var(--good)" };
+    for (const i of $("latbar").children) { i.style.flexGrow = Math.max(0.5, parts[i.dataset.k]); i.style.background = cols[i.dataset.k]; }
+    const names = { broker: "Platform → engine", process: "State + forecast", signal: "Signal decided", deliv: "Broker → this screen" };
+    $("latleg").replaceChildren(...Object.keys(parts).map((k) => el("span", { style: `--c: ${cols[k]}` }, names[k] + " ", el("b", {}, ms(parts[k])))));
+    const total = (L.end_to_end_p50 || 0) + (S.deliv || 0);
+    $("lat-total").textContent = ms(total);
+    $("lat-p95").textContent = `engine p50 ${ms(L.end_to_end_p50)} · p95 ${ms(L.end_to_end_p95)}`;
+  },
+  comet(s) { if (!reduced()) this.parts.push({ seg: 4, t: 0, col: urgCol(s.urgency), big: true, j: 0 }); },
+  draw(now, dt) {
+    const c = this.ctx; if (!c || !this.centers.length) return;
+    const dark = !isLight();
+    c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0); c.clearRect(0, 0, this.w, this.h);
+    const C = this.centers;
+    // connectors
+    for (let i = 0; i < 6; i++) {
+      const [ax, ay, ar] = C[i], [bx, by, br] = C[i + 1];
+      const g = c.createLinearGradient(ax, ay, bx, by);
+      g.addColorStop(0, rgba(TK.violet, 0.5)); g.addColorStop(1, rgba(TK.cyan, 0.5));
+      c.strokeStyle = g; c.lineWidth = 2; c.beginPath();
+      if (this.vertical) { c.moveTo(ax, ay + ar); c.lineTo(bx, by - br); } else { c.moveTo(ax + ar, ay); c.lineTo(bx - br, by); }
+      c.stroke();
+    }
+    // node halos (flash when particles arrive)
+    c.globalCompositeOperation = dark ? "lighter" : "source-over";
+    for (let i = 0; i < 7; i++) {
+      const f = this.flash[i]; if (f < 0.02) continue;
+      const [x, y, r] = C[i], gr = c.createRadialGradient(x, y, r * 0.6, x, y, r * 2.1);
+      const col = i === 4 ? TK.pink : i === 6 ? TK.good : i === 3 ? TK.violet : TK.cyan;
+      gr.addColorStop(0, rgba(col, 0.55 * f)); gr.addColorStop(1, rgba(col, 0));
+      c.fillStyle = gr; c.beginPath(); c.arc(x, y, r * 2.1, 0, 6.283); c.fill();
+      this.flash[i] *= Math.exp(-dt / 380);
+    }
+    const segCol = [null, TK.cyan, TK.cyan, TK.violet, TK.pink, TK.good];
+    const pids = Object.keys(LEGEND.rows);
+    const pos = (seg, t, j) => {
+      const [ax, ay, ar] = C[seg], [bx, by, br] = C[seg + 1];
+      if (this.vertical) return [ax + j, ay + ar + (by - br - ay - ar) * t];
+      return [ax + ar + (bx - br - ax - ar) * t, ay + j];
+    };
+    if (reduced()) { // static: evenly spaced dots, density by rate
+      for (let s = 0; s < 6; s++) {
+        const n = Math.min(12, Math.round(2 * Math.log2(1 + S.rates[s])));
+        c.fillStyle = rgba(segCol[s] || TK.cyan, 0.8);
+        for (let k = 1; k <= n; k++) { const p = pos(s, k / (n + 1), 0); c.beginPath(); c.arc(p[0], p[1], 2, 0, 6.283); c.fill(); }
+      }
+      c.globalCompositeOperation = "source-over"; return;
+    }
+    // spawn: visual rate follows the real rate on a log scale
+    for (let s = 0; s < 6; s++) {
+      const r = S.stats?.running === false ? 0 : S.rates[s];
+      this.acc[s] += Math.min(70, 7 * Math.log2(1 + r)) * dt / 1000;
+      while (this.acc[s] >= 1 && this.parts.length < 700) {
+        this.acc[s] -= 1;
+        const col = s === 0 && pids.length ? pcol(pids[(Math.random() * pids.length) | 0]) : segCol[s];
+        this.parts.push({ seg: s, t: 0, col, big: false, j: (Math.random() - 0.5) * 10 });
+      }
+      if (this.acc[s] > 3) this.acc[s] = 0;
+    }
+    for (let i = this.parts.length - 1; i >= 0; i--) {
+      const p = this.parts[i], [ax, ay] = C[p.seg], [bx, by] = C[p.seg + 1];
+      const len = Math.hypot(bx - ax, by - ay) || 1;
+      p.t += ((p.big ? 0.42 : 0.26) * dt) / len;
+      if (p.t >= 1) {
+        this.flash[p.seg + 1] = Math.min(1, this.flash[p.seg + 1] + (p.big ? 1 : 0.12));
+        if (p.big && p.seg < 5) { p.seg++; p.t = 0; continue; }
+        this.parts.splice(i, 1); continue;
+      }
+      const [x, y] = pos(p.seg, p.t, p.j * Math.sin(p.t * Math.PI));
+      if (p.big) {
+        c.fillStyle = rgba(p.col, 0.25); c.beginPath(); c.arc(x, y, 11, 0, 6.283); c.fill();
+        c.fillStyle = p.col; c.beginPath(); c.arc(x, y, 4.5, 0, 6.283); c.fill();
+      } else {
+        c.fillStyle = rgba(p.col, 0.22); c.beginPath(); c.arc(x, y, 4.5, 0, 6.283); c.fill();
+        c.fillStyle = rgba(p.col, 0.95); c.beginPath(); c.arc(x, y, 1.7, 0, 6.283); c.fill();
+      }
+    }
+    c.globalCompositeOperation = "source-over";
+  },
+};
+
+// ---------------------------------------------------------------- 5. signals feed
+const FEED = {
+  queue: [], cards: new Map(), shown: 0, MAX: 30,
+  push(s) {
+    this.queue.push(s);
+    if (this.queue.length > 12) { const drop = this.queue.length - 12; this.queue.splice(0, drop); S.sigDropped += drop; }
+  },
+  // At most ~3 cards a second, however fast signals arrive (counts stay exact in the header).
+  pump() {
+    const now = performance.now(), gap = this.queue.length > 6 ? 330 : this.queue.length > 2 ? 600 : 1000;
+    if (!this.queue.length || now - (this._at || 0) < gap) return;
+    this._at = now;
+    const s = this.queue.shift();
+    this.render(s, true);
+  },
+  render(s, animate) {
+    $("feed-empty")?.remove();
+    const card = this.card(s);
+    const slot = el("div", { class: "slot" }, card);
+    $("feed").prepend(slot);
+    this.cards.set(s.id, { slot, card, s });
+    if (animate && !reduced()) slideIn(slot, card);
+    const bar = card.querySelector(".bar i"); setTimeout(() => (bar.style.width = Math.round((s.confidence || 0) * 100) + "%"), 60);
+    // keep the latest MAX cards, but never drop an offer this viewer applied until its result arrives
+    const feed = $("feed");
+    for (let slot = feed.lastElementChild; feed.children.length > this.MAX && slot; ) {
+      const prev = slot.previousElementSibling, id = slot.firstChild?.dataset.id, sg = S.signals.get(id);
+      if (!(sg && sg._mine && (!sg._outcome || Date.now() < sg._keepUntil))) { this.cards.delete(id); slot.remove(); }
+      slot = prev;
+    }
+    this.shown++; this.meta();
+    FOCUS.maybeFollow(s);
+  },
+  canApply(s) { return !s.autopilot && ["discount", "coupon"].includes(s.action?.type); },
+  card(s) {
+    const [ic] = KIND[s.kind] || ["•"];
+    const ex = s.expected || {}, a = s.action || {};
+    const imp = [];
+    if (a.type === "discount" && a.discount) imp.push(el("span", { class: "chip accent" }, `${Math.round(a.discount * 100)}% off${a.hours ? " · " + a.hours + "h" : ""}`));
+    if (a.type === "coupon" && a.coupon) imp.push(el("span", { class: "chip accent" }, `₹${num(a.coupon)} coupon${a.customers ? " × " + num(a.customers) : ""}`));
+    if (a.type === "restock" && a.units) imp.push(el("span", { class: "chip warn" }, `Order ${num(a.units)} units`));
+    if (a.type === "hold_price") imp.push(el("span", { class: "chip" }, "Hold price"));
+    if (ex.uplift_units) imp.push(el("span", { class: "chip good" }, `+${num(ex.uplift_units)} units`));
+    if (ex.revenue) imp.push(el("span", { class: "chip" }, `${inr(ex.revenue)} revenue`));
+    if (ex.margin != null) imp.push(el("span", { class: "chip" }, `${Math.round(ex.margin * 100)}% margin`));
+    const lat = s.latency_ms != null ? el("span", { class: "lat" }, "⚡ raised ", el("b", {}, ms(s.latency_ms)), " after the order")
+      : el("span", { class: "lat" }, "🌙 from the end-of-day re-plan");
+    const card = el("article", { class: `sig ${s.urgency || "low"} ${reduced() ? "" : "fresh"}`, "data-id": s.id, onclick: (e) => { if (!e.target.closest("button")) DRAWER.open(s.merchant, s.sku); } },
+      el("div", { class: "top" }, el("span", { class: "kic" }, ic), el("span", { class: "urg" }, s.urgency || ""),
+        el("span", { class: "pdot", style: { background: pcol(s.platform) } }),
+        el("span", { class: "where" }, el("b", {}, s.merchant_name || s.merchant), " · " + (s.city || "")),
+        el("span", { class: "when" }, s.sim_ts ? String(s.sim_ts).slice(11, 16) : "")),
+      el("h3", {}, s.title || "Signal"), s.detail ? el("p", { class: "det" }, s.detail) : null,
+      imp.length ? el("div", { class: "imp" }, imp) : null,
+      el("div", { class: "meter" }, el("span", {}, "Confidence"), el("div", { class: "bar" }, el("i")), el("b", {}, pct0(s.confidence))),
+      el("div", { class: "foot" }, lat, el("div", { class: "act" })));
+    this.fillActions(card, s);
+    if (s._outcome) this.fillOutcome(card, s._outcome);
+    return card;
+  },
+  fillActions(card, s) {
+    const box = card.querySelector(".act"); if (!box) return;
+    let n;
+    if (s.autopilot) n = el("span", { class: "tag auto" }, "⚙ Autopilot applied");
+    else if (s._state === "applied") n = el("span", { class: "tag ok" }, s._outcome ? "✓ Applied" : "✓ Applied · measuring");
+    else if (s._state === "applying") n = el("button", { class: "btn sm good", disabled: true }, "Applying…");
+    else if (this.canApply(s)) n = el("button", { class: "btn sm good", onclick: (e) => { e.stopPropagation(); this.apply(s); } }, "Apply offer");
+    else n = el("span", { class: "tag wait" }, KIND[s.kind]?.[1] || s.kind || "");
+    box.replaceChildren(n);
+    card.classList.toggle("applied", s._state === "applied" || !!s.autopilot);
+  },
+  fillOutcome(card, o) {
+    card.querySelector(".res")?.remove();
+    const exp = o.expected_uplift_units, act = o.actual_uplift_units;
+    card.append(el("div", { class: "res " + (o.worked ? "good" : "bad") },
+      o.worked ? "✓ Worked: " : "✗ Fell short: ",
+      `+${num(act)} units vs +${num(exp)} expected`, o.uplift_pct != null ? ` (${o.uplift_pct >= 0 ? "+" : ""}${Math.round(o.uplift_pct * (Math.abs(o.uplift_pct) <= 5 ? 100 : 1))}% sales)` : "",
+      o.revenue_gain != null ? ` · ${inr(o.revenue_gain)} gained` : ""));
+  },
+  async apply(s) {
+    s._state = "applying"; this.refresh(s);
+    try {
+      await api(`/offers/${encodeURIComponent(s.id)}/apply`, { method: "POST" });
+      s._state = "applied"; s._mine = true;
+      SB.toast("🏷️", "Offer applied", `${s.title} · ${s.merchant_name}`, { tone: "good", ms: 3500 });
+    } catch (e) { s._state = null; SB.toast("⚠️", "Couldn't apply the offer", e.message, { tone: "bad" }); }
+    this.refresh(s);
+  },
+  refresh(s) { const c = this.cards.get(s.id); if (c) { this.fillActions(c.card, s); if (s._outcome) this.fillOutcome(c.card, s._outcome); } },
+  meta() {
+    const st = S.stats, total = st?.signals_total ?? S.sigSeen;
+    const kinds = Object.entries(st?.signals_by_kind || {}).sort((a, b) => b[1] - a[1]);
+    $("feed-meta").replaceChildren(el("span", { class: "chip accent" }, `${num(total)} raised`),
+      ...kinds.map(([k, n]) => el("span", { class: "chip" }, `${KIND[k]?.[0] || "•"} ${KIND[k]?.[1] || k} ${num(n)}`)),
+      this.queue.length ? el("span", { class: "chip warn" }, `${this.queue.length} queued`) : null);
+    $("feed-sub").textContent = `Showing the latest ${Math.min(this.MAX, this.shown)}. Each one is measured from the order that triggered it.`;
+  },
+};
+
+// Slide a new card in, driven from requestAnimationFrame (height opens, card glides in).
+function slideIn(slot, card) {
+  const h = slot.offsetHeight, t0 = performance.now(), D = 480;
+  slot.style.overflow = "hidden"; slot.style.height = "0px"; card.style.opacity = "0"; card.style.transform = "translateX(36px)";
+  const step = (now) => {
+    const t = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - t, 3);
+    slot.style.height = (h * e).toFixed(1) + "px"; card.style.opacity = String(Math.min(1, t * 1.6)); card.style.transform = `translateX(${(36 * (1 - e)).toFixed(1)}px)`;
+    if (t < 1) requestAnimationFrame(step); else { slot.style.height = slot.style.overflow = card.style.opacity = card.style.transform = ""; }
+  };
+  requestAnimationFrame(step);
+}
+function onSignal(s) {
+  if (!s || !s.id || S.signals.has(s.id)) return;
+  s._deliv = s.sent_ms ? Math.max(0, Date.now() - s.sent_ms) : null;
+  S.signals.set(s.id, s); S.sigSeen++;
+  if (S.signals.size > 600) S.signals.delete(S.signals.keys().next().value);
+  if (s.autopilot) s._state = "applied";
+  const m = S.merchants.get(s.merchant);
+  if (!m) refreshMerchants(); else if (!s._backfill) m.open_signals = (m.open_signals || 0) + 1;
+  MAP.flare(s); PIPE.comet(s); FEED.push(s);
+  if (DRAWER.id === s.merchant) DRAWER.refresh();
+}
+function onOutcome(o) {
+  if (!o) return;
+  S.outcomes.unshift(o); if (S.outcomes.length > 12) S.outcomes.pop();
+  const s = S.signals.get(o.signal_id);
+  if (s) {
+    s._outcome = o; s._state = "applied"; s._keepUntil = Date.now() + 15000; FEED.refresh(s);
+    if (s._mine) SB.toast(o.worked ? "✅" : "📉", o.worked ? "Your offer worked" : "Your offer fell short",
+      `${o.product}: +${num(o.actual_uplift_units)} units vs +${num(o.expected_uplift_units)} expected`, { tone: o.worked ? "good" : "bad" });
+  }
+  LEARN.outcomes();
+}
+
+// ---------------------------------------------------------------- 8. ticker
+const TICKER = {
+  vp: $("tk-vp"), track: $("tk-track"), queue: [], items: [], pos: null, total: 0,
+  push(o) { this.queue.push(o); if (this.queue.length > 60) this.queue.splice(0, this.queue.length - 60); },
+  make(o) {
+    return el("span", { class: "tk" }, el("i", { style: { background: pcol(o.platform) } }), el("b", {}, o.merchant_name || o.merchant), "· " + (o.city || "") + " ·",
+      ` ${o.product} ×${o.qty} ·`, el("span", { class: "amt" }, inrFull(o.amount)), o.offer ? el("span", { class: "off" }, "OFFER") : null);
+  },
+  step(dt) {
+    const W = this.vp.clientWidth;
+    if (reduced()) { // static: the newest few, replaced in place
+      if (this.queue.length && (!this._at || performance.now() - this._at > 1500)) {
+        this._at = performance.now(); const latest = this.queue.splice(0).slice(-8).reverse();
+        this.track.replaceChildren(...latest.map((o) => this.make(o))); this.track.style.transform = "none";
+      }
+      return;
+    }
+    if (this.pos == null) this.pos = W;
+    while (this.queue.length && this.pos + this.total < W + 40) {
+      const n = this.make(this.queue.shift()); this.track.append(n);
+      const w = n.offsetWidth; this.items.push(w); this.total += w;
+    }
+    const speed = 70 + Math.min(160, this.queue.length * 5);
+    this.pos -= speed * dt / 1000;
+    while (this.items.length && this.pos + this.items[0] < 0) { this.pos += this.items[0]; this.total -= this.items.shift(); this.track.firstChild.remove(); }
+    if (!this.items.length && this.pos < 0) this.pos = W;
+    this.track.style.transform = `translate3d(${this.pos.toFixed(1)}px,0,0)`;
+  },
+};
+function onTicker(m) {
+  for (const o of m.orders || []) { TICKER.push(o); MAP.pulse(o.merchant); S.tickerOrders++; }
+  $("tk-n").textContent = S.stats ? `${num(S.stats.orders_per_sec)}/s` : "";
+}
+
+// ---------------------------------------------------------------- 6. forecast chart
+function makeChart(host) {
+  const W = 900, H = 330, P = { l: 42, r: 14, t: 22, b: 26 };
+  let key = null, geo = null, hoverI = null;
+  const box = el("div", { class: "chartbox" }), tip = el("div", { class: "tooltip" });
+  host.replaceChildren(box);
+  function set(d, k) {
+    const first = k !== key; key = k;
+    const hist = d.history || [], fc = d.forecast || [], td = d.today || {};
+    const days = [...hist.map((h) => h.day), ...fc.map((f) => f.day), td.day].filter(Boolean).sort();
+    if (!days.length) return;
+    const d0 = days[0], n = dayDiff(d0, days[days.length - 1]) + 1;
+    const sw = (W - P.l - P.r) / n, xs = (i) => P.l + i * sw, xc = (i) => P.l + (i + 0.5) * sw;
+    const ix = (day) => dayDiff(d0, day);
+    const max = Math.max(1, ...hist.map((h) => h.units), ...fc.map((f) => f.hi ?? f.f), td.forecast || 0, td.actual || 0) * 1.12;
+    const y = (v) => H - P.b - (Math.max(0, v) / max) * (H - P.t - P.b);
+    const ti = td.day ? ix(td.day) : hist.length;
+    const g = svg("g");
+    const root = svg("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Actual sales and forecast" },
+      svg("defs", {},
+        svg("linearGradient", { id: "fcLine", x1: 0, y1: 0, x2: 1, y2: 0 }, svg("stop", { offset: 0, "stop-color": "#8b7bff" }), svg("stop", { offset: 1, "stop-color": "#33d6f2" })),
+        svg("linearGradient", { id: "histFill", x1: 0, y1: 0, x2: 0, y2: 1 }, svg("stop", { offset: 0, "stop-color": "#8b96ad", "stop-opacity": 0.28 }), svg("stop", { offset: 1, "stop-color": "#8b96ad", "stop-opacity": 0 })),
+        svg("linearGradient", { id: "todayFill", x1: 0, y1: 0, x2: 0, y2: 1 }, svg("stop", { offset: 0, "stop-color": "#33d6f2", "stop-opacity": 0.95 }), svg("stop", { offset: 1, "stop-color": "#33d6f2", "stop-opacity": 0.25 })),
+        svg("filter", { id: "glow" }, svg("feGaussianBlur", { stdDeviation: 3.5, result: "b" }), svg("feMerge", {}, svg("feMergeNode", { in: "b" }), svg("feMergeNode", { in: "SourceGraphic" })))), g);
+    for (let k = 0; k <= 4; k++) {
+      const v = (max / 4) * k;
+      g.append(svg("line", { x1: P.l, x2: W - P.r, y1: y(v), y2: y(v), stroke: "var(--border)" }), svg("text", { x: P.l - 7, y: y(v) + 4, "text-anchor": "end" }, String(Math.round(v))));
+    }
+    g.append(svg("rect", { x: xs(ti), y: P.t, width: W - P.r - xs(ti), height: H - P.t - P.b, fill: "rgba(139,123,255,0.05)" }));
+    // offer windows
+    for (const o of d.offers || []) {
+      const f = parseSim(o.from), u = parseSim(o.until); if (!isFinite(f) || !isFinite(u)) continue;
+      const fx = P.l + ((f - dayMs(d0)) / 864e5) * sw, ux = P.l + ((u - dayMs(d0)) / 864e5) * sw;
+      const a = Math.max(P.l, fx), b = Math.min(W - P.r, ux); if (b <= a) continue;
+      g.append(svg("rect", { x: a, y: P.t, width: b - a, height: H - P.t - P.b, fill: "rgba(244,114,182,0.13)", stroke: "rgba(244,114,182,0.4)", "stroke-dasharray": "3 3" }),
+        svg("text", { x: a + 4, y: P.t + 12, style: "fill: var(--pink); font-weight: 700" }, `${Math.round((o.discount || 0) * 100)}% off`));
+    }
+    // festivals
+    let fk = 0;
+    for (const [fd, name] of FESTIVALS) {
+      const i = ix(fd); if (i < 0 || i >= n) continue;
+      g.append(svg("line", { x1: xc(i), x2: xc(i), y1: P.t, y2: H - P.b, stroke: "#f5c451", "stroke-dasharray": "2 4", opacity: 0.8 }),
+        svg("text", { x: xc(i) + 4, y: H - P.b - 6 - (fk++ % 3) * 14, style: "fill: #f5c451; font-weight: 700" }, name));
+    }
+    // forecast band + line (joined to today's full-day forecast)
+    const fpts = fc.filter((f) => !td.day || f.day >= td.day).map((f) => ({ i: ix(f.day), ...f }));
+    if (td.day && td.forecast != null && !fpts.some((p) => p.i === ti)) fpts.unshift({ i: ti, f: td.forecast, lo: td.forecast, hi: td.forecast });
+    if (fpts.length > 1) {
+      const top = fpts.map((p) => `${xc(p.i)},${y(p.hi ?? p.f)}`).join(" "), bot = fpts.map((p) => `${xc(p.i)},${y(p.lo ?? p.f)}`).reverse().join(" ");
+      g.append(svg("polygon", { points: `${top} ${bot}`, fill: "rgba(139,123,255,0.26)", class: first ? "fade" : "" }));
+      g.append(svg("polyline", { points: fpts.map((p) => `${xc(p.i)},${y(p.f)}`).join(" "), fill: "none", stroke: "url(#fcLine)", "stroke-width": 3, filter: "url(#glow)", class: first && !reduced() ? "draw" : "", style: "animation-delay:.4s" }));
+    }
+    // history
+    if (hist.length) {
+      const hp = hist.map((h) => `${xc(ix(h.day))},${y(h.units)}`).join(" ");
+      g.append(svg("polygon", { points: `${xc(ix(hist[0].day))},${y(0)} ${hp} ${xc(ix(hist[hist.length - 1].day))},${y(0)}`, fill: "url(#histFill)" }),
+        svg("polyline", { points: hp, fill: "none", stroke: "var(--muted)", "stroke-width": 1.7, class: first && !reduced() ? "draw" : "" }));
+    }
+    // today: actual so far (bar), expected so far (marker), full-day forecast (ghost)
+    let nowLine = null, nowTxt = null;
+    if (td.day) {
+      const bx = xs(ti) + sw * 0.18, bw = sw * 0.64;
+      if (td.forecast != null) g.append(svg("rect", { x: bx, y: y(td.forecast), width: bw, height: Math.max(0, y(0) - y(td.forecast)), fill: "none", stroke: "var(--violet)", "stroke-dasharray": "3 3", rx: 3 }));
+      if (td.actual != null) g.append(svg("rect", { x: bx, y: y(td.actual), width: bw, height: Math.max(0, y(0) - y(td.actual)), fill: "url(#todayFill)", rx: 3 }));
+      if (td.expected_so_far != null) g.append(svg("line", { x1: bx - 5, x2: bx + bw + 5, y1: y(td.expected_so_far), y2: y(td.expected_so_far), stroke: "var(--text)", "stroke-width": 2.2 }),
+        svg("text", { x: bx + bw + 8, y: y(td.expected_so_far) + 4, style: "fill: var(--text); font-weight: 700" }, "expected by now"));
+      nowLine = svg("line", { y1: P.t - 6, y2: H - P.b, stroke: "var(--cyan)", "stroke-width": 1.6, "stroke-dasharray": "4 4" });
+      nowTxt = svg("text", { y: P.t - 9, "text-anchor": "middle", style: "fill: var(--cyan); font-weight: 800" }, "NOW");
+      g.append(nowLine, nowTxt);
+    }
+    // x labels: every week
+    for (let i = 0; i < n; i += 7) g.append(svg("text", { x: xc(i), y: H - 8, "text-anchor": "middle" }, fmtDayShort(isoDay(dayMs(d0) + i * 864e5))));
+    // hover
+    const byI = new Map(); hist.forEach((h) => byI.set(ix(h.day), { day: h.day, a: h.units }));
+    fpts.forEach((p) => byI.set(p.i, { ...(byI.get(p.i) || {}), day: isoDay(dayMs(d0) + p.i * 864e5), f: p.f, lo: p.lo, hi: p.hi }));
+    if (td.day) byI.set(ti, { ...(byI.get(ti) || {}), day: td.day, today: td });
+    const cross = svg("line", { y1: P.t, y2: H - P.b, stroke: "var(--border-hi)", opacity: 0 });
+    const hit = svg("rect", { x: P.l, y: P.t, width: W - P.l - P.r, height: H - P.t - P.b, fill: "transparent" });
+    g.append(cross, hit);
+    const show = (i) => {
+      const p = byI.get(i); if (!p) { tip.style.opacity = 0; cross.setAttribute("opacity", 0); return; }
+      cross.setAttribute("x1", xc(i)); cross.setAttribute("x2", xc(i)); cross.setAttribute("opacity", 1);
+      const dt = new Date(dayMs(p.day));
+      tip.replaceChildren(el("b", {}, `${DOW[dt.getUTCDay()]} ${fmtDayShort(p.day)}`),
+        p.today ? el("div", {}, `Sold so far ${num(p.today.actual)} · expected by now ${num(p.today.expected_so_far)}`) : null,
+        p.a != null ? el("div", {}, `Sold ${num(p.a)} units`) : null,
+        p.f != null ? el("div", {}, `Forecast ${num(p.f)} units`) : null,
+        p.lo != null && p.hi != null && p.lo !== p.hi ? el("div", { class: "muted" }, `80% range ${num(p.lo)}–${num(p.hi)}`) : null);
+      const r = root.getBoundingClientRect(), px = (xc(i) / W) * r.width;
+      tip.style.left = Math.max(0, Math.min(r.width - 180, px + 14)) + "px"; tip.style.top = "10px"; tip.style.opacity = 1;
+    };
+    hit.addEventListener("mousemove", (ev) => { const r = root.getBoundingClientRect(), sx = ((ev.clientX - r.left) / r.width) * W; hoverI = Math.max(0, Math.min(n - 1, Math.floor((sx - P.l) / sw))); show(hoverI); });
+    hit.addEventListener("mouseleave", () => { hoverI = null; show(-1); });
+    box.replaceChildren(root, tip);
+    if (hoverI != null) show(hoverI);
+    geo = { nowLine, nowTxt, x0: xs(ti), sw, day: td.day };
+    tick();
+  }
+  // The "now" line slides through today as the simulated clock runs.
+  function tick() {
+    if (!geo || !geo.nowLine) return;
+    const t = simNow(); if (!isFinite(t)) return;
+    const frac = Math.max(0, Math.min(1, (t - dayMs(geo.day)) / 864e5));
+    const x = (geo.x0 + frac * geo.sw).toFixed(1);
+    geo.nowLine.setAttribute("x1", x); geo.nowLine.setAttribute("x2", x); geo.nowTxt.setAttribute("x", x);
+  }
+  return { set, tick, get key() { return key; } };
+}
+function todayTiles(d) {
+  const td = d.today || {}, a = td.actual, e = td.expected_so_far;
+  const dev = a != null && e ? (a - e) / e : null;
+  const tile = (k, v, s, cls) => el("div", { class: "t" }, el("div", { class: "k" }, k), el("div", { class: "v " + (cls || "") }, v), el("div", { class: "s" }, s));
+  return el("div", { class: "fc-today" },
+    tile("Sold today", num(a), "so far, actual"),
+    tile("Expected by now", num(e), `of ${num(td.forecast)} forecast for the day`),
+    tile("vs expectation", dev == null ? "—" : (dev >= 0 ? "+" : "") + Math.round(dev * 100) + "%", dev == null ? "" : dev >= 0 ? "ahead of forecast" : "behind forecast", dev == null ? "" : Math.abs(dev) < 0.08 ? "" : dev > 0 ? "good" : "bad"),
+    tile("Model", d.wape != null ? (100 * (1 - d.wape)).toFixed(1) + "%" : "—", d.model ? `${d.model} accuracy` : "accuracy"));
+}
+
+const FOCUS = {
+  m: null, sku: null, follow: true, lastFollow: 0, chart: null, busy: false,
+  init() {
+    $("follow").onclick = () => { this.follow = !this.follow; $("follow").classList.toggle("on", this.follow); if (this.follow) this.lastFollow = 0; };
+    setInterval(() => this.refresh(), 1500);
+  },
+  set(merchant, sku, pin) {
+    if (pin) { this.follow = false; $("follow").classList.remove("on"); }
+    if (this.m === merchant && this.sku === sku) return;
+    this.m = merchant; this.sku = sku; this.refresh(true);
+  },
+  maybeFollow(s) {
+    if (!this.follow || !s.sku) return;
+    const now = performance.now();
+    if (now - this.lastFollow < (this.m ? 9000 : 0)) return;
+    if (this.m && s.urgency === "low" && now - this.lastFollow < 20000) return;
+    this.lastFollow = now; this.set(s.merchant, s.sku);
+  },
+  async refresh(force) {
+    if (!this.m || !this.sku || this.busy || (document.hidden && !force)) return;
+    this.busy = true;
+    const m = this.m, sku = this.sku;
+    try {
+      const d = await api(`/merchants/${encodeURIComponent(m)}/series/${encodeURIComponent(sku)}`);
+      if (m !== this.m || sku !== this.sku) return;
+      const mer = S.merchants.get(m), sg = [...S.signals.values()].reverse().find((s) => s.merchant === m && s.sku === sku);
+      const product = d.product || sg?.product || sku;
+      $("fc-title").replaceChildren(product, el("span", { class: "muted", style: { fontWeight: 500 } }, ` · ${mer?.name || sg?.merchant_name || m} · ${mer?.city || sg?.city || ""}`));
+      $("fc-sub").textContent = sg ? `Signal: ${sg.title}` : "Actual sales vs the live forecast, with its 80% band.";
+      const host = $("fc-host");
+      if (!this.chart || this._k !== m + "|" + sku) {
+        this._k = m + "|" + sku;
+        host.replaceChildren(el("div", { id: "fc-tiles" }), el("div", { id: "fc-chart" }),
+          el("div", { class: "legend" }, el("span", {}, el("i", { style: { background: "var(--muted)" } }), "Actual"), el("span", {}, el("i", { style: { background: "var(--grad)" } }), "Forecast"),
+            el("span", {}, el("i", { style: { background: "rgba(139,123,255,.35)", height: "10px" } }), "80% range"), el("span", {}, el("i", { style: { background: "var(--cyan)" } }), "Today so far"),
+            el("span", {}, el("i", { style: { background: "rgba(244,114,182,.5)", height: "10px" } }), "Offer window")));
+        this.chart = makeChart($("fc-chart"));
+      }
+      $("fc-tiles").replaceChildren(todayTiles(d));
+      this.chart.set(d, this._k);
+    } catch {} finally { this.busy = false; }
+  },
+  async pickDefault() {
+    if (this.m || !S.list.length) return;
+    const m = [...S.list].sort((a, b) => (b.orders_today || 0) - (a.orders_today || 0))[0];
+    try { const d = await api(`/merchants/${encodeURIComponent(m.id)}`); const p = (d.products || [])[0]; if (p && !this.m) this.set(m.id, p.sku); } catch {}
+  },
+};
+
+// ---------------------------------------------------------------- merchant drawer
+const DRAWER = {
+  id: null, sku: null, chart: null, timer: null, busy: false,
+  init() {
+    $("scrim").onclick = () => this.close();
+    addEventListener("keydown", (e) => { if (e.key === "Escape") this.close(); });
+  },
+  open(id, sku) {
+    const m = S.merchants.get(id);
+    this.id = id; this.sku = sku || null; this.chart = null; this._k = null;
+    const d = $("drawer");
+    d.replaceChildren(el("button", { class: "btn ghost sm close", onclick: () => this.close() }, "✕ Close"),
+      el("div", { class: "eyebrow" }, m ? `${plat(m.platform).name} · ${m.city}` : "Merchant"),
+      el("h2", {}, m?.name || id), el("div", { class: "muted", style: { fontSize: "13px" } }, m?.category || ""),
+      el("div", { id: "dr-body" }, el("div", { class: "shimmer", style: { height: "220px", marginTop: "16px" } })));
+    d.classList.add("open"); $("scrim").classList.add("open"); d.scrollTop = 0;
+    clearInterval(this.timer); this.timer = setInterval(() => this.refresh(), 1500);
+    this.refresh();
+  },
+  close() { this.id = null; clearInterval(this.timer); $("drawer").classList.remove("open"); $("scrim").classList.remove("open"); },
+  async refresh() {
+    if (!this.id || this.busy) return;
+    this.busy = true; const id = this.id;
+    try {
+      const [d, series] = await Promise.all([api(`/merchants/${encodeURIComponent(id)}`), this.sku ? api(`/merchants/${encodeURIComponent(id)}/series/${encodeURIComponent(this.sku)}`).catch(() => null) : null]);
+      if (id !== this.id) return;
+      const prods = d.products || [];
+      if (!this.sku && prods.length) { this.sku = prods[0].sku; this.busy = false; return this.refresh(); }
+      this.render(d, prods, series);
+    } catch (e) { if (id === this.id) $("dr-body").replaceChildren(el("div", { class: "empty" }, "Couldn't load this merchant: " + e.message)); }
+    finally { this.busy = false; }
+  },
+  render(d, prods, series) {
+    const body = $("dr-body");
+    if (!this._k) {
+      body.replaceChildren(el("div", { class: "dstats", id: "dr-stats" }), el("div", { class: "subh" }, "Forecast"), el("div", { id: "dr-fc-title", style: { fontWeight: 700, marginBottom: "8px" } }),
+        el("div", { id: "dr-tiles" }), el("div", { id: "dr-chart" }),
+        el("div", { class: "row", style: { marginTop: "8px" } }, el("button", { class: "btn sm", onclick: () => { FOCUS.set(this.id, this.sku, true); SB.toast("📌", "Pinned to the wall", "The forecast panel now shows this product.", { ms: 2500 }); } }, "📌 Pin to wall")),
+        el("div", { class: "subh" }, "Open signals"), el("div", { id: "dr-sigs" }),
+        el("div", { class: "subh" }, "Products · stock cover"), el("div", { style: { overflowX: "auto" } }, el("table", { class: "prods", id: "dr-prods" })),
+        el("div", { class: "subh" }, "Recent outcomes"), el("div", { id: "dr-outs", class: "outs" }));
+      this.chart = makeChart($("dr-chart"));
+    }
+    const rev = d.revenue_today ?? S.merchants.get(this.id)?.revenue_today, ord = d.orders_today ?? S.merchants.get(this.id)?.orders_today;
+    const open = d.open_signals || [];
+    $("dr-stats").replaceChildren(
+      el("div", {}, el("div", { class: "k" }, "Orders today"), el("div", { class: "v" }, num(ord))),
+      el("div", {}, el("div", { class: "k" }, "Revenue today"), el("div", { class: "v" }, inr(rev))),
+      el("div", {}, el("div", { class: "k" }, "Open signals"), el("div", { class: "v " + (open.length ? "warn" : "") }, Array.isArray(open) ? open.length : num(open))));
+    const p = prods.find((x) => x.sku === this.sku);
+    $("dr-fc-title").textContent = p ? `${p.name}` : this.sku || "";
+    if (series) { $("dr-tiles").replaceChildren(todayTiles(series)); this._k = this.id + "|" + this.sku; this.chart.set(series, this._k); }
+    $("dr-sigs").replaceChildren(...(Array.isArray(open) && open.length ? open.slice(0, 6).map((s) => el("div", { class: "dsig " + (s.urgency || ""), onclick: () => { this.sku = s.sku; this._k = null; this.refresh(); } },
+      el("b", {}, s.title), el("div", { class: "muted" }, s.detail || ""))) : [el("div", { class: "muted", style: { fontSize: "13px" } }, "Nothing needs attention right now.")]));
+    const head = el("thead", {}, el("tr", {}, el("th", {}, "Product"), el("th", {}, "Price"), el("th", {}, "Stock"), el("th", {}, "Cover"), el("th", {}, "Today vs forecast")));
+    const rows = prods.map((x) => {
+      const cover = x.cover_days ?? x.cover, lead = x.lead_days ?? 3;
+      const ta = x.today?.actual ?? x.today_actual ?? x.actual_today, tf = x.today?.forecast ?? x.today_forecast ?? x.forecast_today;
+      const ratio = ta != null && tf ? Math.min(1, ta / tf) : 0;
+      return el("tr", { class: x.sku === this.sku ? "on" : "", onclick: () => { this.sku = x.sku; this._k = null; this.refresh(); } },
+        el("td", {}, x.name), el("td", {}, inrFull(x.price)), el("td", {}, num(x.stock)),
+        el("td", {}, cover == null ? "—" : el("span", { class: "cov " + (cover < lead ? "low" : cover < lead * 2 ? "mid" : "ok") }, cover >= 99 ? "99+ d" : cover.toFixed(1) + " d")),
+        el("td", {}, el("div", { style: { display: "flex", gap: "8px", alignItems: "center" } }, el("div", { class: "tbar" }, el("i", { style: { width: ratio * 100 + "%" } })),
+          el("span", { class: "muted", style: { fontSize: "12px", whiteSpace: "nowrap" } }, `${num(ta)} / ${num(tf)}`))));
+    });
+    $("dr-prods").replaceChildren(head, el("tbody", {}, rows));
+    const outs = d.outcomes || d.recent_outcomes || [];
+    $("dr-outs").replaceChildren(...(outs.length ? outs.slice(0, 5).map(outcomeRow) : [el("div", { class: "muted", style: { fontSize: "13px" } }, "No offer windows closed yet.")]));
+  },
+};
+
+// ---------------------------------------------------------------- 7. learning
+function outcomeRow(o) {
+  const mx = Math.max(1, o.expected_uplift_units || 0, o.actual_uplift_units || 0);
+  return el("div", { class: "out " + (o.worked ? "w" : "l") }, el("div", { class: "ic" }, o.worked ? "✓" : "✗"),
+    el("div", { style: { minWidth: 0 } }, el("div", { class: "nm" }, `${o.product} `, el("span", {}, `· ${o.merchant_name || ""} · ${Math.round((o.discount || 0) * 100)}% off`)),
+      el("div", { class: "ubars", title: "Expected vs actual uplift (units)" },
+        el("div", { style: { width: ((o.expected_uplift_units || 0) / mx) * 100 + "%", background: "var(--faint)" } }),
+        el("div", { style: { width: ((o.actual_uplift_units || 0) / mx) * 100 + "%", background: o.worked ? "var(--good)" : "var(--bad)" } }))),
+    el("div", { class: "g " + (o.worked ? "good" : "bad") }, `+${num(o.actual_uplift_units)}`, el("small", {}, `vs +${num(o.expected_uplift_units)} exp · ${inr(o.revenue_gain)}`)));
+}
+const LEARN = {
+  built: false, el: {},
+  build() {
+    const hit = el("div", { class: "v" }, "—"), hitS = el("div", { class: "s" }, " ");
+    const acc = el("div", { class: "v" }, "—"), accS = el("div", { class: "s" }, " "), sp = makeSpark("var(--cyan)", { base: true });
+    this.el = { hit, hitS, acc, accS, sp, hitTw: new Tween(hit, (v) => Math.round(v) + "%"), accTw: new Tween(acc, (v) => v.toFixed(1) + "%"), els: el("div"), outs: el("div", { class: "outs" }) };
+    $("learn").replaceChildren(el("div", { class: "learn-top" },
+      el("div", { class: "t" }, el("div", { class: "k" }, "Offer hit rate"), hit, hitS),
+      el("div", { class: "t" }, el("div", { class: "k" }, "Forecast accuracy over time"), acc, accS, sp.node)),
+      el("div", { class: "subh" }, "Price sensitivity learned per category (prior ○ → learned ●)"), this.el.els,
+      el("div", { class: "subh" }, "Latest offer results"), this.el.outs);
+    this.built = true; this.outcomes();
+  },
+  update() {
+    if (!this.built) this.build();
+    const m = S.stats, L = m.learning || {}, a = m.accuracy || {};
+    this.el.hitTw.set(L.hit_rate != null ? L.hit_rate * 100 : null);
+    this.el.hitS.textContent = L.outcomes ? `of ${num(L.outcomes)} offers beat or met expectation` : "measured when the first offer window closes";
+    this.el.accTw.set(a.wape != null ? 100 * (1 - a.wape) : null);
+    this.el.accS.textContent = a.baseline_wape != null ? `naive baseline ${(100 * (1 - a.baseline_wape)).toFixed(1)}% · ${num(a.days_scored || 0)} days scored` : " ";
+    if (S.accHist.length > 1) { const lo = Math.min(...S.accHist, ...S.baseHist) - 2, hi = Math.max(...S.accHist) + 1; this.el.sp.update(S.accHist, S.baseHist, lo, hi); }
+    const E = Object.entries(L.elasticity || {}).sort((x, y) => (y[1].n || 0) - (x[1].n || 0));
+    const vals = E.flatMap(([, e]) => [e.prior, e.learned]).filter((v) => v != null);
+    const lo = Math.min(-3, ...vals) - 0.2, hi = 0, X = (v) => ((v - lo) / (hi - lo)) * 100;
+    if (!this._elRows || this._elKeys !== E.map((e) => e[0]).join()) {
+      this._elKeys = E.map((e) => e[0]).join(); this._elRows = {};
+      this.el.els.replaceChildren(...E.map(([cat]) => {
+        const span = el("div", { class: "span" }), pr = el("div", { class: "pr" }), ln = el("div", { class: "ln" }), vals = el("div", { class: "vals" });
+        this._elRows[cat] = { span, pr, ln, vals };
+        return el("div", { class: "el-row" }, el("div", { class: "cat" }, cat), el("div", { class: "el-track" }, span, pr, ln), vals);
+      }));
+    }
+    for (const [cat, e] of E) {
+      const r = this._elRows[cat], a1 = X(e.prior), b1 = X(e.learned ?? e.prior);
+      r.pr.style.left = a1 + "%"; r.ln.style.left = b1 + "%";
+      r.span.style.left = Math.min(a1, b1) + "%"; r.span.style.width = Math.abs(b1 - a1) + "%";
+      r.vals.replaceChildren(elastic(e.prior) + " → ", el("b", {}, elastic(e.learned)), ` · n=${num(e.n || 0)}`);
+    }
+  },
+  outcomes() {
+    if (!this.built) return;
+    this.el.outs.replaceChildren(...(S.outcomes.length ? S.outcomes.slice(0, 6).map(outcomeRow) : [el("div", { class: "muted", style: { fontSize: "13px" } }, "Waiting for the first offer window to close…")]));
+  },
+};
+
+// ---------------------------------------------------------------- the frame loop
+let lastFrame = performance.now();
+function frame(now) {
+  const raw = now - lastFrame, dt = Math.min(80, raw); lastFrame = now;
+  if (S.stats) {
+    // revenue runs between stats messages so the number never stands still
+    const ahead = S.sim.running ? Math.min(1.2, (now - S.statsWall) / 1000) : 0;
+    const target = (S.stats.revenue_total || 0) + (S.stats.revenue_per_sec || 0) * ahead;
+    const tw = K.rev.tw; if (tw.v == null) tw.set(target); else tw.t = Math.max(tw.t ?? 0, target);
+  }
+  for (const t of TWEENS) t.step(Math.min(1000, raw));
+  if (S.stats && K.rev.tw.v != null) { const s = `${inrFull(K.rev.tw.v)} · ${inr(S.stats.revenue_per_sec)}/s`; if (K.rev.sub.textContent !== s) K.rev.sub.textContent = s; }
+  HEAD.tick();
+  MAP.draw(now, dt); PIPE.draw(now, dt); TICKER.step(dt);
+  FOCUS.chart?.tick(); DRAWER.chart?.tick();
+  requestAnimationFrame(frame);
+}
+
+// ---------------------------------------------------------------- boot
+function gate() {
+  if (document.querySelector(".gate-wrap")) return;
+  const input = el("input", { type: "password", placeholder: "Admin token", autocomplete: "off" });
+  const wrap = el("div", { class: "gate-wrap" }, el("div", { class: "card gate pop" }, el("div", { class: "eyebrow" }, "Live Commerce"),
+    el("h2", {}, "Admin token needed"), el("p", { class: "muted" }, "The live wall reads every merchant's feed, so it needs the root operator's token."),
+    el("form", { onsubmit: (e) => { e.preventDefault(); try { sessionStorage.setItem("sb-admin-token", input.value.trim()); } catch {} wrap.remove(); boot(); } },
+      input, el("button", { class: "btn primary" }, "Open")),
+    el("p", { style: { marginTop: "14px", fontSize: "13px" } }, el("a", { href: "?mock=1" }, "Watch the demo feed instead"))));
+  document.body.append(wrap); setTimeout(() => input.focus(), 50);
+}
+
+async function fetchJSON(url, opts = {}, timeout = 4000) {
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), timeout);
+  try { const r = await fetch(url, { ...opts, signal: ctl.signal }); if (!r.ok) { const e = new Error(r.statusText); e.status = r.status; throw e; } return await r.json(); }
+  finally { clearTimeout(t); }
+}
+
+let started = false;
+function startShared() {
+  if (started) return; started = true;
+  setInterval(() => FEED.pump(), 110);
+  setInterval(() => refreshMerchants(), S.mode === "poll" ? 3000 : 10000);
+  setTimeout(() => FOCUS.pickDefault(), 1500);
+  requestAnimationFrame((t) => { lastFrame = t; frame(t); });
+}
+
+function startMock(reason) {
+  MOCK = makeMock();
+  setMode("mock");
+  setMerchants(MOCK.world.merchants.map((m) => ({ ...m })));
+  MOCK.run({ stats: onStats, ticker: onTicker, signal: onSignal, outcome: onOutcome });
+  startShared();
+  if (reason === "offline") {
+    $("mode").title = "The Live Commerce engine isn't reachable, so this browser is generating a demo feed";
+    // keep checking: when the engine comes up, offer to switch
+    const probe = setInterval(async () => {
+      try { await fetchJSON("/commerce/api/status", {}, 3000); clearInterval(probe); const b = $("golive"); b.classList.remove("hidden"); b.onclick = () => { location.href = location.pathname; }; } catch {}
+    }, 15000);
+  }
+}
+
+async function startLive(merchants) {
+  setMode("live");
+  setMerchants(merchants);
+  try { onStats(await api("/status")); } catch {}
+  try { const back = await api("/signals?limit=30"); for (const s of [...back].reverse()) { s._backfill = true; onSignal(s); } FEED.queue.splice(0).forEach((s) => FEED.render(s, false)); } catch {}
+  startShared();
+  let res;
+  try { res = await fetch("/admin/live/monitor", { headers: { "X-Admin-Token": token() || "" } }); } catch { res = null; }
+  if (res && res.status === 401) { try { sessionStorage.removeItem("sb-admin-token"); } catch {} return gate(); }
+  if (res && res.ok) {
+    const client = await SB.live("/admin/live/monitor", { "X-Admin-Token": token() }, onMessage);
+    if (client) {
+      client.on("connect", () => setMode("live"));
+      client.on("offline", () => setMode("live", "off"));
+      return;
+    }
+  }
+  // No live broker: fall back to polling the engine's HTTP API.
+  setMode("poll");
+  setInterval(async () => { try { onStats(await api("/status")); } catch {} }, 500);
+  setInterval(async () => { try { const l = await api("/signals?limit=20"); for (const s of [...l].reverse()) onSignal(s); } catch {} }, 2000);
+}
+
+async function boot() {
+  const q = new URLSearchParams(location.search);
+  if (q.get("mock") === "1") return startMock("forced");
+  let merchants;
+  try { merchants = await fetchJSON("/commerce/api/merchants"); }
+  catch { return startMock("offline"); }
+  if (!Array.isArray(merchants)) return startMock("offline");
+  if (!token()) return gate();
+  startLive(merchants);
+}
+
+// ================================================================ demo feed (mock engine)
+// Generates contract-shaped data in the browser: stats every 500 ms, ticker batches every
+// 250 ms, signals (with bursts) and outcomes, and answers the same HTTP API paths.
+function makeMock() {
+  const mulberry = (a) => () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return h >>> 0; };
+  const R = mulberry(20261108), rnd = () => R(), pick = (a) => a[(rnd() * a.length) | 0];
+  const CITY = {
+    Mumbai: [72.88, 19.08, ["Powai", "Malad", "Goregaon", "Mulund", "Kandivali", "Andheri", "Borivali", "Vashi"]], Delhi: [77.21, 28.61, ["Saket", "Rohini", "Dwarka", "Lajpat Nagar", "Karol Bagh"]],
+    Bengaluru: [77.59, 12.97, ["Whitefield", "Koramangala", "Electronic City", "Marathahalli", "Jayanagar"]], Hyderabad: [78.49, 17.39, ["Kukatpally", "Ameerpet", "LB Nagar", "Gachibowli"]],
+    Chennai: [80.27, 13.08, ["T Nagar", "Velachery", "Anna Nagar", "Tambaram"]], Kolkata: [88.36, 22.57, ["Salt Lake", "Howrah", "Park Street", "New Town"]],
+    Pune: [73.86, 18.52, ["Kothrud", "Hadapsar", "Wakad", "Baner", "Pimpri"]], Ahmedabad: [72.57, 23.02, ["Satellite", "Naroda", "Maninagar", "Bopal"]],
+    Jaipur: [75.79, 26.91, ["Malviya Nagar", "Vaishali Nagar", "Mansarovar"]], Lucknow: [80.95, 26.85, ["Gomti Nagar", "Hazratganj", "Aliganj"]], Surat: [72.83, 21.17, ["Adajan", "Vesu", "Varachha"]],
+    Kochi: [76.27, 9.93, ["Edappally", "Kakkanad"]], Chandigarh: [76.78, 30.73, ["Sector 17", "Sector 35"]], Indore: [75.86, 22.72, ["Vijay Nagar", "Palasia"]], Bhopal: [77.41, 23.26, ["MP Nagar", "Kolar Road"]],
+    Nagpur: [79.09, 21.15, ["Sitabuldi", "Dharampeth"]], Patna: [85.14, 25.59, ["Boring Road", "Kankarbagh"]], Bhubaneswar: [85.82, 20.3, ["Saheed Nagar", "Patia"]], Guwahati: [91.74, 26.14, ["Paltan Bazaar", "Dispur"]],
+    Coimbatore: [76.96, 11.02, ["RS Puram", "Gandhipuram"]], Visakhapatnam: [83.22, 17.69, ["MVP Colony", "Dwaraka Nagar"]], Thane: [72.98, 19.2, ["Thane West", "Ghodbunder Road", "Majiwada"]],
+    Vadodara: [73.18, 22.31, ["Alkapuri", "Gotri"]], Nashik: [73.79, 20.0, ["College Road", "Nashik Road"]], Mysuru: [76.64, 12.3, ["Vijayanagar", "Saraswathipuram"]], Kanpur: [80.33, 26.45, ["Swaroop Nagar", "Kidwai Nagar"]],
+    Ludhiana: [75.86, 30.9, ["Model Town", "Sarabha Nagar"]], Goa: [73.83, 15.49, ["Panaji", "Margao"]], Thiruvananthapuram: [76.94, 8.52, ["Pattom", "Kowdiar"]], Dehradun: [78.03, 30.32, ["Rajpur Road"]],
+    Raipur: [81.63, 21.25, ["Shankar Nagar"]], Ranchi: [85.31, 23.34, ["Lalpur"]], Madurai: [78.12, 9.93, ["Anna Nagar"]], Vijayawada: [80.65, 16.51, ["Benz Circle", "Governorpet"]], Amritsar: [74.87, 31.63, ["Ranjit Avenue"]],
+    Srinagar: [74.8, 34.08, ["Lal Chowk"]], Varanasi: [82.97, 25.32, ["Lanka", "Sigra"]],
+  };
+  const CAT = {
+    Grocery: [["Tata Salt 1kg", 28], ["India Gate Basmati 5kg", 649], ["Aashirvaad Atta 10kg", 489], ["Fortune Sunflower Oil 1L", 155], ["Amul Butter 500g", 285], ["Maggi Noodles 12-pack", 168],
+      ["Surf Excel Matic 2kg", 425], ["Toor Dal 1kg", 172], ["Red Label Tea 1kg", 560], ["Amul Ghee 1L", 650], ["Cadbury Celebrations", 249], ["Haldiram's Soan Papdi 500g", 199]],
+    Electronics: [["boAt Airdopes 141", 1299], ["Mi Power Bank 20000", 1999], ["Philips LED 9W 4-pack", 399], ["Diwali LED String Lights", 349], ["Prestige Induction Cooktop", 2499], ["Samsung 43\" Smart TV", 31990]],
+    Fashion: [["Cotton Kurta Set", 1299], ["Banarasi Silk Saree", 3499], ["Men's Nehru Jacket", 1899], ["Kolhapuri Chappals", 799], ["Festive Lehenga", 4999], ["Chikankari Dupatta", 899]],
+    Beauty: [["Kumkumadi Face Oil", 899], ["Ubtan Face Pack", 449], ["Vitamin C Serum", 599], ["Rose Water Toner", 299], ["Sandalwood Soap 4-pack", 240]],
+    Home: [["Terracotta Diya Set (12)", 199], ["Brass Puja Thali", 899], ["Rangoli Colours Kit", 249], ["Scented Candles Trio", 599], ["Toran Door Hanging", 349], ["Steel Dinner Set 24pc", 1899]],
+    Gourmet: [["Kaju Katli 500g", 549], ["Dry Fruit Gift Box", 1199], ["Masala Chai Blend 250g", 349], ["Filter Coffee 500g", 420], ["Mango Pickle 400g", 260]],
+  };
+  const PRIOR = { Grocery: -1.1, Electronics: -2.1, Fashion: -1.7, Beauty: -1.5, Home: -1.6, Gourmet: -1.3 };
+  const TRUE = { Grocery: -1.45, Electronics: -1.75, Fashion: -2.2, Beauty: -1.3, Home: -2.0, Gourmet: -1.6 };
+  const BRANDS = ["Urban Threads", "Masala Box", "Kaapi Kulture", "Khadi Loom", "Desi Glow", "Bombay Brew Co", "Chai Tales", "Indigo Weave", "Nimbu Naturals", "Saffron Skin", "Pahadi Pantry", "Jaipur Juttis",
+    "Coastal Spice Co", "Tiffin Tales", "Mitti Home", "Kesar Kitchen", "Banyan Basics", "Rangrez", "Ghar Decor", "Svasti Ayurveda", "Bloom Botanics", "Mango Monk", "Thread & Tale", "Bindi Box", "Kulhad Co",
+    "Peacock Prints", "Lotus Leaf Tea", "Dhaba Dips", "Cotton Crate", "Neel Studio", "Haveli Crafts", "Sutra Silks", "Amrit Organics", "Chandni Lights", "Malabar Masala", "Kashmir Kahwa", "Dilli Darbar Sweets", "Patang Toys", "Zari House", "Tulsi Tonics"];
+  const RFMT = [["Reliance Smart Bazaar", ["Grocery", "Home"]], ["Reliance Fresh", ["Grocery"]], ["Reliance Digital", ["Electronics"]], ["Reliance Trends", ["Fashion"]], ["Reliance Smart Point", ["Grocery"]]];
+  const PLATS = [
+    { id: "shopify", n: 80, mult: 0.7, cities: ["Bengaluru", "Mumbai", "Delhi", "Pune", "Hyderabad", "Chennai", "Kolkata", "Jaipur", "Ahmedabad", "Kochi", "Chandigarh", "Indore", "Goa", "Lucknow", "Guwahati", "Dehradun", "Srinagar", "Varanasi", "Amritsar", "Coimbatore"] },
+    { id: "reliance", n: 140, mult: 1.0, cities: Object.keys(CITY) },
+    { id: "dmart", n: 110, mult: 1.4, cities: ["Mumbai", "Mumbai", "Thane", "Thane", "Pune", "Pune", "Nashik", "Nagpur", "Ahmedabad", "Surat", "Vadodara", "Hyderabad", "Hyderabad", "Vijayawada", "Visakhapatnam", "Bengaluru", "Mysuru", "Indore", "Bhopal", "Jaipur", "Chennai", "Raipur"] },
+  ];
+  const merchants = [], used = new Set();
+  let sid = 0;
+  for (const P of PLATS) for (let i = 0; i < P.n; i++) {
+    const city = pick(P.cities), [lon, lat, locs] = CITY[city], loc = pick(locs);
+    let name, cats;
+    if (P.id === "shopify") { name = BRANDS[i % BRANDS.length] + (i >= BRANDS.length ? " " + city : ""); cats = [pick(["Fashion", "Beauty", "Home", "Gourmet"])]; }
+    else if (P.id === "dmart") { name = `DMart ${loc}`; cats = ["Grocery", "Home"]; }
+    else { const [f, c] = pick(RFMT); name = `${f} ${loc}`; cats = c; }
+    let nm = name, k = 2; while (used.has(nm)) nm = `${name} ${k++}`; used.add(nm);
+    const products = [];
+    for (const c of cats) {
+      const pool = [...CAT[c]].sort(() => rnd() - 0.5).slice(0, cats.length > 1 ? 4 : 5);
+      for (const [pn, price] of pool) products.push({ sku: `${c.slice(0, 3).toUpperCase()}-${hash(pn) % 10000}`, name: pn, category: c, price, cost: Math.round(price * 0.72),
+        stock: Math.round(40 + rnd() * 400), lead_days: 2 + ((rnd() * 5) | 0), perishable: c === "Grocery" && rnd() < 0.3, pop: (P.id === "dmart" ? 30 : P.id === "reliance" ? 18 : 6) * (0.4 + rnd() * 1.6) * (price > 5000 ? 0.15 : price > 1000 ? 0.5 : 1) });
+    }
+    const spread = city === "Mumbai" || city === "Delhi" || city === "Bengaluru" ? 0.75 : 0.4;
+    const [x, y] = proj(lon + (rnd() - 0.5) * spread, lat + (rnd() - 0.5) * spread);
+    merchants.push({ id: `${P.id}-${String(++sid).padStart(4, "0")}`, platform: P.id, name: nm, city, category: cats[0], x, y, products, w: P.mult * Math.pow(rnd(), 1.8) * 3 + 0.2,
+      orders_today: 0, revenue_today: 0, open: [], outs: [] });
+  }
+  const cum = []; { let t = 0; for (const m of merchants) { t += m.w; cum.push(t); } }
+  const pickM = () => { const r = rnd() * cum[cum.length - 1]; let lo = 0, hi = cum.length - 1; while (lo < hi) { const mid = (lo + hi) >> 1; if (cum[mid] < r) lo = mid + 1; else hi = mid; } return merchants[lo]; };
+  const byId = new Map(merchants.map((m) => [m.id, m]));
+  const CUSTOMERS = 120000;
+  const HOURLY = [0.2, 0.1, 0.05, 0.05, 0.08, 0.2, 0.5, 0.9, 1.2, 1.4, 1.6, 1.8, 1.9, 1.7, 1.5, 1.4, 1.5, 1.7, 2.0, 2.2, 2.1, 1.6, 1.0, 0.5];
+  const HSUM = HOURLY.reduce((a, b) => a + b, 0);
+  const cumDay = (frac) => { const h = frac * 24, i = Math.floor(h); let s = 0; for (let k = 0; k < i; k++) s += HOURLY[k]; return (s + HOURLY[Math.min(23, i)] * (h - i)) / HSUM; };
+  const FAMP = { Home: 1.6, Gourmet: 1.3, Electronics: 0.9, Fashion: 0.8, Beauty: 0.5, Grocery: 0.35 };
+  function festMult(day, cat) {
+    let m = 1;
+    for (const [fd, name] of FESTIVALS) {
+      const d = dayDiff(day, fd), amp = (FAMP[cat] || 0.4) * (name === "Diwali" ? 1 : name === "Dhanteras" ? 0.7 : 0.35);
+      if (d >= 0 && d <= 5) m += amp * (1 - d / 6); else if (d === -1 || d === -2) m -= 0.12 * (name === "Diwali" ? 1 : 0.3);
+    }
+    return Math.max(0.5, m);
+  }
+  const wk = (day) => [1.25, 0.9, 0.88, 0.9, 0.95, 1.05, 1.3][new Date(dayMs(day)).getUTCDay()];
+
+  const st = {
+    sim: Date.parse("2026-11-06T09:00:00Z"), speed: "1h", running: true,
+    orders_total: 0, units_total: 0, revenue_total: 0, active: 0, ordersToday: 0, day: "2026-11-06",
+    signals_total: 0, by_kind: {}, offers_applied: 0, uplift: 0, msgs: 0,
+    plat: { shopify: { orders_total: 0, revenue_total: 0, w: [] }, reliance: { orders_total: 0, revenue_total: 0, w: [] }, dmart: { orders_total: 0, revenue_total: 0, w: [] } },
+    pipe: { ingested: 0, forecasts_updated: 0, delivered: 0 }, win: [], tick: [], recent: [], offers: [], outcomes: 0, hits: 0,
+    el: Object.fromEntries(Object.entries(PRIOR).map(([c, p]) => [c, { prior: p, learned: p, n: 0 }])),
+    t0: Date.now(), days_scored: 56,
+  };
+  for (let i = 0; i < 6; i++) { st.orders_total += 0; }
+  const opsNow = () => {
+    const d = new Date(st.sim), hf = d.getUTCHours() + d.getUTCMinutes() / 60, h = Math.floor(hf);
+    const diurnal = HOURLY[h] + (HOURLY[(h + 1) % 24] - HOURLY[h]) * (hf - h);
+    const fest = festMult(isoDay(st.sim), "Home") * 0.5 + 0.5;
+    const spd = { "1x": 0.25, "1min": 0.55, "1h": 1, "1day": 1.5 }[st.speed];
+    return 230 * (0.25 + diurnal / 1.4) * fest * spd;
+  };
+  let H = {};
+  const lognorm = (mu, s) => Math.exp(mu + s * Math.sqrt(-2 * Math.log(rnd() + 1e-9)) * Math.cos(6.283 * rnd()));
+  const lat = () => ({ broker: lognorm(1.4, 0.35), process: lognorm(2.2, 0.3), signal: lognorm(2.6, 0.35) });
+  const latWin = [];
+
+  function stepOrders(dtS) {
+    if (!st.running) return;
+    const prevDay = isoDay(st.sim);
+    st.sim += SPEED_VAL[st.speed] * dtS * 1000;
+    const day = isoDay(st.sim);
+    if (day !== prevDay) { for (const m of merchants) { m.orders_today = 0; m.revenue_today = 0; } st.ordersToday = 0; st.day = day; st.days_scored++; }
+    const ops = opsNow(), n = Math.round(ops * dtS * (0.85 + rnd() * 0.3));
+    const sampleP = Math.min(1, 20 / Math.max(1, ops));
+    const touched = new Set();
+    let rev = 0;
+    for (let i = 0; i < n; i++) {
+      const m = pickM(), p = pick(m.products), qty = 1 + (rnd() < 0.3 ? 1 : 0) + (rnd() < 0.08 ? 2 : 0);
+      const off = st.offers.find((o) => o.m === m.id && o.sku === p.sku && !o.closed);
+      const amount = Math.round(p.price * qty * (off ? 1 - off.discount : 1));
+      m.orders_today++; m.revenue_today += amount; st.orders_total++; st.units_total += qty; st.revenue_total += amount; rev += amount; st.ordersToday++;
+      st.plat[m.platform].orders_total++; st.plat[m.platform].revenue_total += amount; touched.add(m.id);
+      if (rnd() < sampleP) H.tk.push({ platform: m.platform, merchant: m.id, merchant_name: m.name, city: m.city, product: p.name, qty, amount, offer: !!off });
+    }
+    st.msgs += touched.size; st.pipe.ingested += touched.size; st.pipe.forecasts_updated += Math.round(n * 0.7);
+    st.win.push({ t: Date.now(), n, rev, msgs: touched.size, plat: [...touched].reduce((a, id) => (a[byId.get(id).platform] = (a[byId.get(id).platform] || 0) + 1, a), {}) });
+    st.active = Math.round(CUSTOMERS * (1 - Math.exp(-st.ordersToday / (CUSTOMERS * 1.4))));
+    for (let k = 0; k < Math.min(n, 6); k++) { const l = lat(); latWin.push(l); }
+    while (latWin.length > 400) latWin.shift();
+  }
+  const sigText = (kind, m, p, f) => {
+    const disc = kind === "clearance" ? 0.15 : kind === "festival" ? 0.1 : [0.05, 0.08, 0.1, 0.12][(rnd() * 4) | 0];
+    const hours = kind === "clearance" ? 24 : kind === "festival" ? 60 : [24, 48, 72][(rnd() * 3) | 0];
+    const dev = Math.round(15 + rnd() * 30), cover = +(1.5 + rnd() * 20).toFixed(1), units = Math.round(40 + rnd() * 260);
+    const fest = f ? f.name : "Diwali";
+    switch (kind) {
+      case "discount": return { title: `${Math.round(disc * 100)}% off ${p.name} for ${hours}h`, detail: `Sales are ${dev}% below forecast for 3 days while stock covers ${cover} days. A short discount should move ${units} extra units before ${fest}.`, action: { type: "discount", discount: disc, hours }, urgency: dev > 35 ? "high" : "medium" };
+      case "restock": return { title: `Reorder ${units} × ${p.name} today`, detail: `${fest} demand is running ${(1.4 + rnd()).toFixed(1)}× normal. Stock covers ${(0.8 + rnd() * 2).toFixed(1)} days but the supplier needs ${p.lead_days}.`, action: { type: "restock", units }, urgency: "high" };
+      case "winback": { const c = 20 + ((rnd() * 60) | 0); return { title: `₹50 coupon for ${c} lapsed regulars`, detail: `${c} customers who bought ${p.name} every month haven't ordered in 5 weeks. A coupon brings back about a third.`, action: { type: "coupon", coupon: 50, customers: c }, urgency: "low" }; }
+      case "surge": return { title: `Hold price on ${p.name}: demand up ${dev + 20}%`, detail: `Orders in ${m.city} jumped in the last 2 hours, ahead of ${fest}. Don't discount; stock covers ${cover} days.`, action: { type: "hold_price" }, urgency: "medium" };
+      case "festival": return { title: `${fest} push: ${Math.round(disc * 100)}% off ${p.name}`, detail: `Last year's ${fest} lifted this category ${dev + 30}%. Customers in ${m.city} respond to small festive offers.`, action: { type: "discount", discount: disc, hours }, urgency: "medium" };
+      default: return { title: `Clear ${p.name}: ${Math.round(disc * 100)}% off for 24h`, detail: `${units} units expire in 3 days and sales are ${dev}% under forecast. Clearing now saves ${inr(units * p.cost * 0.6)} of write-off.`, action: { type: "discount", discount: disc, hours }, urgency: rnd() < 0.5 ? "high" : "medium" };
+    }
+  };
+  function makeSignal() {
+    const m = pickM(), p = pick(m.products);
+    const kind = p.perishable && rnd() < 0.5 ? "clearance" : pick(["discount", "discount", "restock", "winback", "surge", "festival", "discount", "restock"]);
+    const f = festInfo(), t = sigText(kind, m, p, f), l = lat();
+    const disc = t.action.discount || 0, el_ = st.el[p.category]?.learned ?? -1.5;
+    const upl = Math.round(p.pop * (disc ? -el_ * disc * 4 : 0.5) * (1 + rnd()) + 5);
+    const s = { id: "sig-" + (++st.signals_total) + "-" + ((rnd() * 1e6) | 0), sent_ms: Date.now() - Math.round(2 + rnd() * 6), sim_ts: new Date(st.sim).toISOString().slice(0, 19),
+      platform: m.platform, merchant: m.id, merchant_name: m.name, city: m.city, sku: p.sku, product: p.name, category: p.category, kind, urgency: t.urgency, title: t.title, detail: t.detail,
+      action: t.action, expected: { units: upl + Math.round(p.pop), revenue: Math.round((upl + p.pop) * p.price * (1 - disc)), margin: Math.round(upl * (p.price * (1 - disc) - p.cost)), uplift_units: upl },
+      confidence: +(0.55 + rnd() * 0.4).toFixed(2), evidence: { actual: Math.round(p.pop * 0.7), forecast: Math.round(p.pop), deviation: -0.25, stock: p.stock, cover_days: 6, elasticity: el_ },
+      latency_ms: Math.round(l.broker + l.process + l.signal), autopilot: t.action.type === "discount" && rnd() < 0.35 };
+    st.by_kind[kind] = (st.by_kind[kind] || 0) + 1;
+    st.recent.unshift(s); if (st.recent.length > 200) st.recent.pop();
+    m.open.unshift(s); if (m.open.length > 6) m.open.pop();
+    st.pipe.delivered++;
+    if (s.autopilot) applyOffer(s, "autopilot");
+    H.signal(s);
+  }
+  function applyOffer(s, by) {
+    if (st.offers.some((o) => o.id === s.id)) return;
+    st.offers.push({ id: s.id, s, m: s.merchant, sku: s.sku, discount: s.action.discount || 0.05, from: st.sim, until: st.sim + (s.action.hours || 48) * 3600e3, closeAt: Date.now() + 7000 + rnd() * 9000, by });
+    st.offers_applied++;
+  }
+  function closeOffers() {
+    const now = Date.now();
+    for (const o of st.offers) {
+      if (o.closed || now < o.closeAt) continue;
+      o.closed = true;
+      const cat = o.s.category, e = st.el[cat] || (st.el[cat] = { prior: -1.5, learned: -1.5, n: 0 });
+      const before = e.learned, truth = TRUE[cat] ?? -1.5;
+      const exp = o.s.expected.uplift_units, act = Math.max(0, Math.round(exp * (truth / before) * (0.7 + rnd() * 0.6)));
+      e.learned = +(before + (truth - before) * 0.3 + (rnd() - 0.5) * 0.06).toFixed(3); e.n++;
+      const worked = act >= exp * 0.9, p = byId.get(o.m).products.find((x) => x.sku === o.sku);
+      const gain = Math.round(act * p.price * (1 - o.discount) - o.discount * p.price * p.pop);
+      st.outcomes++; if (worked) st.hits++; st.uplift += Math.max(0, gain);
+      const out = { signal_id: o.id, sku: o.sku, product: o.s.product, merchant_name: o.s.merchant_name, discount: o.discount, expected_uplift_units: exp, actual_uplift_units: act,
+        uplift_pct: +(act / Math.max(1, p.pop)).toFixed(2), revenue_gain: gain, worked, elasticity_before: before, elasticity_after: e.learned, category: cat };
+      const m = byId.get(o.m); m.outs.unshift(out); if (m.outs.length > 5) m.outs.pop();
+      m.open = m.open.filter((x) => x.id !== o.id);
+      H.outcome(out);
+    }
+  }
+  function festInfo() {
+    const day = isoDay(st.sim), f = FESTIVALS.find(([d]) => d >= day);
+    return f ? { name: f[1], date: f[0], days_to: dayDiff(day, f[0]) } : null;
+  }
+  const pctl = (arr, q) => { if (!arr.length) return null; const s = [...arr].sort((a, b) => a - b); return s[Math.min(s.length - 1, Math.floor(q * s.length))]; };
+  function stats() {
+    const now = Date.now(); st.win = st.win.filter((w) => now - w.t < 1000);
+    const ops = st.win.reduce((a, w) => a + w.n, 0), rps = st.win.reduce((a, w) => a + w.rev, 0), mps = st.win.reduce((a, w) => a + w.msgs, 0);
+    const pl = {};
+    for (const pid of Object.keys(st.plat)) pl[pid] = { orders_total: st.plat[pid].orders_total, revenue_total: st.plat[pid].revenue_total, orders_per_sec: 0 };
+    // split orders/sec by each platform's share in the window
+    const share = {}; let tot = 0; for (const w of st.win) for (const [k, v] of Object.entries(w.plat)) { share[k] = (share[k] || 0) + v; tot += v; }
+    for (const pid of Object.keys(pl)) pl[pid].orders_per_sec = tot ? Math.round((ops * (share[pid] || 0)) / tot) : 0;
+    const e2e = latWin.map((l) => l.broker + l.process + l.signal);
+    const el = (now - st.t0) / 1000, wape = 0.115 + 0.09 * Math.exp(-el / 80) + (rnd() - 0.5) * 0.004;
+    st.pipe.delivered += 2 + 4;
+    return { sent_ms: now - Math.round(2 + rnd() * 5), sim_ts: new Date(st.sim).toISOString().slice(0, 19), speed: st.speed, running: st.running, merchants: merchants.length, customers: CUSTOMERS,
+      series: merchants.reduce((a, m) => a + m.products.length, 0), orders_total: st.orders_total, units_total: st.units_total, revenue_total: st.revenue_total,
+      orders_per_sec: st.running ? ops : 0, revenue_per_sec: st.running ? rps : 0, msgs_per_sec: st.running ? mps : 0, active_customers_today: st.active,
+      signals_total: st.signals_total, signals_by_kind: { ...st.by_kind }, offers_applied: st.offers_applied, uplift_revenue: st.uplift, platforms: pl,
+      latency_ms: { broker_p50: pctl(latWin.map((l) => l.broker), 0.5), broker_p95: pctl(latWin.map((l) => l.broker), 0.95), process_p50: pctl(latWin.map((l) => l.process), 0.5),
+        signal_p50: pctl(latWin.map((l) => l.signal), 0.5), end_to_end_p50: pctl(e2e, 0.5), end_to_end_p95: pctl(e2e, 0.95) },
+      accuracy: { wape, baseline_wape: 0.29 + (rnd() - 0.5) * 0.004, days_scored: st.days_scored, series_scored: merchants.reduce((a, m) => a + m.products.length, 0), by_platform: { shopify: wape * 1.2, reliance: wape, dmart: wape * 0.85 } },
+      learning: { outcomes: st.outcomes, hit_rate: st.outcomes ? st.hits / st.outcomes : null, elasticity: JSON.parse(JSON.stringify(st.el)) },
+      pipeline: { ingested: st.pipe.ingested, forecasts_updated: st.pipe.forecasts_updated, signals_raised: st.signals_total, delivered: st.pipe.delivered },
+      festival: festInfo() };
+  }
+  function series(m, p) {
+    const today = isoDay(st.sim), frac = (st.sim - dayMs(today)) / 864e5;
+    const base = p.pop, history = [], forecast = [];
+    for (let d = -42; d <= -1; d++) {
+      const day = isoDay(dayMs(today) + d * 864e5), r = mulberry(hash(m.id + p.sku + day));
+      history.push({ day, units: Math.max(0, Math.round(base * wk(day) * festMult(day, p.category) * (0.8 + r() * 0.4))) });
+    }
+    const bias = mulberry(hash(m.id + p.sku))();
+    for (let d = 1; d <= 14; d++) {
+      const day = isoDay(dayMs(today) + d * 864e5), f = base * wk(day) * festMult(day, p.category) * (0.95 + bias * 0.1);
+      forecast.push({ day, f: +f.toFixed(1), lo: +(f * (0.82 - 0.012 * d)).toFixed(1), hi: +(f * (1.18 + 0.02 * d)).toFixed(1) });
+    }
+    const fToday = base * wk(today) * festMult(today, p.category), exp = fToday * cumDay(frac);
+    const off = st.offers.find((o) => o.m === m.id && o.sku === p.sku && st.sim >= o.from && st.sim < o.until);
+    const dev = (mulberry(hash(m.id + p.sku + today))() - 0.55) * 0.6 + (off ? off.discount * 3 : 0);
+    const offers = st.offers.filter((o) => o.m === m.id && o.sku === p.sku).map((o) => ({ from: new Date(o.from).toISOString().slice(0, 19), until: new Date(o.until).toISOString().slice(0, 19), discount: o.discount }));
+    const models = ["Holt-Winters + festival", "Gradient boosting", "Seasonal naive + lift", "Croston (intermittent)"];
+    return { product: p.name, history, forecast, today: { day: today, actual: Math.round(exp * (1 + dev)), expected_so_far: Math.round(exp), forecast: Math.round(fToday) }, offers,
+      model: models[hash(p.sku + m.id) % 4], wape: 0.08 + (hash(m.id + p.sku) % 100) / 1000 };
+  }
+  function merchantDetail(m) {
+    const today = isoDay(st.sim);
+    return { id: m.id, platform: m.platform, name: m.name, city: m.city, category: m.category, x: m.x, y: m.y, orders_today: m.orders_today, revenue_today: m.revenue_today,
+      products: m.products.map((p) => { const s = series(m, p); const daily = Math.max(0.5, s.today.forecast); const stock = Math.max(0, Math.round(p.stock - s.today.actual * 0.6));
+        return { sku: p.sku, name: p.name, category: p.category, price: p.price, cost: p.cost, stock, lead_days: p.lead_days, perishable: p.perishable, cover_days: +(stock / daily).toFixed(1),
+          today: { day: today, actual: s.today.actual, expected_so_far: s.today.expected_so_far, forecast: s.today.forecast } }; }),
+      open_signals: m.open, outcomes: m.outs };
+  }
+  const list = () => merchants.map((m) => ({ id: m.id, platform: m.platform, name: m.name, city: m.city, category: m.category, x: m.x, y: m.y, orders_today: m.orders_today, revenue_today: m.revenue_today, open_signals: m.open.length }));
+  async function api(path, { method, body }) {
+    await new Promise((r) => setTimeout(r, 15 + Math.random() * 25));
+    const [p0, q] = path.split("?"), seg = p0.split("/").filter(Boolean).map(decodeURIComponent);
+    if (method === "POST") {
+      if (seg[0] === "control") {
+        if (body.cmd === "start") st.running = true; else if (body.cmd === "pause") st.running = false; else if (body.cmd === "speed" && SPEED_VAL[body.speed]) st.speed = body.speed;
+        return { ok: true };
+      }
+      if (seg[0] === "offers" && seg[2] === "apply") { const s = st.recent.find((x) => x.id === seg[1]); if (!s) throw new Error("Unknown signal"); applyOffer(s, "merchant"); return { ok: true }; }
+      throw new Error("Not found");
+    }
+    if (seg[0] === "status") return stats();
+    if (seg[0] === "signals") return st.recent.slice(0, +(new URLSearchParams(q).get("limit") || 50));
+    if (seg[0] === "merchants" && !seg[1]) return list();
+    if (seg[0] === "merchants") {
+      const m = byId.get(seg[1]); if (!m) throw new Error("Unknown merchant");
+      if (seg[2] === "series") { const p = m.products.find((x) => x.sku === seg[3]); if (!p) throw new Error("Unknown product"); return series(m, p); }
+      return merchantDetail(m);
+    }
+    throw new Error("Not found");
+  }
+  function run(handlers) {
+    H = { ...handlers, tk: [] };
+    let last = performance.now(), nextBurst = Date.now() + 12000;
+    setInterval(() => {
+      const now = performance.now(), dt = Math.min(0.5, (now - last) / 1000); last = now;
+      stepOrders(dt);
+      if (st.running) {
+        const rate = 0.25 + opsNow() / 600;
+        if (rnd() < rate * dt) makeSignal();
+        if (Date.now() > nextBurst) { nextBurst = Date.now() + 30000 + rnd() * 20000; const n = 16 + ((rnd() * 10) | 0); for (let i = 0; i < n; i++) setTimeout(makeSignal, i * 40); }
+      }
+      closeOffers();
+    }, 100);
+    setInterval(() => { if (H.tk.length) { const orders = H.tk.splice(0); handlers.ticker({ sent_ms: Date.now(), orders: orders.slice(-8) }); } }, 250);
+    setInterval(() => handlers.stats(stats()), 500);
+    handlers.stats(stats());
+  }
+  return { world: { merchants: list() }, api, run };
+}
+
+// ---------------------------------------------------------------- init
+SB.nav("commerce");
+HEAD.init(); initKpis(); MAP.init(); PIPE.init(); FOCUS.init(); DRAWER.init();
+const relayout = () => { MAP.layout(); PIPE.layout(); };
+new ResizeObserver(relayout).observe($("mapbox"));
+new ResizeObserver(() => PIPE.layout()).observe($("pipe"));
+addEventListener("resize", relayout);
+document.fonts?.ready.then(relayout);
+boot();
+</script>
+</body>
+</html>

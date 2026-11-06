@@ -70,7 +70,7 @@ const SB = (() => {
 
   // The same top bar on every page.
   function nav(active, ...right) {
-    const links = [["/", "Chat", "chat"], ["/explore", "Explore", "explore"], ["/graph-view", "Graph", "graph"], ["/hq", "HQ", "hq"]];
+    const links = [["/", "Chat", "chat"], ["/explore", "Explore", "explore"], ["/graph-view", "Graph", "graph"], ["/commerce", "Live Commerce", "commerce"], ["/hq", "HQ", "hq"]];
     const logo = el("a", { class: "sb-logo", href: "/" });
     logo.innerHTML = LOGO + "<span>Second<span class='grad-text'>Brain</span></span>";
     const bar = el("nav", { class: "sb-nav" }, logo,

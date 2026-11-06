@@ -11,13 +11,15 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Literal
 
+import httpx
 import psycopg
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from psycopg.rows import dict_row
 from pydantic import BaseModel
 
 from secondbrain import admin, demo, evolution, learning, live, maintenance, relationships, signals, tree
+from secondbrain.commerce import contract as commerce
 from secondbrain.documents import UnsupportedDocument, extract_text
 from secondbrain.forecasting.api import build_router as forecast_router
 from secondbrain.graph import build_full_graph
@@ -288,6 +290,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/hq", include_in_schema=False)
     def hq_screen():
         return FileResponse(STATIC_DIR / "hq.html", headers=NO_CACHE)
+
+    @app.get("/commerce", include_in_schema=False)
+    def commerce_screen():
+        return FileResponse(STATIC_DIR / "commerce.html", headers=NO_CACHE)
+
+    @app.api_route("/commerce/api/{path:path}", methods=["GET", "POST"], include_in_schema=False)
+    async def commerce_api(path: str, request: Request):
+        """The Live Commerce engine's API, same origin as the pages. Commands need the admin token."""
+        if request.method == "POST":
+            require_admin(request.headers.get("x-admin-token"))
+        url = f"http://127.0.0.1:{commerce.ENGINE_PORT}/{path}"
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                r = await client.request(request.method, url, params=request.query_params, content=await request.body(),
+                                         headers={"content-type": request.headers.get("content-type", "application/json")})
+        except httpx.HTTPError:
+            raise HTTPException(503, "The Live Commerce engine is not running (uv run python -m secondbrain.commerce)")
+        return Response(r.content, r.status_code, media_type=r.headers.get("content-type"))
 
     @app.post("/admin/learn", dependencies=[Depends(require_admin)])
     def learn(brain: Brain):
