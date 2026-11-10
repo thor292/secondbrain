@@ -295,6 +295,7 @@ class Writer:
                     with self.lock:
                         self.rows_total = self.history_rows = 0
                         self.window.clear()
+                    self.sim_ts = None   # the old run's clock would hold the watcher at its last day
                     self.reset_requested.clear()
                     self.resets += 1
                 if topic is not None:
@@ -440,7 +441,7 @@ class Watcher:
         now = ist(self.w.sim_ts)
         hour = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=1)   # the last closed hour
         day = now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
-        if self.done_hour is None:
+        if self.done_hour is None or hour < self.done_hour:   # first tick, or the clock went back
             self.done_hour, self.done_day = hour, day
             return
         if hour > self.done_hour:

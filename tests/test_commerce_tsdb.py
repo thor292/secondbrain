@@ -203,3 +203,13 @@ def test_show_writes_the_parameters_into_the_query():
     sql = tsdb._show("SELECT * FROM t WHERE day = %(day)s AND b = ANY(%(hours)s) AND z >= %(z)s",
                      {"day": DAY, "hours": [at(DAY, h) for h in range(5)], "z": 4.0})
     assert "day = '2026-11-12'" in sql and "z >= 4.0" in sql and ", …]" in sql
+
+
+def test_watcher_follows_the_clock_back_after_a_reset(conn):
+    wa, _ = watcher(conn)
+    wa.history_done = True
+    wa.w.sim_ts = at(DAY + timedelta(days=5), 6).replace(tzinfo=None).isoformat()   # the old run, days ahead
+    wa._tick(conn)
+    wa.w.sim_ts = at(DAY, 6).replace(tzinfo=None).isoformat()                       # a new run from today
+    wa._tick(conn)
+    assert wa.done_day == at(DAY - timedelta(days=1), 0) and wa.done_hour == at(DAY, 5)
