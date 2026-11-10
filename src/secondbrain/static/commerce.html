@@ -1083,7 +1083,7 @@ const FEED = {
     const kinds = Object.entries(st?.signals_by_kind || {}).sort((a, b) => b[1] - a[1]);
     $("feed-meta").replaceChildren(el("span", { class: "chip accent" }, `${num(total)} raised`),
       ...kinds.map(([k, n]) => el("span", { class: "chip" }, `${KIND[k]?.[0] || "•"} ${KIND[k]?.[1] || k} ${num(n)}`)),
-      this.queue.length ? el("span", { class: "chip warn" }, `${this.queue.length} queued`) : null);
+      ...(this.queue.length ? [el("span", { class: "chip warn" }, `${this.queue.length} queued`)] : []));
     $("feed-sub").textContent = `Showing the latest ${Math.min(this.MAX, this.shown)}. Each one is measured from the order that triggered it.`;
   },
 };
