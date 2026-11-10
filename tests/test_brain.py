@@ -103,6 +103,14 @@ def test_chat_screen_and_demo_users(client):
     assert {"asha", "ravi", "lee"} <= users
 
 
+def test_demo_hands_the_admin_token_only_to_this_machine(client):
+    from fastapi.testclient import TestClient
+
+    assert client.get("/demo/admin-token").status_code == 404   # the test client isn't on this machine
+    with TestClient(client.app, client=("127.0.0.1", 50000)) as local:
+        assert local.get("/demo/admin-token").json() == {"token": ADMIN_TOKEN}
+
+
 def test_conversation_history_is_kept_and_can_be_reset(client):
     headers = {"X-User-Id": "asha"}
     ask(client, "asha", "What is the Q4 sales target?")

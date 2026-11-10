@@ -1222,6 +1222,7 @@ function gate() {
   document.body.append(wrap); setTimeout(() => input.focus(), 50);
 }
 async function connectLive() {
+  await SB.adminToken();
   if (!token()) return gate();
   let res;
   try { res = await fetch("/admin/live/monitor", { headers: { "X-Admin-Token": token() || "" } }); } catch { res = null; }

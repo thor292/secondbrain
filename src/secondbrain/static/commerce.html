@@ -1540,6 +1540,7 @@ async function boot() {
   try { merchants = await fetchJSON("/commerce/api/merchants"); }
   catch { return startMock("offline"); }
   if (!Array.isArray(merchants)) return startMock("offline");
+  await SB.adminToken();
   if (!token()) return gate();
   startLive(merchants);
 }

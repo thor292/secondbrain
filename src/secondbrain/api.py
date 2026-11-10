@@ -126,6 +126,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def health(brain: Brain):
         return {"status": "ok", "llm": brain.llm.name, "embedding_model": brain.embedder.name}
 
+    @app.get("/demo/admin-token", include_in_schema=False)
+    def demo_admin_token(request: Request):
+        """The admin token for pages opened on this machine in demo mode, so a local demo never asks for it.
+        Anyone else (another machine, or demo mode off) still has to type it."""
+        local = request.client is not None and request.client.host in ("127.0.0.1", "::1", "localhost")
+        if not (settings.demo_mode and settings.admin_token and local):
+            raise HTTPException(404, "Not available")
+        return {"token": settings.admin_token}
+
     @app.get("/demo/users")
     def demo_users():
         if not settings.demo_mode:

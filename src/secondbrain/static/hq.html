@@ -1398,6 +1398,7 @@ async function boot() {
   let status;
   try { status = await fetchJSON("/commerce/api/status"); } catch { return startMock("offline"); }
   if (!status || !status.sim_ts) return startMock("offline");
+  await SB.adminToken();
   if (!token()) return gate();
   startLive(status);
 }

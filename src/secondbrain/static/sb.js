@@ -118,6 +118,19 @@ const SB = (() => {
     b.textContent = state === "on" ? "Live" : "Reconnecting…";
     b.title = state === "on" ? "Connected: new signals and knowledge appear the moment they happen" : "Live notices paused";
   }
+  // The admin token: typed once per tab, or handed over by the app when the page is opened on the demo
+  // machine itself (demo mode, local only).
+  let tokenP = null;
+  function adminToken() {
+    const have = (() => { try { return sessionStorage.getItem("sb-admin-token"); } catch { return null; } })();
+    if (have) return Promise.resolve(have);
+    return tokenP ||= fetch("/demo/admin-token").then((r) => (r.ok ? r.json() : {})).catch(() => ({})).then((d) => {
+      tokenP = null;
+      if (d.token) { try { sessionStorage.setItem("sb-admin-token", d.token); } catch {} }
+      return d.token || null;
+    });
+  }
+
   // Live Commerce topics sit under a prefix the app reports (a second copy of the demo uses its own).
   let commercePrefix = "sb/commerce", configP = null;
   function commerceConfig() {
@@ -168,5 +181,5 @@ const SB = (() => {
     set(k, v) { try { v == null ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, JSON.stringify(v)); } catch {} },
   };
 
-  return { el, svg, money, shortMoney, pct, fmtDay, addDays, festivalNote, festivalsBetween, countUp, kpi, sparkline, nav, store, LOGO, live, toast, batcher, commerceConfig, commerceRest };
+  return { el, svg, money, shortMoney, pct, fmtDay, addDays, festivalNote, festivalsBetween, countUp, kpi, sparkline, nav, store, LOGO, live, toast, batcher, commerceConfig, commerceRest, adminToken };
 })();
