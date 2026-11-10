@@ -1396,7 +1396,8 @@ async function startLive(status) {
 async function boot() {
   if (Q.get("mock") === "1") return startMock("forced");
   let status;
-  try { status = await fetchJSON("/commerce/api/status"); } catch { return startMock("offline"); }
+  const waiting = () => { const b = $("mode"); if (b) { b.className = "mode"; b.textContent = "Engine busy, connecting…"; } };
+  try { status = await SB.engineFetch("/commerce/api/status", { onWait: waiting }); } catch { return startMock("offline"); }
   if (!status || !status.sim_ts) return startMock("offline");
   await SB.adminToken();
   if (!token()) return gate();

@@ -328,9 +328,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             require_admin(request.headers.get("x-admin-token"))
         url = f"http://127.0.0.1:{commerce.ENGINE_PORT}/{path}"
         try:
-            async with httpx.AsyncClient(timeout=5) as client:
+            async with httpx.AsyncClient(timeout=15) as client:
                 r = await client.request(request.method, url, params=request.query_params, content=await request.body(),
                                          headers={"content-type": request.headers.get("content-type", "application/json")})
+        except httpx.TimeoutException:   # running, but busy (a big batch or the first history fit)
+            raise HTTPException(504, "The Live Commerce engine is busy; try again in a moment")
         except httpx.HTTPError:
             raise HTTPException(503, "The Live Commerce engine is not running (uv run python -m secondbrain.commerce)")
         return Response(r.content, r.status_code, media_type=r.headers.get("content-type"))

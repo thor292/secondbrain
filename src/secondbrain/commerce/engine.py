@@ -71,6 +71,16 @@ def pct(values, q: float) -> float | None:
     return round(float(np.percentile(np.fromiter(values, float), q)), 1) if values else None
 
 
+def recent(samples, seconds: float = 120.0, at_least: int = 30) -> list[float]:
+    """(wall s, ms) samples of the last two minutes, or the last 30 when signals are sparse: a latency that
+    moves with the run, not the median of everything since the start."""
+    if not samples:
+        return []
+    cut = time.time() - seconds
+    live = [v for t, v in samples if t >= cut]
+    return live if len(live) >= at_least else [v for _, v in list(samples)[-at_least:]]
+
+
 def _above(up: float) -> str:
     """'64% above forecast', or '3.1x its forecast' once a percentage stops reading naturally."""
     return f"{up:.0%} above forecast" if up < 1.5 else f"{up + 1:.1f}x its forecast"
@@ -92,12 +102,18 @@ class Engine:
         self.lock = threading.RLock()
         self.started = time.time()
         self.signal_seq = 0
+        # Snapshots the HTTP API answers from, so pages never wait behind a busy batch:
+        # key -> (computed at, value), key -> when a page last asked, key -> (compute, min seconds between)
+        self.views: dict = {}
+        self.wanted: dict = {}
+        self.view_fns: dict = {}
         self.reset()
 
     # ------------------------------------------------------------------ state
 
     def reset(self, sim_start: str = C.SIM_START) -> None:
         self.sim_start = sim_start
+        self.views = {}   # a new run: nothing from the last one
         self.reg = Registry()
         self.fc = Forecaster(date.fromisoformat(sim_start[:10]) - timedelta(days=C.HISTORY_DAYS + 7))
         self.profile = HourProfile()
@@ -175,6 +191,8 @@ class Engine:
             busy = time.perf_counter() - t0
             self.window.append((time.time(), self.totals["orders"] - n_orders, self.totals["revenue"] - revenue,
                                 len(batch), busy, self.batch_platform))
+            if busy > 0.5:
+                log.info("slow batch: %d messages in %.2f s", len(batch), busy)
             self.batch_platform = {}
 
     def _handle(self, topic: str, payload, recv: float) -> bool:
@@ -409,6 +427,13 @@ class Engine:
         self.elast_dirty = False
 
     def _close_day(self) -> None:
+        t0 = time.perf_counter()
+        try:
+            self._close_day_inner()
+        finally:
+            log.info("day close %s: %.2f s", self.today, time.perf_counter() - t0)
+
+    def _close_day_inner(self) -> None:
         """The sim day ``self.today`` closed: score, learn, update forecasts, then decide for the new day."""
         self._fit_pending(force=True)
         self._refresh_elasticity()
@@ -1009,9 +1034,9 @@ class Engine:
             sig["sent_ms"] = int(now)
             sig["latency_ms"] = int(now - trigger) if trigger else None
             self.publish_live(C.signal_topic(sig["platform"], sig["merchant"]), sig, 1)
-            self.lat["signal"].append(now - processed_ms)
+            self.lat["signal"].append((now / 1000, now - processed_ms))
             if trigger:
-                self.lat["end_to_end"].append(now - trigger)
+                self.lat["end_to_end"].append((now / 1000, now - trigger))
             self.signals.append(sig)
             self.signal_by_id[sig["id"]] = sig
             self.pipeline["signals_raised"] += 1
@@ -1101,10 +1126,44 @@ class Engine:
 
     # ------------------------------------------------------------------ live outputs
 
+    def view(self, key: tuple, compute, every: float = 1.0):
+        """A page's read: computed now when the engine is free; while a batch holds it, the latest snapshot at
+        once (the first time, waiting up to 10 s). The worker refreshes snapshots pages are still reading
+        between batches (``refresh_views``)."""
+        self.wanted[key] = time.time()
+        self.view_fns[key] = (compute, every)
+        hit = self.views.get(key)
+        if not self.lock.acquire(blocking=hit is None, timeout=10 if hit is None else -1):
+            if hit is not None:
+                return hit[1]
+            raise TimeoutError("engine busy")
+        try:
+            value = compute()
+            self.views[key] = (time.time(), value)
+            return value
+        finally:
+            self.lock.release()
+
+    def refresh_views(self, now: float) -> None:
+        for key in list(self.wanted):
+            if now - self.wanted[key] > 15:   # nobody is reading it any more
+                for d in (self.wanted, self.views, self.view_fns):
+                    d.pop(key, None)
+                continue
+            compute, every = self.view_fns[key]
+            hit = self.views.get(key)
+            if hit is None or now - hit[0] >= every:
+                try:
+                    self.views[key] = (now, compute())
+                except Exception:   # e.g. a merchant that a reset removed
+                    for d in (self.wanted, self.views, self.view_fns):
+                        d.pop(key, None)
+
     def tick(self) -> None:
-        """Wall-clock cadence: stats every 500 ms, ticker every 250 ms."""
+        """Wall-clock cadence: stats every 500 ms, ticker every 250 ms, page snapshots about every second."""
         now = time.time()
         with self.lock:
+            self.refresh_views(now)
             if now - self.last_ticker_at >= 0.25:
                 self.last_ticker_at = now
                 if self.ticker:
@@ -1147,6 +1206,7 @@ class Engine:
         r = self._rates()
         nxt = C.next_festival(self.today) if self.today else None
         L = self.lat
+        sig_ms, e2e_ms = recent(L["signal"]), recent(L["end_to_end"])
         return {
             "sent_ms": C.wall_ms(), "sim_ts": self.now.isoformat(timespec="seconds") if self.now else None,
             "speed": self.speed, "speed_actual": self.speed_actual, "running": self.running,
@@ -1162,8 +1222,8 @@ class Engine:
                           for pid, t in self.platform_totals.items()},
             "latency_ms": {"broker_p50": pct(L["broker"], 50), "broker_p95": pct(L["broker"], 95),
                            "process_p50": pct(L["process"], 50), "process_p95": pct(L["process"], 95),
-                           "signal_p50": pct(L["signal"], 50), "signal_p95": pct(L["signal"], 95),
-                           "end_to_end_p50": pct(L["end_to_end"], 50), "end_to_end_p95": pct(L["end_to_end"], 95)},
+                           "signal_p50": pct(sig_ms, 50), "signal_p95": pct(sig_ms, 95),
+                           "end_to_end_p50": pct(e2e_ms, 50), "end_to_end_p95": pct(e2e_ms, 95)},
             "accuracy": self.acc.summary(self.reg.platform_ids, self.fc.backtest),
             "learning": {"outcomes": self.book.n_outcomes, "hit_rate": self.book.hit_rate(),
                          "judged": self.book.n_judged,
@@ -1276,14 +1336,19 @@ def create_app(engine: Engine):
 
     app = FastAPI(title="SecondBrain Live Commerce engine")
 
-    def scoped(view, platform: str | None, merchant: str | None, *args):
-        """Run a command-centre view on one branch of the tree (HQ, a platform, a merchant)."""
-        with engine.lock:
-            try:
-                sc = hq.resolve(engine, platform or None, merchant or None)
-            except hq.ScopeError as exc:
-                raise HTTPException(exc.status, exc.detail)
-            return view(engine, sc, *args)
+    def snapshot(key: tuple, compute, every: float = 1.0):
+        try:
+            return engine.view(key, compute, every)
+        except TimeoutError:
+            raise HTTPException(504, "The engine is busy; try again in a moment")
+
+    def scoped(view, platform: str | None, merchant: str | None, *args, every: float = 1.0):
+        """A command-centre view on one branch of the tree (HQ, a platform, a merchant)."""
+        try:
+            return snapshot((view.__name__, platform, merchant, *args),
+                            lambda: view(engine, hq.resolve(engine, platform or None, merchant or None), *args), every)
+        except hq.ScopeError as exc:
+            raise HTTPException(exc.status, exc.detail)
 
     @app.get("/platforms")
     def platforms(platform: str | None = None, merchant: str | None = None):
@@ -1291,7 +1356,7 @@ def create_app(engine: Engine):
 
     @app.get("/lessons")
     def lessons(platform: str | None = None, merchant: str | None = None):
-        return scoped(hq.lessons, platform, merchant)
+        return scoped(hq.lessons, platform, merchant, every=3.0)
 
     @app.get("/attention")
     def attention(limit: int = 10, platform: str | None = None, merchant: str | None = None):
@@ -1299,38 +1364,36 @@ def create_app(engine: Engine):
 
     @app.get("/tree")
     def tree(platform: str | None = None, merchant: str | None = None):
-        return scoped(hq.tree, platform, merchant)
+        return scoped(hq.tree, platform, merchant, every=2.0)
 
     @app.get("/status")
     def status():
-        with engine.lock:
-            return engine.last_stats or engine.stats()
+        if engine.last_stats:   # replaced whole every 500 ms by the worker: safe to hand out as it is
+            return engine.last_stats
+        return snapshot(("status",), engine.stats)
 
     @app.get("/merchants")
     def merchants():
-        with engine.lock:
-            return engine.merchants_view()
+        return snapshot(("merchants",), engine.merchants_view)
 
     @app.get("/merchants/{mid}")
     def merchant(mid: str):
-        with engine.lock:
-            view = engine.merchant_view(mid)
+        view = snapshot(("merchant", mid), lambda: engine.merchant_view(mid))
         if view is None:
             raise HTTPException(404, "unknown merchant")
         return view
 
     @app.get("/merchants/{mid}/series/{sku}")
     def series(mid: str, sku: str):
-        with engine.lock:
-            view = engine.series_view(mid, sku)
+        view = snapshot(("series", mid, sku), lambda: engine.series_view(mid, sku))
         if view is None:
             raise HTTPException(404, "unknown series (or the clock has not started)")
         return view
 
     @app.get("/signals")
     def signals(limit: int = 50):
-        with engine.lock:
-            return list(reversed(engine.signals))[:max(0, min(limit, 500))]
+        n = max(0, min(limit, 500))
+        return snapshot(("signals", n), lambda: list(reversed(engine.signals))[:n])
 
     @app.post("/control")
     def control(body: dict):

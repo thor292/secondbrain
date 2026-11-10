@@ -1537,7 +1537,8 @@ async function boot() {
   const q = new URLSearchParams(location.search);
   if (q.get("mock") === "1") return startMock("forced");
   let merchants;
-  try { merchants = await fetchJSON("/commerce/api/merchants"); }
+  const waiting = () => { const b = $("mode"); b.className = "mode"; b.textContent = "Engine busy, connecting…"; };
+  try { merchants = await SB.engineFetch("/commerce/api/merchants", { onWait: waiting }); }
   catch { return startMock("offline"); }
   if (!Array.isArray(merchants)) return startMock("offline");
   await SB.adminToken();

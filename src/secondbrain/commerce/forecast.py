@@ -58,6 +58,8 @@ RESID_BETA = 0.1      # residual / accuracy smoothing
 Z80 = 1.2816
 HORIZON = 14
 LEVEL_FLOOR = 0.02
+ALPHA_SAMPLE = 400    # products per category that choose its smoothing alpha...
+ALPHA_DAYS = 150      # ...over the last 150 days of history
 SENS_PSEUDO = 40.0    # units of festival-day evidence before a merchant's own festival sensitivity moves from 1
 SENS_RANGE = (0.6, 1.6)
 FEST_FLOOR = 0.3      # a festival never takes more than 70% off a day (keeps the filter stable after big dips)
@@ -475,11 +477,24 @@ class Forecaster:
         return st
 
     def _choose_alpha(self, init: State, Y, P, C, off, cat, grp, mer, t0, pool_A, pool_B) -> np.ndarray:
-        """Run every alpha side by side (rows tiled) on a copy of the pools; best per category by WAPE."""
+        """Run every alpha side by side (rows tiled) on a copy of the pools; best per category by WAPE.
+
+        A category's alpha is one number, so a sample of its products over the last months decides it as
+        well as all of them over 14 months, at a fraction of the time and memory."""
+        rng = np.random.default_rng(len(off))
+        rows = np.concatenate([rng.permutation(np.flatnonzero(cat == c))[:ALPHA_SAMPLE] for c in np.unique(cat)])
+        s0 = max(0, Y.shape[1] - ALPHA_DAYS)
+        sub = rows[off[rows] <= Y.shape[1] - 28]   # products with enough days in the window to judge
+        if len(sub) and s0:
+            rows = sub
+        Y, P, C = Y[rows, s0:], P[rows, s0:], C[rows, s0:]
+        off, sub_cat, grp, mer = np.maximum(off[rows] - s0, 0), cat[rows], grp[rows], mer[rows]
+        t0 += s0
+        init = self._init_state(Y, P, off, t0)
         k, n = len(ALPHAS), len(off)
         st = State(*(np.concatenate([getattr(init, f)] * k) for f in init.__dataclass_fields__))
         st.alpha = np.repeat(ALPHAS, n)
-        cat_k, grp_k, mer_k, off_k = np.tile(cat, k), np.tile(grp, k), np.tile(mer, k), np.tile(off, k)
+        cat_k, grp_k, mer_k, off_k = np.tile(sub_cat, k), np.tile(grp, k), np.tile(mer, k), np.tile(off, k)
         Yk, Pk, Ck = np.tile(Y, (k, 1)), np.tile(P, (k, 1)), np.tile(C, (k, 1))
         pools = (self.pool.copy(), self.fpool.copy(), self.sens.copy())
         err = np.zeros(k * n)
@@ -490,7 +505,7 @@ class Forecaster:
             scored = off_k[act] <= t - 14
             err[act[scored]] += np.abs(Yk[act[scored], t] - pred[scored])
         n_cat = len(self.pool.num)
-        per_cat = np.stack([np.bincount(cat, err[j * n:(j + 1) * n], n_cat) for j in range(k)])
+        per_cat = np.stack([np.bincount(sub_cat, err[j * n:(j + 1) * n], n_cat) for j in range(k)])
         return ALPHAS[per_cat.argmin(axis=0)][cat]
 
     # ------------------------------------------------------------------ live

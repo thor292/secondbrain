@@ -533,3 +533,27 @@ def test_rates_measure_the_current_run_only(engine):
     engine.run_since -= 0.5   # half a second into the run
     engine.window.append((time.time(), 100, 1000.0, 1, 0.001, {"shopify": 100}))
     assert engine.stats()["orders_per_sec"] == pytest.approx(200, rel=0.05)   # 100 orders / 0.5 s, not / 3 s
+
+
+def test_api_answers_from_a_snapshot_while_a_batch_holds_the_engine(network):
+    import threading
+    from fastapi.testclient import TestClient
+
+    client = TestClient(create_app(network))
+    fresh = client.get("/merchants").json()
+    status = client.get("/status").json()
+    held, release = threading.Event(), threading.Event()
+
+    def busy():
+        with network.lock:
+            held.set()
+            release.wait(10)
+
+    threading.Thread(target=busy, daemon=True).start()
+    held.wait(5)
+    try:
+        t0 = time.perf_counter()
+        assert client.get("/merchants").json() == fresh and client.get("/status").json() == status
+        assert time.perf_counter() - t0 < 1.0
+    finally:
+        release.set()

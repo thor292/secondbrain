@@ -1639,7 +1639,10 @@ async function boot() {
   resize(); renderLegend(); renderCounts(); PANEL.render();
   requestAnimationFrame((t) => { lastT = t; frame(t); });
   let offline = false;
-  if (!FORCE_MOCK) { try { await getJSON("/merchants", 5000); } catch (e) { offline = true; } }
+  if (!FORCE_MOCK) {
+    try { await SB.engineFetch("/commerce/api/merchants", { onWait: () => caption("The engine is busy; connecting…", 2000) }); }
+    catch (e) { offline = true; }
+  }
   if (FORCE_MOCK || offline) { MOCK = makeMock(); setMode("mock"); if (offline) caption("The Live Commerce engine isn't reachable, so this browser is showing <b>demo data</b>.", 8000); }
   await refreshTree();
   if (!G.nodes.length) return;

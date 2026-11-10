@@ -131,6 +131,26 @@ const SB = (() => {
     });
   }
 
+  // A read from the Live Commerce engine that waits out a busy engine (504, or no answer yet) instead of
+  // failing: only a stopped engine (or 90 s of busy) gives up, so a page never falls back to its demo feed
+  // just because the engine was in the middle of a big batch.
+  async function engineFetch(url, { timeout = 8000, onWait } = {}) {
+    const until = Date.now() + 90000;
+    for (let n = 0; ; n++) {
+      const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), timeout);
+      try {
+        const r = await fetch(url, { signal: ctl.signal });
+        if (r.ok) return await r.json();
+        if (r.status !== 504) { const e = new Error(r.statusText); e.status = r.status; throw e; }
+      } catch (e) {
+        if (e.name !== "AbortError") throw e;
+      } finally { clearTimeout(t); }
+      if (Date.now() > until) throw new Error("The engine stayed busy");
+      onWait?.(n);
+      await new Promise((res) => setTimeout(res, 1500));
+    }
+  }
+
   // Live Commerce topics sit under a prefix the app reports (a second copy of the demo uses its own).
   let commercePrefix = "sb/commerce", configP = null;
   function commerceConfig() {
@@ -181,5 +201,5 @@ const SB = (() => {
     set(k, v) { try { v == null ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, JSON.stringify(v)); } catch {} },
   };
 
-  return { el, svg, money, shortMoney, pct, fmtDay, addDays, festivalNote, festivalsBetween, countUp, kpi, sparkline, nav, store, LOGO, live, toast, batcher, commerceConfig, commerceRest, adminToken };
+  return { el, svg, money, shortMoney, pct, fmtDay, addDays, festivalNote, festivalsBetween, countUp, kpi, sparkline, nav, store, LOGO, live, toast, batcher, commerceConfig, commerceRest, adminToken, engineFetch };
 })();
