@@ -439,11 +439,13 @@ const sqlBlock = (sql) => { const p = el("pre", { class: "sql" }); p.innerHTML =
 
 // A number that eases toward its target every frame.
 const TWEENS = [];
+// A number on screen. Rates show each new measurement as it is; totals roll forward like an odometer,
+// and never count up from zero or back down: a first value or a reset shows at once.
 class Tween {
-  constructor(node, fmt) { this.node = node; this.fmt = fmt; this.v = null; this.t = null; TWEENS.push(this); }
+  constructor(node, fmt, rate = false) { this.node = node; this.fmt = fmt; this.rate = rate; this.v = null; this.t = null; TWEENS.push(this); }
   set(t) {
     if (t == null || !isFinite(t)) { this.t = this.v = null; this.node.textContent = "—"; return; }
-    if (this.v == null) this.v = reduced() ? t : 0;
+    if (this.rate || this.v == null || t < this.v || reduced()) this.v = t;
     this.t = t;
   }
   step(dt) {
@@ -551,10 +553,10 @@ const KPI = {
       const node = el("div", { class: `kpi rise ${opts.glow || ""}`, style: { animationDelay: (opts.i || 0) * 50 + "ms" } }, el("div", { class: "k" }, label), v, d, x);
       box.append(node);
       v.textContent = "—";
-      this.tiles[key] = { node, v, d, x, tw: opts.fmt ? new Tween(v, opts.fmt) : null };
+      this.tiles[key] = { node, v, d, x, tw: opts.fmt ? new Tween(v, opts.fmt, opts.rate) : null };
     };
     tile("rows", "Rows stored", "Every order line plus 14 months of daily sales per product.", { glow: "glow", fmt: (x) => words(x), i: 0 });
-    tile("rate", "Rows / second now", "Written in batches every quarter second.", { fmt: (x) => num(x), i: 1 });
+    tile("rate", "Rows / second now", "Written in batches every quarter second.", { fmt: (x) => num(x), rate: true, i: 1 });
     tile("batch", "Insert batch time", "Median time to write one batch.", { i: 2 });
     tile("ratio", "Compression", "Old days stored column by column.", { glow: "glow-good", i: 3 });
     tile("chunks", "Chunks", "Pieces of the tables, one per day or month.", { fmt: (x) => num(x), i: 4 });
