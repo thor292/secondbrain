@@ -69,6 +69,11 @@ current image for the running demo, and switch the image when event ingestion
 starts. Everything was tested on both (`docker-compose.timescale.yml` runs
 TimescaleDB on port 55433).
 
+Demo 2 (branch `demo2-timescale`, [TIMESCALEDB.md](TIMESCALEDB.md)) runs on
+that image: `sales_daily` is a hypertable, and Live Commerce writes every order
+and 14 months of product history into hypertables with continuous aggregates
+and the columnstore.
+
 Switching the main database to TimescaleDB:
 
 1. `pg_dump` the `secondbrain` database (or reload it: it's all generated from

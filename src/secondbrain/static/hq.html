@@ -507,9 +507,9 @@ function lessonText(L) {
 
 // ---------------------------------------------------------------- live messages
 function onMessage(topic, m) {
-  const i = topic.indexOf("commerce/");
-  if (i < 0 || !m) return;
-  const rest = topic.slice(i + 9), parts = rest.split("/");
+  const rest = SB.commerceRest(topic);
+  if (rest == null || !m) return;
+  const parts = rest.split("/");
   if (rest === "stats") onStats(m);
   else if (parts[0] === "signals") onSignal(m);
   else if (parts[0] === "outcomes") onOutcome(m, parts[2]);

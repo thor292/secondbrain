@@ -147,6 +147,17 @@
   .pnode .pl { margin-top: 5px; font-size: 12px; font-weight: 700; color: var(--cyan); font-variant-numeric: tabular-nums; padding: 2px 9px; border-radius: 99px; background: rgba(51, 214, 242, .1); white-space: nowrap; }
   .rate { position: absolute; z-index: 2; transform: translate(-50%, -50%); font-size: 11px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums;
           background: var(--panel-solid); border: 1px solid var(--border); padding: 1px 7px; border-radius: 99px; white-space: nowrap; pointer-events: none; }
+  .tsdb { margin-top: 16px; }
+  .tsdb .tgrid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)) minmax(0, 2.2fr); gap: 12px; align-items: stretch; }
+  .tsdb .tstat { background: rgba(255,255,255,.03); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .tsdb .tstat b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; margin-top: 4px; white-space: nowrap; }
+  .tsdb .tstat span { font-size: 11.5px; color: var(--muted); }
+  .tsdb .tfind { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; min-width: 0; }
+  .tsdb .tfind a { color: inherit; text-decoration: none; padding: 7px 10px; border-radius: 10px; background: rgba(51,214,242,.06);
+    border: 1px solid rgba(51,214,242,.18); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tsdb .tfind a.new { animation: tflash 1.2s ease-out; }
+  @keyframes tflash { from { background: rgba(51,214,242,.28); } }
+  @media (max-width: 1150px) { .tsdb .tgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .tsdb .tfind { grid-column: 1 / -1; } }
   .lat-wrap { margin-top: 18px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 20px; align-items: center; }
   .lat-big { font-size: 13px; color: var(--muted); }
   .lat-big b { display: block; font-size: 34px; color: var(--text); font-weight: 800; letter-spacing: -0.03em; line-height: 1.05; font-variant-numeric: tabular-nums; }
@@ -328,6 +339,20 @@
     </div>
   </section>
 
+  <section class="card tight tsdb hidden" id="tsdb">
+    <div class="hd"><div><div class="eyebrow">Stored in TimescaleDB</div><h2>Every order lands in a time-series database, live</h2>
+      <p>Hypertables chunked by day, rollups kept current, old days compressed, and SQL checks that raise their own signals.</p></div>
+      <a class="chip" href="/timescale">Open TimescaleDB →</a></div>
+    <div class="tgrid">
+      <div class="tstat"><span>Rows stored</span><b id="ts-rows">—</b><span id="ts-rows-sub">order lines + history</span></div>
+      <div class="tstat"><span>Written now</span><b id="ts-rate">—</b><span id="ts-rate-sub">rows / second</span></div>
+      <div class="tstat"><span>Compressed</span><b id="ts-ratio">—</b><span id="ts-ratio-sub">columnstore</span></div>
+      <div class="tstat"><span>SQL check</span><b id="ts-q">—</b><span>hour check, ms</span></div>
+      <div class="tstat"><span>SQL findings</span><b id="ts-sig">0</b><span>published over MQTT</span></div>
+      <div class="tfind" id="ts-find"><div class="empty" style="padding:8px 0">The SQL watcher reports here as simulated hours close.</div></div>
+    </div>
+  </section>
+
   <div class="g2b">
     <section class="card tight">
       <div class="hd">
@@ -492,9 +517,10 @@ async function control(cmd) {
 }
 
 function onMessage(topic, m) {
-  const i = topic.indexOf("commerce/");
-  if (i < 0 || !m) return;
-  const rest = topic.slice(i + 9);
+  const rest = SB.commerceRest(topic);
+  if (rest == null || !m) return;
+  if (rest === "tsdb/stats") return onTsdbStats(m);
+  if (rest.startsWith("tsdb/signals/")) return onTsdbSignal(m);
   if (rest === "stats") onStats(m);
   else if (rest === "ticker") onTicker(m);
   else if (rest.startsWith("signals/")) onSignal(m);
@@ -605,6 +631,30 @@ function initKpis() {
 function flashKpi(k) { const n = K[k]?.node; if (!n || reduced()) return; n.classList.remove("flash"); void n.offsetWidth; n.classList.add("flash"); }
 
 // ---------------------------------------------------------------- stats
+// ---------------------------------------------------------------- TimescaleDB (shown where this copy has it)
+const fmtBytes = (b) => (b >= 1e9 ? (b / 1e9).toFixed(1) + " GB" : b >= 1e6 ? Math.round(b / 1e6) + " MB" : Math.round((b || 0) / 1e3) + " kB");
+const fmtRows = (n) => (n >= 1e7 ? (n / 1e7).toFixed(2) + " cr" : n >= 1e5 ? (n / 1e5).toFixed(1) + " L" : num(n));
+function onTsdbStats(m) {
+  $("tsdb").classList.remove("hidden");
+  $("ts-rows").textContent = fmtRows(m.rows_total || 0);
+  $("ts-rows-sub").textContent = `${fmtRows(m.order_lines || 0)} orders · ${fmtRows(m.history_rows || 0)} history`;
+  $("ts-rate").textContent = num(m.rows_per_sec || 0);
+  $("ts-rate-sub").textContent = `rows / second · batch ${m.batch_ms_p50 ?? "—"} ms`;
+  $("ts-ratio").textContent = m.columnstore_ratio ? m.columnstore_ratio + "×" : "—";
+  $("ts-ratio-sub").textContent = m.columnstore_after_bytes ? `${fmtBytes(m.columnstore_before_bytes)} → ${fmtBytes(m.columnstore_after_bytes)}` : "measuring…";
+  const q = (m.query_ms || {})["hour check"];
+  $("ts-q").textContent = q != null ? q + " ms" : "—";
+  $("ts-sig").textContent = num(m.signals_total || 0);
+}
+function onTsdbSignal(s) {
+  const box = $("ts-find");
+  box.querySelector(".empty")?.remove();
+  const a = el("a", { href: "/timescale#" + encodeURIComponent(s.id), class: "new", title: s.detail || "" },
+    (s.kind || "").endsWith("spike") ? "▲ " : "▼ ", s.title);
+  box.prepend(a);
+  while (box.children.length > 3) box.lastChild.remove();
+}
+
 function onStats(m) {
   const prev = S.stats, now = performance.now();
   if (m.sent_ms) { const d = Math.max(0, Date.now() - m.sent_ms); S.deliv = S.deliv == null ? d : S.deliv * 0.8 + d * 0.2; }

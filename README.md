@@ -52,6 +52,10 @@ five memory types. See [ARCHITECTURE.md](ARCHITECTURE.md) for the design.
   holidays) are backtested on each merchant's history and the best one per
   product is kept, with its reason. Sales are permission-checked like memories.
   See [docs/FORECASTING.md](docs/FORECASTING.md).
+- **Live Commerce**: Shopify, Reliance Retail and DMart (600 merchants) streamed
+  over MQTT, forecast and coached in real time ([docs/COMMERCE.md](docs/COMMERCE.md)).
+  Demo 2 stores every order and the history in TimescaleDB, with SQL findings over
+  MQTT ([docs/TIMESCALEDB.md](docs/TIMESCALEDB.md)).
 - **Model layer**: an offline `stub` provider for tests, and a `litellm`
   provider for the company proxy.
 

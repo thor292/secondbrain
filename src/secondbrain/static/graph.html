@@ -1432,8 +1432,7 @@ function onTicker(t) {
   }
 }
 function onMessage(topic, m) {
-  const i = topic.indexOf("commerce/"); if (i < 0 || !m) return;
-  const rest = topic.slice(i + 9);
+  const rest = SB.commerceRest(topic); if (rest == null || !m) return;
   if (rest === "stats") { D.status = m; }
   else if (rest === "ticker") onTicker(m);
   else if (rest.startsWith("signals/")) onSignal(m);

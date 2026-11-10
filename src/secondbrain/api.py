@@ -21,6 +21,7 @@ from pydantic import BaseModel
 from secondbrain import admin, demo, evolution, learning, live, maintenance, relationships, signals, tree
 from secondbrain.commerce import ask as commerce_chat
 from secondbrain.commerce import contract as commerce
+from secondbrain.commerce import tsdb_api
 from secondbrain.documents import UnsupportedDocument, extract_text
 from secondbrain.forecasting.api import build_router as forecast_router
 from secondbrain.graph import build_full_graph
@@ -306,6 +307,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def commerce_screen():
         return FileResponse(STATIC_DIR / "commerce.html", headers=NO_CACHE)
 
+    @app.get("/commerce/config", include_in_schema=False)
+    def commerce_config():
+        """What the pages need to find this copy's live topics, and whether TimescaleDB is attached."""
+        return {"live_prefix": commerce.LIVE_PREFIX, "tsdb": tsdb_api.available(settings)}
+
     @app.api_route("/commerce/api/{path:path}", methods=["GET", "POST"], include_in_schema=False)
     async def commerce_api(path: str, request: Request):
         """The Live Commerce engine's API, same origin as the pages. Commands need the admin token."""
@@ -319,6 +325,36 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         except httpx.HTTPError:
             raise HTTPException(503, "The Live Commerce engine is not running (uv run python -m secondbrain.commerce)")
         return Response(r.content, r.status_code, media_type=r.headers.get("content-type"))
+
+    @app.get("/timescale", include_in_schema=False)
+    def timescale_screen():
+        return FileResponse(STATIC_DIR / "timescale.html", headers=NO_CACHE)
+
+    def _tsdb(call, *args):
+        try:
+            return call(settings, *args)
+        except tsdb_api.Unavailable as exc:
+            raise HTTPException(503, str(exc))
+
+    @app.get("/commerce/tsdb/overview")
+    def tsdb_overview():
+        """Hypertables, chunks, sizes, rollups and daily totals per platform, with the SQL that answered."""
+        return _tsdb(tsdb_api.overview)
+
+    @app.get("/commerce/tsdb/merchants/{merchant_id}")
+    def tsdb_merchant(merchant_id: str, days: int = 60):
+        """One merchant's daily sales (history, then live days), the last two days by hour, and last year."""
+        return _tsdb(tsdb_api.merchant, merchant_id, days)
+
+    @app.get("/commerce/tsdb/signals")
+    def tsdb_signals(limit: int = 60):
+        """The SQL watcher's most recent findings, newest first (the same bodies it published over MQTT)."""
+        return _tsdb(tsdb_api.findings, limit)
+
+    @app.get("/commerce/tsdb/top")
+    def tsdb_top(hours: int = 24, limit: int = 10):
+        """The merchants with the most revenue over the last simulated hours."""
+        return _tsdb(tsdb_api.top, hours, limit)
 
     @app.post("/commerce/ask")
     def commerce_ask(body: CommerceAskRequest, brain: Brain):

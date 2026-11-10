@@ -33,7 +33,7 @@ Ingest topics (simulator publishes, engine subscribes; QoS 0 for orders, 1 other
     {"days": ["2025-09-12", ...], "skus": [...], "units": [[per day, per sku]], "prices": [[...]],
      "sold_out": [[0 | 1]]}
     ``units[d][s]`` is units of ``skus[s]`` sold on ``days[d]``; ``prices`` the average price paid;
-    ``sold_out`` 1 when the product ran out that day (sales below demand).
+    ``sold_out`` 1 when the product ran out that day (sales below demand, or no stock left at the close).
 
 ``commerce/v1/{platform}/{merchant}/orders`` - live orders, one message per merchant per tick:
     {"sent_ms", "sim_ts", "orders": [{"id", "customer", "sku", "qty", "price", "offer": signal id | null}]}
@@ -83,6 +83,26 @@ Live topics (engine publishes with the publisher login, the wall reads with the 
 ``sb/commerce/outcomes/{platform}/{merchant}`` - an applied offer's window closed:
     {"signal_id", "sku", "product", "merchant_name", "discount", "expected_uplift_units", "actual_uplift_units",
      "uplift_pct", "revenue_gain", "worked": bool, "elasticity_before", "elasticity_after", "category"}
+
+TimescaleDB (``tsdb.py``: every order and the history in hypertables, SQL findings from them)
+--------------------------------------------------------------------------------------------
+
+``sb/commerce/tsdb/stats`` - every second of wall time:
+    {"sent_ms", "sim_ts", "running", "rows_total", "order_lines", "history_rows", "rows_per_sec",
+     "batch_ms_p50", "backlog", "chunks", "columnstore_chunks", "lines_bytes", "history_bytes",
+     "columnstore_before_bytes", "columnstore_after_bytes", "columnstore_ratio",
+     "rollup_rows": {"cm_sales_1h", "cm_sales_1d", "cm_sku_1d"}, "checked_hour", "checked_day",
+     "query_ms": {name: ms}, "signals_total", "signals_by_kind": {kind: n}, "stockout_lost_last_day"}
+
+``sb/commerce/tsdb/signals/{platform}/{merchant}`` - a finding of the SQL watcher:
+    {"id", "source": "timescaledb", "sent_ms", "sim_ts", "platform", "merchant", "merchant_name", "city",
+     "category", "kind": "hour_spike" | "hour_drop" | "stockout_loss" | "stockout_streak",
+     "window": "hour" | "day", "sku" | null, "product" | null, "title", "detail",
+     "value" (orders for hour_*; rupees lost for stockout_*), "usual" | null, "ratio" | null, "z" | null,
+     "products" (stockout_loss), "days" (stockout_streak), "period_start", "sql" (the query as it ran), "query_ms"}
+
+The app reads the same tables for the TimescaleDB page (GET /commerce/tsdb/overview, /merchants/{id}?days=,
+/top?hours=, /signals?limit=: the findings, stored in cm_findings as they go out); see api.py.
 
 Engine HTTP API (ENGINE_PORT; the app proxies it at /commerce/api/...)
 ---------------------------------------------------------------------
@@ -157,6 +177,7 @@ CONTROL = f"{PREFIX}/_control"
 LIVE_PREFIX = os.environ.get("SB_COMMERCE_LIVE_PREFIX", "sb/commerce")  # must stay under sb/ (live broker ACL)
 STATS = f"{LIVE_PREFIX}/stats"
 TICKER = f"{LIVE_PREFIX}/ticker"
+TSDB_STATS = f"{LIVE_PREFIX}/tsdb/stats"
 
 # Simulated seconds per wall second. The wall shows the labels.
 SPEEDS = {
@@ -221,6 +242,10 @@ def parse_merchant_topic(topic: str) -> tuple[str, str, str] | None:
 
 def signal_topic(platform: str, merchant: str) -> str:
     return f"{LIVE_PREFIX}/signals/{platform}/{merchant}"
+
+
+def tsdb_signal_topic(platform: str, merchant: str) -> str:
+    return f"{LIVE_PREFIX}/tsdb/signals/{platform}/{merchant}"
 
 
 def outcome_topic(platform: str, merchant: str) -> str:

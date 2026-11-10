@@ -387,6 +387,7 @@ def backfill(model: DemandModel, st: State) -> dict:
     units = np.zeros((len(days), model.n), np.int64)
     prices = np.zeros((len(days), model.n))
     demand = np.zeros((len(days), model.n), np.int64)
+    empty = np.zeros((len(days), model.n), bool)   # no stock left at the close
     for i, d in enumerate(days):
         st.arrivals((d + 1) * DAY)
         disc = model.promo_discount(d)
@@ -394,16 +395,17 @@ def backfill(model: DemandModel, st: State) -> dict:
         demand[i] = lines + rng.poisson(lines * model.qty_extra)
         units[i] = np.minimum(demand[i], st.stock)
         st.stock -= units[i]
+        empty[i] = st.stock <= 0
         prices[i] = np.round(model.price * (1 - disc), 2)
         st.reorder(d)
-    return {"days": days, "units": units, "prices": prices, "demand": demand}
+    return {"days": days, "units": units, "prices": prices, "demand": demand, "empty": empty}
 
 
 def history_payload(model: DemandModel, hist: dict, mi: int) -> dict:
     a, b = model.offsets[mi], model.offsets[mi + 1]
     return {"days": [sim_date(d).isoformat() for d in hist["days"]], "skus": model.sku[a:b],
             "units": hist["units"][:, a:b].tolist(), "prices": hist["prices"][:, a:b].tolist(),
-            "sold_out": (hist["units"][:, a:b] < hist["demand"][:, a:b]).astype(int).tolist()}
+            "sold_out": ((hist["units"][:, a:b] < hist["demand"][:, a:b]) | hist["empty"][:, a:b]).astype(int).tolist()}
 
 
 def stock_payload(model: DemandModel, st: State, mi: int, t: float, restocked: np.ndarray | None = None) -> dict:

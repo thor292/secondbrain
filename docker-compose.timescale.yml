@@ -4,8 +4,9 @@
 #   docker compose -f docker-compose.timescale.yml -p secondbrain-ts up -d --wait
 #
 # Then point SB_ADMIN_DATABASE_URL / SB_APP_DATABASE_URL at port 55433.
-# The same init script creates the roles and the test database. To make it the
-# main database, swap this image into docker-compose.yml (see docs/FORECASTING.md).
+# The same init script creates the roles and the test database. Demo 2 runs on it
+# (docs/TIMESCALEDB.md, scripts/demo2.sh). To make it the main database, swap this
+# image into docker-compose.yml (see docs/FORECASTING.md).
 services:
   postgres:
     image: timescale/timescaledb-ha:pg17

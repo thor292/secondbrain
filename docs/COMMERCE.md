@@ -63,7 +63,9 @@ simulator --(MQTT ingest broker)--> engine --(live broker, permission-checked)--
   with measured latencies, the signals feed with *Apply offer*, the forecast in
   focus, and what the brain has learned.
 
-The message contract is in `commerce/contract.py`.
+The message contract is in `commerce/contract.py`. Demo 2 adds TimescaleDB
+under it (`--tsdb`): every order and the history in hypertables, rollups,
+compression and SQL findings over MQTT, in [TIMESCALEDB.md](TIMESCALEDB.md).
 
 ## The numbers, and what they mean
 

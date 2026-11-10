@@ -93,6 +93,11 @@ const SB = (() => {
       el("div", { class: "sb-links" }, links.map(([href, label, key]) => el("a", { href, class: key === active ? "on" : "" }, label))),
       el("div", { class: "right" }, right));
     document.body.prepend(bar);
+    commerceConfig().then((c) => {   // the TimescaleDB page, where this copy has it
+      if (!c.tsdb) return;
+      const hq = bar.querySelector('.sb-links a[href="/hq"]');
+      hq.before(el("a", { href: "/timescale", class: active === "timescale" ? "on" : "" }, "TimescaleDB"));
+    });
     return bar;
   }
 
@@ -113,8 +118,18 @@ const SB = (() => {
     b.textContent = state === "on" ? "Live" : "Reconnecting…";
     b.title = state === "on" ? "Connected: new signals and knowledge appear the moment they happen" : "Live notices paused";
   }
+  // Live Commerce topics sit under a prefix the app reports (a second copy of the demo uses its own).
+  let commercePrefix = "sb/commerce", configP = null;
+  function commerceConfig() {
+    return configP ||= fetch("/commerce/config").then((r) => (r.ok ? r.json() : {})).catch(() => ({}))
+      .then((c) => { if (c.live_prefix) commercePrefix = c.live_prefix; return c; });
+  }
+  // "sb/commerce/signals/dmart/x" -> "signals/dmart/x"; null for anything else.
+  const commerceRest = (topic) => (topic.startsWith(commercePrefix + "/") ? topic.slice(commercePrefix.length + 1) : null);
+
   async function live(credentialsUrl, headers, onMessage) {
     if (liveClient) { liveClient.end(true); liveClient = null; }
+    await commerceConfig();
     try {
       const res = await fetch(credentialsUrl, { headers });
       if (!res.ok) return null;  // live notices switched off: the page still works
@@ -153,5 +168,5 @@ const SB = (() => {
     set(k, v) { try { v == null ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, JSON.stringify(v)); } catch {} },
   };
 
-  return { el, svg, money, shortMoney, pct, fmtDay, addDays, festivalNote, festivalsBetween, countUp, kpi, sparkline, nav, store, LOGO, live, toast, batcher };
+  return { el, svg, money, shortMoney, pct, fmtDay, addDays, festivalNote, festivalsBetween, countUp, kpi, sparkline, nav, store, LOGO, live, toast, batcher, commerceConfig, commerceRest };
 })();

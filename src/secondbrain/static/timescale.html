@@ -1,0 +1,1266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecondBrain TimescaleDB</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='7' fill='%2333d6f2'/></svg>">
+<link rel="stylesheet" href="/static/sb.css">
+<style>
+  /* TimescaleDB: the data platform under Live Commerce, shown working. Page-only styles; tokens come from sb.css. */
+  .ts { max-width: 1440px; }
+  .sb-nav .live-badge { display: none; } /* the hero shows its own badge */
+  .mono, code, pre { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  .mode { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; letter-spacing: .04em; padding: 5px 11px; border-radius: 999px;
+          border: 1px solid var(--border); color: var(--muted); vertical-align: middle; white-space: nowrap; }
+  .mode::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+  .mode.on { color: var(--good); border-color: rgba(52, 211, 153, .35); background: var(--good-soft); }
+  .mode.on::before { background: var(--good); animation: ping 2s infinite; }
+  .mode.paused { color: var(--warn); border-color: rgba(251, 191, 36, .4); background: var(--warn-soft); }
+  .mode.paused::before { background: var(--warn); }
+
+  /* ---------- 1. hero ---------- */
+  .hero { padding: 28px 30px 24px; overflow: hidden; }
+  .hero::before { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+                  background: radial-gradient(600px 260px at 0% 0%, rgba(139, 123, 255, .16), transparent 70%), radial-gradient(500px 240px at 100% 0%, rgba(51, 214, 242, .10), transparent 70%); }
+  .hero-top { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px 28px; align-items: start; }
+  .hero h1 { font-size: 46px; line-height: 1.04; letter-spacing: -0.035em; margin: 6px 0 8px; font-weight: 800; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .hero .sub { font-size: 19px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 6px; }
+  .hero .why { color: var(--muted); font-size: 14.5px; max-width: 760px; margin: 0; }
+  .clock { text-align: right; min-width: 220px; }
+  .clock .d { font-size: 12px; color: var(--muted); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+  .clock .t { font-size: 40px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; line-height: 1.05; }
+  .clock .s { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+  .paused-note { position: relative; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 16px; padding: 10px 14px; border-radius: 12px; font-size: 14px;
+                 background: var(--warn-soft); border: 1px solid rgba(251, 191, 36, .35); }
+  .paused-note b { color: var(--warn); }
+
+  .flowwrap { position: relative; margin-top: 18px; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
+  .flowwrap svg { display: block; width: 100%; min-width: 900px; height: auto; }
+  .fnode rect.box { fill: var(--panel-solid); stroke: var(--border-hi); stroke-width: 1.2; transition: stroke .3s; }
+  .fnode.db rect.box { stroke: rgba(51, 214, 242, .55); }
+  .fnode .ttl { fill: var(--text); font-size: 13px; font-weight: 700; }
+  .fnode .sb2 { fill: var(--muted); font-size: 11px; }
+  .fnode .ctr { fill: var(--cyan); font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .fnode .ico { font-size: 17px; }
+  .fnode rect.glow { fill: none; stroke: var(--cyan); stroke-width: 2; opacity: 0; }
+  .fnode.flash rect.glow { animation: nflash .7s ease-out; }
+  .fnode.flash-pink rect.glow { stroke: var(--pink); animation: nflash 1.2s ease-out; }
+  @keyframes nflash { 0% { opacity: 1; } 100% { opacity: 0; } }
+  .fline { stroke: var(--border-hi); stroke-width: 2; stroke-dasharray: 5 6; }
+  .running .fline { animation: dash 1s linear infinite; }
+  @keyframes dash { to { stroke-dashoffset: -11; } }
+  .flegend { display: flex; gap: 6px 18px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); margin-top: 6px; position: relative; }
+  .flegend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+
+  .kgrid { position: relative; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px; margin-top: 20px; }
+  .kgrid .kpi { padding: 15px 16px; min-height: 118px; }
+  .kgrid .kpi .v { font-size: 27px; white-space: nowrap; position: relative; z-index: 1; }
+  .kgrid .kpi .v small { font-size: 15px; color: var(--muted); font-weight: 700; margin-left: 2px; }
+  .kgrid .kpi .d { font-size: 12px; position: relative; z-index: 1; line-height: 1.4; }
+  .kgrid .kpi .spark { width: 75%; height: 44px; opacity: .55; }
+  .kgrid .kpi .k { white-space: nowrap; }
+  .kgrid .kpi .ex { font-size: 11px; color: var(--faint); margin-top: 6px; position: relative; z-index: 1; line-height: 1.35; }
+  .measuring { color: var(--muted); font-size: 18px !important; font-weight: 700 !important; }
+  @media (max-width: 1360px) { .kgrid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  @media (max-width: 900px) { .hero-top { grid-template-columns: minmax(0, 1fr); } .clock { text-align: left; } .hero h1 { font-size: 34px; } .clock .t { font-size: 30px; } }
+  @media (max-width: 640px) { .hero { padding: 20px 16px; } .kgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } .kgrid .kpi .v { font-size: 21px; } .kgrid .kpi { min-height: 100px; padding: 12px 13px; } }
+
+  /* ---------- glossary ---------- */
+  .gloss { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+  .gl { padding: 13px 15px; border-radius: 14px; background: var(--panel); border: 1px solid var(--border); font-size: 13px; color: var(--muted); line-height: 1.45; }
+  .gl b { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 14px; margin-bottom: 3px; }
+  .gl b i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; flex: none; }
+  @media (max-width: 1000px) { .gloss { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 560px) { .gloss { grid-template-columns: minmax(0, 1fr); } }
+
+  /* ---------- 3. layout ---------- */
+  .layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 16px; }
+  .layout .card + .card { margin-top: 0; }
+  .ht { padding: 16px 0; border-bottom: 1px solid var(--border); }
+  .ht:first-of-type { padding-top: 4px; }
+  .ht:last-child { border-bottom: 0; padding-bottom: 0; }
+  .ht .h { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .ht .h code { font-size: 14px; font-weight: 700; color: var(--text); }
+  .ht .h .m { color: var(--muted); font-size: 13px; }
+  .ht .h .r { margin-left: auto; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .ht .h .r b { color: var(--text); }
+  .strip { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 12px; align-items: flex-end; min-height: 40px; }
+  .chk { position: relative; width: 18px; height: 38px; border-radius: 4px; flex: none; }
+  .chk.hot { background: linear-gradient(180deg, var(--violet), color-mix(in srgb, var(--violet) 55%, transparent)); box-shadow: 0 0 14px -4px var(--violet); }
+  .chk.hot.newest { animation: hotpulse 1.6s ease-in-out infinite; }
+  @keyframes hotpulse { 50% { box-shadow: 0 0 22px 0 var(--violet); } }
+  .chk.cs { border: 1px dashed var(--border-hi); }
+  .chk.cs i { position: absolute; left: -1px; right: -1px; bottom: -1px; border-radius: 3px; transition: height .8s;
+              background: repeating-linear-gradient(135deg, var(--cyan) 0 3px, color-mix(in srgb, var(--cyan) 55%, transparent) 3px 6px); }
+  .chk.cs.pop { animation: pop .5s cubic-bezier(.2, 1.4, .4, 1) both; }
+  .strip .more { font-size: 12px; color: var(--muted); align-self: center; margin-left: 6px; }
+  .strip-leg { display: flex; gap: 6px 16px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .strip-leg span { display: inline-flex; align-items: center; gap: 6px; }
+  .strip-leg i { width: 10px; height: 14px; border-radius: 2px; display: inline-block; }
+  .strip-empty { font-size: 13px; color: var(--muted); padding: 10px 12px; border-radius: 10px; border: 1px dashed var(--border-hi); }
+  .cmp .big { font-size: 46px; font-weight: 800; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+  .cmp .big small { font-size: 18px; color: var(--muted); font-weight: 700; margin-left: 6px; letter-spacing: 0; }
+  .cbar { margin-top: 14px; }
+  .cbar .lb { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--muted); margin-bottom: 5px; }
+  .cbar .lb b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .cbar .tr { height: 22px; border-radius: 8px; background: var(--panel-hi); overflow: hidden; }
+  .cbar .tr i { display: block; height: 100%; border-radius: 8px; transition: width 1.2s cubic-bezier(.2, .8, .2, 1); }
+  .cbar.before .tr i { background: linear-gradient(90deg, var(--faint), var(--muted)); }
+  .cbar.after .tr i { background: var(--grad); box-shadow: 0 0 16px rgba(51, 214, 242, .5); min-width: 4px; }
+  .roll { padding: 12px 0; border-top: 1px solid var(--border); }
+  .roll .h { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; }
+  .roll .h code { font-weight: 700; font-size: 13.5px; }
+  .roll .h .n { margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .roll .x { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+  .roll button { border: 0; background: transparent; color: var(--cyan); font-size: 12px; cursor: pointer; padding: 2px 0; font-weight: 600; }
+  .rt { font-size: 10.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; color: var(--good); background: var(--good-soft); }
+  @media (max-width: 1000px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+
+  /* ---------- SQL ---------- */
+  pre.sql { margin: 10px 0 0; padding: 14px 16px; border-radius: 12px; background: color-mix(in srgb, var(--bg) 70%, transparent); border: 1px solid var(--border);
+            font-size: 12.5px; line-height: 1.55; overflow-x: auto; white-space: pre; color: var(--text); max-height: 420px; }
+  .sql .kw { color: var(--violet); font-weight: 700; }
+  .sql .fn { color: var(--cyan); }
+  .sql .st { color: #f5c451; }
+  .sql .nu { color: var(--pink); }
+  .sql .cm { color: var(--faint); font-style: italic; }
+  @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .sql .st { color: #a16207; } }
+  .qmeta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+  .qmeta b { color: var(--good); font-variant-numeric: tabular-nums; }
+  .qtabs { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+  .qtabs button { border: 1px solid var(--border); background: transparent; color: var(--muted); padding: 4px 10px; border-radius: 8px; font-size: 12.5px; cursor: pointer; font-weight: 600; }
+  .qtabs button.on { color: var(--text); background: var(--panel-hi); border-color: var(--border-hi); }
+
+  /* ---------- 4. speed ---------- */
+  .speed { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 22px; }
+  .speed .claim .big { font-size: 52px; font-weight: 800; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+  .speed .claim .big small { font-size: 20px; color: var(--muted); font-weight: 700; margin-left: 4px; }
+  .speed .claim p { color: var(--muted); font-size: 13.5px; margin: 10px 0 0; }
+  .qgrp + .qgrp { margin-top: 16px; }
+  .qgrp h4 { margin: 0 0 6px; font-size: 12px; color: var(--muted); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+  .qrow { display: grid; grid-template-columns: minmax(0, 250px) minmax(0, 1fr) 84px; gap: 12px; align-items: center; padding: 5px 0; font-size: 13px; }
+  .qrow .n { min-width: 0; } .qrow .n b { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .qrow .n span { display: block; font-size: 11.5px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .qrow .b { height: 8px; border-radius: 8px; background: var(--panel-hi); overflow: hidden; }
+  .qrow .b i { display: block; height: 100%; border-radius: 8px; transition: width .6s cubic-bezier(.2, .8, .2, 1); }
+  .qrow .v { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .qrow.fresh .v { animation: vflash 1s ease; }
+  @keyframes vflash { 0% { color: var(--cyan); } }
+  .qscale { font-size: 11.5px; color: var(--faint); margin-top: 8px; }
+  @media (max-width: 900px) { .speed { grid-template-columns: minmax(0, 1fr); } .qrow { grid-template-columns: minmax(0, 1fr) 70px; } .qrow .b { grid-column: 1 / -1; grid-row: 2; } }
+
+  /* ---------- 5. signals ---------- */
+  .sigs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 16px; align-items: start; }
+  .sigs .card + .card { margin-top: 0; }
+  .vs { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  .vs .chip b { font-variant-numeric: tabular-nums; }
+  .feed { display: flex; flex-direction: column; gap: 8px; max-height: 560px; overflow-y: auto; padding-right: 4px; }
+  .sg { --u: var(--cyan); flex: none; position: relative; text-align: left; width: 100%; cursor: pointer; padding: 12px 14px 12px 18px; border-radius: 12px; background: var(--panel);
+        border: 1px solid var(--border); overflow: hidden; transition: border-color .2s, transform .2s; color: var(--text); }
+  .sg::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--u); }
+  .sg.drop { --u: var(--bad); } .sg.spike { --u: var(--good); }
+  .sg:hover { transform: translateX(2px); border-color: var(--border-hi); }
+  .sg.sel { border-color: var(--cyan); box-shadow: 0 0 0 2px rgba(51, 214, 242, .18); }
+  .sg.fresh { animation: pop .45s cubic-bezier(.2, 1.4, .4, 1) both, sgglow 2.4s ease; }
+  @keyframes sgglow { 0% { box-shadow: 0 0 30px -6px var(--cyan); } }
+  .sg .top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+  .sg .kind { font-size: 10.5px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--u); }
+  .sg .when { margin-left: auto; font-variant-numeric: tabular-nums; }
+  .sg h3 { margin: 6px 0 3px; font-size: 14.5px; line-height: 1.35; font-weight: 700; }
+  .sg p { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .pbadge { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700; padding: 2px 9px; border-radius: 999px;
+            color: var(--pc); background: color-mix(in srgb, var(--pc) 14%, transparent); border: 1px solid color-mix(in srgb, var(--pc) 40%, transparent); white-space: nowrap; }
+  .pbadge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--pc); }
+  .detail h3 { margin: 6px 0 4px; font-size: 18px; line-height: 1.3; }
+  .detail .dd { color: var(--muted); font-size: 13.5px; }
+  .detail .nums { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 14px 0 4px; }
+  .detail .nums div { padding: 10px 12px; border-radius: 12px; background: var(--panel); border: 1px solid var(--border); }
+  .detail .nums .k { font-size: 11px; color: var(--muted); font-weight: 600; }
+  .detail .nums .v { font-size: 19px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .sigempty { display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: center; padding: 16px 4px; color: var(--muted); font-size: 14px; }
+  .orb { width: 52px; height: 52px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #9ef0ff, #22b8d6 45%, #0b2a45 80%); box-shadow: 0 0 34px rgba(51, 214, 242, .45); animation: breathe 2.4s ease-in-out infinite; }
+  @keyframes breathe { 50% { transform: scale(1.06); box-shadow: 0 0 52px rgba(139, 123, 255, .5); } }
+  @media (max-width: 1000px) { .sigs { grid-template-columns: minmax(0, 1fr); } .detail .nums { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+  /* ---------- 6. explorer ---------- */
+  .xbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .search { position: relative; flex: 1; min-width: 240px; max-width: 460px; }
+  .search input { width: 100%; padding-left: 36px; }
+  .search .ic { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--faint); pointer-events: none; }
+  .dropdown { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 12; border-radius: 12px; overflow: hidden;
+              background: color-mix(in srgb, var(--panel-solid) 97%, transparent); border: 1px solid var(--border-hi); box-shadow: var(--shadow); }
+  .dropdown button { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; padding: 9px 12px; border: 0; background: transparent; cursor: pointer; color: var(--text); font-size: 13.5px; }
+  .dropdown button:hover, .dropdown button.on { background: var(--panel-hi); }
+  .dropdown .c { color: var(--muted); font-size: 12px; margin-left: auto; white-space: nowrap; }
+  .quick { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; align-items: center; font-size: 12.5px; color: var(--muted); }
+  .quick button { border: 1px solid var(--border); background: var(--panel); color: var(--text); padding: 4px 10px; border-radius: 999px; font-size: 12.5px; cursor: pointer; font-weight: 600; }
+  .quick button:hover { border-color: var(--border-hi); }
+  .mhead { display: flex; gap: 10px 14px; align-items: center; flex-wrap: wrap; margin-top: 18px; }
+  .mhead h3 { margin: 0; font-size: 22px; letter-spacing: -0.01em; }
+  .mhead .w { color: var(--muted); font-size: 13.5px; }
+  .mstats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+  .mstats div { padding: 11px 13px; border-radius: 12px; background: var(--panel); border: 1px solid var(--border); min-width: 0; }
+  .mstats .k { font-size: 11px; color: var(--muted); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mstats .v { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .mstats .s { font-size: 11.5px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chartbox { position: relative; margin-top: 14px; }
+  .chartbox svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .chartbox .axis { fill: var(--faint); font-size: 11px; }
+  .chartbox .grid line { stroke: var(--border); }
+  .ctip { position: absolute; z-index: 5; pointer-events: none; padding: 8px 11px; border-radius: 10px; font-size: 12.5px; min-width: 170px; color: var(--muted);
+          background: color-mix(in srgb, var(--panel-solid) 95%, transparent); border: 1px solid var(--border-hi); box-shadow: var(--shadow); transform: translate(-50%, calc(-100% - 10px)); }
+  .ctip b { color: var(--text); }
+  .ctip .r { display: flex; justify-content: space-between; gap: 12px; font-variant-numeric: tabular-nums; }
+  .cleg { display: flex; gap: 6px 18px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+  .cleg span { display: inline-flex; align-items: center; gap: 6px; }
+  .cleg i { width: 12px; height: 10px; border-radius: 2px; display: inline-block; }
+  .cleg i.ln { height: 0; border-top: 2px dashed var(--warn); border-radius: 0; }
+  .subh { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; margin: 22px 0 4px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .subh span { text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--faint); }
+  @media (max-width: 900px) { .mstats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+  /* ---------- 7. platforms ---------- */
+  .pgrid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  .pgrid .card + .card { margin-top: 0; }
+  .pmult { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .pm { padding: 14px 14px 10px; border-radius: 14px; background: var(--panel); border: 1px solid var(--border); position: relative; overflow: hidden; min-width: 0; }
+  .pm::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--pc); }
+  .pm .v { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: 8px; }
+  .pm .s { font-size: 12px; color: var(--muted); }
+  .pm svg { display: block; width: 100%; height: 90px; margin-top: 8px; }
+  table.sb tr.click { cursor: pointer; } table.sb tr.click:hover td { background: var(--panel-hi); }
+  table.sb td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  @media (max-width: 1100px) { .pgrid { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 700px) { .pmult { grid-template-columns: minmax(0, 1fr); } }
+
+  .foot { margin-top: 34px; text-align: center; font-size: 14px; color: var(--muted); }
+  .foot a { font-weight: 600; }
+  .nots { padding: 30px; text-align: center; }
+  .gate-wrap { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--bg) 70%, transparent); backdrop-filter: blur(8px); }
+  .gate { max-width: 440px; width: 100%; text-align: center; }
+  .gate form { display: flex; gap: 8px; justify-content: center; margin-top: 16px; }
+  .gate form input { min-width: 0; flex: 1; }
+  .gate button.link { border: 0; background: transparent; color: var(--cyan); cursor: pointer; font-size: 13px; margin-top: 12px; }
+  @media (max-width: 640px) { .section-head h2 { font-size: 17px; } .card { padding: 16px; } }
+</style>
+</head>
+<body>
+<main class="page ts">
+  <section class="card hero rise" id="hero">
+    <div class="hero-top">
+      <div>
+        <div class="eyebrow">Version 2 · the data platform under the brain</div>
+        <h1><span>Timescale<span class="grad-text">DB</span></span> <span class="mode" id="mode">Connecting…</span></h1>
+        <p class="sub">Every order, every merchant, in one time-series database.</p>
+        <p class="why">Each order from Shopify, Reliance Retail and DMart is written to TimescaleDB the moment it happens, next to 14 months of sales history.
+          The database keeps running totals, shrinks old days to a fraction of their size, and checks every merchant every simulated hour, all in plain SQL.</p>
+      </div>
+      <div class="clock"><div class="d" id="clk-d">Simulated time</div><div class="t" id="clk-t">--:--</div><div class="s" id="clk-s">&nbsp;</div></div>
+    </div>
+    <div class="paused-note hidden" id="paused"></div>
+    <div class="flowwrap" id="flowwrap"></div>
+    <div class="flegend">
+      <span><i style="background:var(--violet)"></i>orders being written</span>
+      <span><i style="background:var(--cyan)"></i>an hourly or daily check runs</span>
+      <span><i style="background:var(--pink)"></i>a finding is published</span>
+    </div>
+    <div class="kgrid" id="kpis"></div>
+  </section>
+
+  <section class="section">
+    <div class="section-head"><div><h2>How the data is laid out</h2><p>Four ideas do all the work. Each block below is a real chunk in the database right now.</p></div></div>
+    <div class="gloss">
+      <div class="gl"><b><i style="background:var(--violet)"></i>Hypertable</b>A normal SQL table that TimescaleDB splits into time chunks automatically. You query one table; it only reads the chunks you need.</div>
+      <div class="gl"><b><i style="background:repeating-linear-gradient(135deg,var(--cyan) 0 3px,transparent 3px 6px)"></i>Columnstore</b>Finished chunks are compressed column by column. Similar values sit together, so they shrink many times over and still answer SQL.</div>
+      <div class="gl"><b><i style="background:var(--good)"></i>Continuous aggregate</b>Hourly and daily totals the database keeps up to date as orders arrive, so a question over a year reads hundreds of rows, not millions.</div>
+      <div class="gl"><b><i style="background:var(--pink)"></i>SQL watcher</b>Every simulated day, plain SQL prices the sales lost to empty shelves and finds products out of stock for days; every hour it checks each store against its platform. Findings go out over MQTT.</div>
+    </div>
+    <div class="layout">
+      <div class="card" id="tables"><div class="shimmer" style="height:240px"></div></div>
+      <div class="card cmp" id="compress"><div class="shimmer" style="height:240px"></div></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head"><div><h2>It answers in milliseconds</h2><p>How long each job took, measured inside the database. Updated live as the watcher works and as this page asks its own questions.</p></div></div>
+    <div class="card speed" id="speed"><div class="shimmer" style="height:200px;grid-column:1/-1"></div></div>
+  </section>
+
+  <section class="section" id="sig-section">
+    <div class="section-head"><div><h2>Findings from TimescaleDB</h2><p>Plain SQL over the stored days, reporting facts worth acting on: rupees lost to empty shelves, products out of stock for days, a store far off its platform this hour. Next to the AI engine's forecasts, with the exact query behind every finding.</p></div></div>
+    <div class="sigs">
+      <div class="card"><div class="vs" id="vs"></div><div class="feed" id="feed"></div></div>
+      <div class="card detail" id="detail"></div>
+    </div>
+  </section>
+
+  <section class="section" id="explorer">
+    <div class="section-head"><div><h2>Any merchant, 14 months, one query</h2><p>Daily revenue straight from TimescaleDB: the history backfill and the live days in one series, with the same window last year.</p></div>
+      <div class="seg" id="range"><button data-d="60" class="on">60 days</button><button data-d="182">6 months</button><button data-d="430">14 months</button></div></div>
+    <div class="card">
+      <div class="xbar">
+        <div class="search"><span class="ic">⌕</span><input id="msearch" type="text" placeholder="Search 600 merchants by name, city or platform" autocomplete="off" aria-label="Search merchants"><div class="dropdown hidden" id="mdrop"></div></div>
+      </div>
+      <div class="quick" id="quick"></div>
+      <div id="mview"><div class="shimmer" style="height:320px;margin-top:18px"></div></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head"><div><h2>Platforms over time</h2><p>Live days only, one row per platform per day from the daily continuous aggregate.</p></div></div>
+    <div class="pgrid">
+      <div class="card" id="plats"><div class="shimmer" style="height:180px"></div></div>
+      <div class="card" id="top"><div class="shimmer" style="height:180px"></div></div>
+    </div>
+  </section>
+
+  <div class="foot">
+    <a href="/commerce">Live Commerce: start or pause the simulation →</a>
+    <div class="faint" style="margin-top:6px;font-size:12.5px">The AI engine keeps its forecasts in memory for speed; TimescaleDB is the system of record next to it, the way a company's warehouse sits next to its operational systems.</div>
+  </div>
+</main>
+<script src="/static/sb.js"></script>
+<script>
+const { el, svg } = SB;
+const $ = (id) => document.getElementById(id);
+const RM = matchMedia("(prefers-reduced-motion: reduce)");
+const reduced = () => RM.matches;
+const LIGHT = matchMedia("(prefers-color-scheme: light)");
+const isLight = () => LIGHT.matches && document.documentElement.dataset.theme !== "dark";
+SB.nav("timescale");
+
+// ---------------------------------------------------------------- constants (same platform colours as HQ and Live Commerce)
+const PLAT = {
+  shopify: { name: "Shopify", dark: "#95BF47", light: "#5f8f1d" },
+  reliance: { name: "Reliance Retail", dark: "#4f8cff", light: "#2563eb" },
+  dmart: { name: "DMart", dark: "#f5a524", light: "#d97706" },
+};
+const PLAT_ORDER = ["shopify", "reliance", "dmart"];
+const pname = (p) => (PLAT[p] ? PLAT[p].name : String(p || "").replace(/^\w/, (c) => c.toUpperCase()));
+const pcol = (p) => (PLAT[p] ? (isLight() ? PLAT[p].light : PLAT[p].dark) : "#a78bfa");
+const pbadge = (p) => el("span", { class: "pbadge", style: `--pc:${pcol(p)}` }, pname(p));
+const SPEED_VAL = { "1x": 1, "1min": 60, "1h": 3600, "1day": 14400 };
+const SPEED_LABEL = { "1x": "real time", "1min": "1 sim minute a second", "1h": "1 sim hour a second", "1day": "1 sim day every 6 s" };
+const SKIND = {
+  hour_spike: ["📈", "Hourly spike", "spike"], hour_drop: ["📉", "Hourly drop", "drop"],
+  stockout_loss: ["🛒", "Lost to empty shelves", "drop"],
+  stockout_streak: ["📦", "Out of stock for days", "drop"],
+};
+const QNAME = {
+  "hour check": ["Hourly check, all 600 merchants", "each store's last hour vs the same hour on its last 7 days, moved like its platform"],
+  "out-of-stock streak": ["Out-of-stock streaks", "products sold out at the close of 3 days running"],
+  "close day": ["Write the closed day", "every product's row for the day, zeros and sold-out days included"],
+  "stock-out check": ["Stock-out check", "sales lost to empty shelves, vs an in-stock day"],
+  "refresh cm_sales_1h": ["Update hourly totals", "continuous aggregate, for the hour that just closed"],
+  "refresh cm_sales_1d": ["Update daily totals", "continuous aggregate, built on the hourly one"],
+  "refresh cm_sku_1d": ["Update product-day totals", "continuous aggregate, units per product per day"],
+  "convert_to_columnstore": ["Compress finished days", "days older than two days move to the columnstore"],
+  "history to columnstore": ["Compress 14 months of history", "one-off batch job, right after the backfill lands"],
+  chunks: ["Count chunks", "stats for this page"], size: ["Measure table sizes", "stats for this page"],
+  columnstore: ["Measure compression", "stats for this page"], rollups: ["Count rollup rows", "stats for this page"],
+  overview: ["Database overview", "version, chunks, sizes, row counts"], hypertables: ["List hypertables", "from timescaledb_information"],
+  platform_days: ["Daily totals per platform", "every live day, from cm_sales_1d"],
+  daily: ["Merchant's daily revenue", "history and live days in one series"], hours: ["Merchant's last 48 hours", "from the hourly aggregate"],
+  last_year: ["Same window last year", "sum over the history hypertable"], top: ["Top merchants, last 24 h", "from the hourly aggregate"],
+};
+// page-side names that collide with the watcher's own stats queries
+const QPAGE = { rollups: ["List continuous aggregates", "from timescaledb_information"] };
+const STATS_Q = new Set(["chunks", "size", "columnstore", "rollups"]);   // the watcher measuring itself for this page
+const BATCH_JOBS = new Set(["history to columnstore", "convert_to_columnstore"]);
+
+// ---------------------------------------------------------------- formatting (Indian)
+const num = (v) => Math.round(+v || 0).toLocaleString("en-IN");
+const words = (n) => { n = +n || 0; return n >= 1e7 ? +(n / 1e7).toFixed(n >= 1e8 ? 1 : 2) + " crore" : n >= 1e5 ? +(n / 1e5).toFixed(n >= 1e6 ? 1 : 2) + " lakh" : num(n); };
+const bytes = (b) => { b = +b || 0; return b >= 1e9 ? (b / 1e9).toFixed(2) + " GB" : b >= 1e6 ? Math.round(b / 1e6) + " MB" : b >= 1e3 ? Math.round(b / 1e3) + " KB" : b + " B"; };
+const ms = (v) => (v == null || !isFinite(v) ? "—" : v >= 10000 ? (v / 1000).toFixed(1) + " s" : v >= 1000 ? (v / 1000).toFixed(2) + " s" : v >= 100 ? Math.round(v) + " ms" : (+v).toFixed(1) + " ms");
+const pad = (n) => String(n).padStart(2, "0");
+const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+// Simulated timestamps are IST wall-clock; read them as UTC and print UTC fields so no browser timezone leaks in.
+const parseSim = (s) => (s ? Date.parse(String(s).length <= 10 ? s + "T00:00:00Z" : String(s).slice(0, 19) + "Z") : NaN);
+const fmtDate = (t) => { const d = new Date(t); return `${DOW[d.getUTCDay()]} ${d.getUTCDate()} ${MON[d.getUTCMonth()]} ${d.getUTCFullYear()}`; };
+const fmtTime = (t) => { const d = new Date(t); return pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()); };
+// A database timestamp (timestamptz, any offset) -> IST wall-clock ms read as UTC.
+function istMs(s) {
+  if (!s) return NaN;
+  s = String(s);
+  if (s.length <= 10) return Date.parse(s + "T00:00:00Z");
+  const t = Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? s : s + "Z");
+  return t + 5.5 * 3600e3;
+}
+const istDay = (s) => (String(s).length <= 10 ? String(s) : new Date(istMs(s)).toISOString().slice(0, 10));
+const dayLabel = (iso) => { const d = new Date(iso + "T00:00:00Z"); return `${d.getUTCDate()} ${MON[d.getUTCMonth()]}`; };
+const simDay = () => (isFinite(S.simMs) ? new Date(S.simMs).toISOString().slice(0, 10) : "");
+const sum = (a, f) => a.reduce((t, x) => t + (+f(x) || 0), 0);
+const nOr = (v) => (v == null || v === "" ? null : +v);
+
+// ---------------------------------------------------------------- state
+const S = {
+  config: {}, ts: null, tsAt: 0, prevTs: null, eng: null, engAt: 0, simMs: NaN, simWall: 0,
+  rate: 0, rateHist: [], peakRate: 0, overview: null, merchants: [], byId: new Map(),
+  signals: [], sel: null, engineSignals: 0, pageQueries: {}, freshQ: new Set(),
+  m: { id: null, days: 60, data: null, full: null, qtab: "daily" },
+  live: false, dirty: new Set(),
+};
+const dirty = (...k) => k.forEach((x) => S.dirty.add(x));
+const token = () => { try { return sessionStorage.getItem("sb-admin-token"); } catch { return null; } };
+
+async function getJSON(url, timeout = 8000) {
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), timeout);
+  try { const r = await fetch(url, { signal: ctl.signal }); if (!r.ok) { const e = new Error(r.statusText); e.status = r.status; throw e; } return await r.json(); }
+  finally { clearTimeout(t); }
+}
+function notePage(queries) {
+  for (const [k, q] of Object.entries(queries || {})) { S.pageQueries[k] = q; S.freshQ.add("p:" + k); }
+  dirty("speed");
+}
+
+// SQL as it ran: placeholders filled in for reading.
+function inlineSql(q) {
+  let s = q.sql || "";
+  for (const [k, v] of Object.entries(q.params || {})) s = s.split(`%(${k})s`).join(/^-?\d+(\.\d+)?$/.test(v) ? v : `'${v}'`);
+  return s;
+}
+const KW = "SELECT|FROM|WHERE|AND|OR|NOT|GROUP|BY|ORDER|LIMIT|WITH|AS|JOIN|LEFT|USING|ON|IN|IS|NULL|CASE|WHEN|THEN|ELSE|END|DESC|ASC|BETWEEN|FILTER|ANY|ARRAY|INTERVAL|UNION|ALL|DISTINCT|HAVING|OVER|PARTITION|CALL|INSERT|INTO|VALUES|TRUE|FALSE|EXISTS|CREATE|MATERIALIZED|VIEW";
+const SQL_RE = new RegExp(`(--[^\\n]*)|('(?:[^']|'')*')|\\b(${KW})\\b|\\b([a-z_][a-z0-9_]*)(?=\\s*\\()|\\b(\\d+(?:\\.\\d+)?)\\b`, "gi");
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+function hlSql(sql) {
+  let out = "", last = 0, m;
+  SQL_RE.lastIndex = 0;
+  while ((m = SQL_RE.exec(sql))) {
+    out += esc(sql.slice(last, m.index));
+    const cls = m[1] ? "cm" : m[2] ? "st" : m[3] ? "kw" : m[4] ? "fn" : "nu";
+    out += `<span class="${cls}">${esc(m[0])}</span>`;
+    last = SQL_RE.lastIndex;
+  }
+  return out + esc(sql.slice(last));
+}
+const sqlBlock = (sql) => { const p = el("pre", { class: "sql" }); p.innerHTML = hlSql(sql || "-- no query"); return p; };
+
+// A number that eases toward its target every frame.
+const TWEENS = [];
+class Tween {
+  constructor(node, fmt) { this.node = node; this.fmt = fmt; this.v = null; this.t = null; TWEENS.push(this); }
+  set(t) {
+    if (t == null || !isFinite(t)) { this.t = this.v = null; this.node.textContent = "—"; return; }
+    if (this.v == null) this.v = reduced() ? t : 0;
+    this.t = t;
+  }
+  step(dt) {
+    if (this.t == null || this.v == null) return;
+    this.v += (this.t - this.v) * (1 - Math.exp(-dt / 260));
+    if (Math.abs(this.t - this.v) < Math.abs(this.t) * 1e-5 + 1e-3) this.v = this.t;
+    const s = this.fmt(this.v);
+    if (s !== this._s) { this._s = s; this.node.textContent = s; }
+  }
+}
+
+// ================================================================ 1. hero: clock, pipeline, KPIs
+const NODES = [
+  ["🛒", "Platforms", "Shopify · Reliance · DMart"],
+  ["📡", "MQTT ingest", "orders as messages"],
+  ["🗄️", "Hypertable", "cm_order_lines"],
+  ["Σ", "Continuous aggregates", "hourly · daily totals"],
+  ["🔎", "SQL watcher", "checks every sim hour"],
+  ["📣", "MQTT signals", "findings as messages"],
+  ["🖥️", "Screens", "this page · HQ"],
+];
+const FLOW = {
+  W: 1200, H: 150, Y: 58, BW: 146, BH: 66, nodes: [], parts: [], acc: 0, gP: null,
+  x(i) { return 84 + i * ((this.W - 168) / (NODES.length - 1)); },
+  init() {
+    const s = svg("svg", { viewBox: `0 0 ${this.W} ${this.H}`, role: "img", "aria-label": "Pipeline: platforms to MQTT to TimescaleDB to continuous aggregates to the SQL watcher to MQTT signals to screens" });
+    for (let i = 0; i < NODES.length - 1; i++) s.append(svg("line", { class: "fline", x1: this.x(i) + this.BW / 2, y1: this.Y, x2: this.x(i + 1) - this.BW / 2, y2: this.Y }));
+    this.gP = svg("g", {});
+    NODES.forEach(([ico, ttl, sub], i) => {
+      const x = this.x(i), ctr = svg("text", { class: "ctr", x, y: this.Y + this.BH / 2 + 22, "text-anchor": "middle" }, "");
+      const g = svg("g", { class: "fnode" + (i >= 2 && i <= 4 ? " db" : "") },
+        svg("rect", { class: "box", x: x - this.BW / 2, y: this.Y - this.BH / 2, width: this.BW, height: this.BH, rx: 12 }),
+        svg("rect", { class: "glow", x: x - this.BW / 2 - 2, y: this.Y - this.BH / 2 - 2, width: this.BW + 4, height: this.BH + 4, rx: 14 }),
+        svg("text", { class: "ico", x, y: this.Y - 10, "text-anchor": "middle" }, ico),
+        svg("text", { class: "ttl", x, y: this.Y + 9, "text-anchor": "middle" }, ttl),
+        svg("text", { class: "sb2", x, y: this.Y + 24, "text-anchor": "middle" }, sub), ctr);
+      s.append(g);
+      this.nodes.push({ g, ctr });
+    });
+    // the database's own bracket
+    s.prepend(svg("rect", { x: this.x(2) - this.BW / 2 - 12, y: 6, width: this.x(4) - this.x(2) + this.BW + 24, height: this.H - 12, rx: 18,
+      fill: "rgba(51,214,242,0.05)", stroke: "rgba(51,214,242,0.25)", "stroke-dasharray": "4 5" }));
+    s.append(svg("text", { x: this.x(3), y: 20, "text-anchor": "middle", fill: "var(--cyan)", "font-size": 11, "font-weight": 800, "letter-spacing": "0.14em" }, "INSIDE TIMESCALEDB"));
+    s.append(this.gP);
+    $("flowwrap").append(s);
+    this.svg = s;
+  },
+  flash(i, pink) {
+    const g = this.nodes[i]?.g; if (!g) return;
+    const c = pink ? "flash-pink" : "flash";
+    g.classList.remove("flash", "flash-pink"); void g.getBBox(); g.classList.add(c);
+  },
+  // A dot travelling along the pipe through the given nodes.
+  spawn(path, color, r = 4) {
+    if (reduced() || this.parts.length > 110 || document.hidden) return;
+    const c = svg("circle", { r, cy: this.Y, cx: this.x(path[0]), fill: color, opacity: 0.95 });
+    c.style.filter = `drop-shadow(0 0 4px ${color})`;
+    this.gP.append(c);
+    this.parts.push({ c, path, seg: 0, t: 0, pink: color === "var(--pink)" });
+  },
+  step(dt) {
+    // order dots at a rate that grows with the write rate (log scale, so a quiet hour still shows life)
+    if (S.rate > 0) {
+      const perSec = Math.min(16, 1.2 + Math.log10(S.rate + 1) * 3);
+      this.acc += (dt / 1000) * perSec;
+      while (this.acc >= 1) {
+        this.acc -= 1;
+        const p = PLAT_ORDER[(Math.random() * 3) | 0];
+        this.spawn(Math.random() < 0.18 ? [0, 1, 2, 3] : [0, 1, 2], pcol(p), 3.2);
+      }
+    }
+    const speed = 0.42; // px per ms
+    for (let i = this.parts.length - 1; i >= 0; i--) {
+      const q = this.parts[i], a = this.x(q.path[q.seg]) + this.BW / 2, b = this.x(q.path[q.seg + 1]) - this.BW / 2;
+      q.t += (dt * speed) / Math.max(1, b - a);
+      if (q.t >= 1) {
+        this.flash(q.path[q.seg + 1], q.pink);
+        q.seg++; q.t = 0;
+        if (q.seg >= q.path.length - 1) { q.c.remove(); this.parts.splice(i, 1); continue; }
+      }
+      const a2 = this.x(q.path[q.seg]) + this.BW / 2, b2 = this.x(q.path[q.seg + 1]) - this.BW / 2;
+      q.c.setAttribute("cx", a2 + (b2 - a2) * q.t);
+    }
+  },
+  counters() {
+    const t = S.ts || {}, e = S.eng || {}, set = (i, s) => { if (this.nodes[i].ctr.textContent !== s) this.nodes[i].ctr.textContent = s; };
+    set(0, `${num(e.merchants || 600)} merchants`);
+    set(1, e.running ? `${num(e.orders_per_sec)} orders/s` : "waiting for orders");
+    set(2, `${words(t.rows_total || 0)} rows`);
+    const rr = t.rollup_rows ? sum(Object.values(t.rollup_rows), (x) => x) : 0;
+    set(3, `${num(rr)} total rows`);
+    set(4, t.checked_hour ? `checked ${String(t.checked_hour).slice(11, 16)}` : "not started");
+    set(5, `${num(t.signals_total || 0)} findings`);
+    set(6, S.live ? "you are here" : "connecting");
+    this.svg.classList.toggle("running", !!(S.rate > 0 || e.running));
+  },
+};
+
+const KPI = {
+  tiles: {},
+  init() {
+    const box = $("kpis");
+    const tile = (key, label, ex, opts = {}) => {
+      const v = el("div", { class: "v" }), d = el("div", { class: "d" }), x = el("div", { class: "ex" }, ex);
+      const node = el("div", { class: `kpi rise ${opts.glow || ""}`, style: { animationDelay: (opts.i || 0) * 50 + "ms" } }, el("div", { class: "k" }, label), v, d, x);
+      box.append(node);
+      v.textContent = "—";
+      this.tiles[key] = { node, v, d, x, tw: opts.fmt ? new Tween(v, opts.fmt) : null };
+    };
+    tile("rows", "Rows stored", "Every order line plus 14 months of daily sales per product.", { glow: "glow", fmt: (x) => words(x), i: 0 });
+    tile("rate", "Rows / second now", "Written in batches every quarter second.", { fmt: (x) => num(x), i: 1 });
+    tile("batch", "Insert batch time", "Median time to write one batch.", { i: 2 });
+    tile("ratio", "Compression", "Old days stored column by column.", { glow: "glow-good", i: 3 });
+    tile("chunks", "Chunks", "Pieces of the tables, one per day or month.", { fmt: (x) => num(x), i: 4 });
+    tile("rollups", "Rollup rows", "Running totals kept up to date automatically.", { fmt: (x) => num(x), i: 5 });
+    tile("finds", "SQL watcher findings", "Facts worth acting on, published over MQTT.", { fmt: (x) => num(x), i: 6 });
+  },
+  render() {
+    const t = S.ts, T = this.tiles;
+    if (!t) return;
+    T.rows.tw.set(t.rows_total);
+    T.rows.d.textContent = `${words(t.order_lines || 0)} live order lines · ${words(t.history_rows || 0)} history`;
+    T.rate.tw.set(S.rate);
+    T.rate.d.textContent = S.peakRate ? `last burst ${words(S.peakRate)} rows/s` : "idle until orders stream";
+    T.rate.node.querySelector(".spark")?.remove();
+    if (S.rateHist.length > 2) T.rate.node.append(SB.sparkline(S.rateHist.slice(-60), { color: "var(--cyan)" }));
+    T.batch.v.innerHTML = t.batch_ms_p50 != null ? `${esc((+t.batch_ms_p50).toFixed(1))}<small>ms</small>` : "—";
+    T.batch.d.textContent = `${num(t.backlog || 0)} messages waiting`;
+    const ratio = nOr(t.columnstore_ratio);
+    if (ratio) { T.ratio.v.className = "v"; T.ratio.v.innerHTML = `${esc(ratio.toFixed(1))}<small>× smaller</small>`; }
+    else { T.ratio.v.className = "v measuring"; T.ratio.v.textContent = "measuring…"; }
+    T.ratio.d.textContent = t.columnstore_before_bytes ? `${bytes(t.columnstore_before_bytes)} → ${bytes(t.columnstore_after_bytes)}` : "starts after the first finished day";
+    const hc = S.overview?.database?.history_chunks || 0;
+    T.chunks.tw.set((t.chunks || 0) + hc);
+    T.chunks.d.textContent = `${num(t.chunks || 0)} daily order chunks (${num(t.columnstore_chunks || 0)} compressed) · ${num(hc)} monthly history`;
+    const rr = t.rollup_rows || {};
+    T.rollups.tw.set(sum(Object.values(rr), (x) => x));
+    T.rollups.d.textContent = `hourly ${num(rr.cm_sales_1h)} · daily ${num(rr.cm_sales_1d)} · product-day ${num(rr.cm_sku_1d)}`;
+    T.finds.tw.set(t.signals_total || 0);
+    const bk = t.signals_by_kind || {};
+    T.finds.d.textContent = t.checked_hour ? `last check ${String(t.checked_hour).slice(11, 16)} · ${num(bk.stockout_loss || 0)} shelf losses · ${num(bk.stockout_streak || 0)} streaks · ${num((bk.hour_spike || 0) + (bk.hour_drop || 0))} store-hours` : "first check after the first simulated hour";
+    T.finds.x.textContent = t.stockout_lost_last_day ? `${SB.shortMoney(+t.stockout_lost_last_day)} of sales lost to empty shelves yesterday.` : "Facts worth acting on, published over MQTT.";
+  },
+};
+
+const HERO = {
+  render() {
+    const e = S.eng || {}, t = S.ts || {};
+    const running = !!(e.running ?? t.running);
+    const m = $("mode"), fresh = Date.now() - S.tsAt < 5000;
+    m.className = "mode " + (fresh ? (running ? "on" : "paused") : "");
+    m.textContent = fresh ? (running ? "Live" : "Simulation paused") : S.tsAt ? "Reconnecting…" : (S.overview ? "Database connected" : "Connecting…");
+    m.title = fresh ? "TimescaleDB stats arrive every second over MQTT" : "No live stats yet: showing what is stored";
+    const note = $("paused");
+    if (!running && (S.eng || S.ts)) {
+      note.replaceChildren(el("b", {}, "The simulation is paused."), el("span", {}, "Everything below is what TimescaleDB holds right now. Press Start on Live Commerce to stream orders in and watch it move."),
+        el("a", { class: "btn sm good", href: "/commerce" }, "Open Live Commerce →"));
+      note.classList.remove("hidden");
+    } else note.classList.add("hidden");
+  },
+  clock() {
+    let t = S.simMs;
+    if (!isFinite(t)) return;
+    const e = S.eng || {}, sp = typeof e.speed === "number" ? e.speed : SPEED_VAL[e.speed] || 0;
+    if (e.running && sp) t += Math.min(4000, Date.now() - S.simWall) * sp;
+    const d = fmtDate(t), tm = fmtTime(t);
+    if ($("clk-t").textContent !== tm) $("clk-t").textContent = tm;
+    if ($("clk-d").textContent !== d) $("clk-d").textContent = d;
+    const s = e.running ? `Running · ${SPEED_LABEL[e.speed] || ""}` : "Paused";
+    if ($("clk-s").textContent !== s) $("clk-s").textContent = s;
+  },
+};
+
+// ================================================================ 3. layout: hypertables, compression, rollups
+function historyCompressed() {
+  const t = S.ts || {}, db = S.overview?.database || {};
+  if (t.query_ms && t.query_ms["history to columnstore"] != null) return true;
+  const rows = t.history_rows || db.history_rows, b = t.history_bytes || db.history_bytes;
+  return rows > 0 && b / rows < 30;   // raw rows take ~90 bytes; compressed ones a handful
+}
+const TABLES = {
+  key: "",
+  render() {
+    const t = S.ts || {}, db = S.overview?.database || {}, ov = S.overview || {};
+    const ratio = nOr(t.columnstore_ratio) || 12;
+    const lineChunks = t.chunks ?? db.chunks ?? 0, lineCs = t.columnstore_chunks ?? db.columnstore_chunks ?? 0;
+    const histChunks = db.history_chunks || 0, histCs = historyCompressed();
+    const rr = t.rollup_rows || {};
+    const k = [lineChunks, lineCs, histChunks, histCs, Math.round(ratio), JSON.stringify(rr), t.lines_bytes, t.history_bytes, (ov.rollups || []).length].join("|");
+    if (k === this.key) return;
+    const prevCs = this._cs ?? lineCs;
+    this.key = k; this._cs = lineCs;
+    const fill = Math.max(22, Math.min(60, 100 / ratio)) + "%";
+    const strip = (n, cs, cap, label, opts = {}) => {
+      if (!n) return el("div", { class: "strip-empty" }, opts.empty);
+      const show = Math.min(n, cap), blocks = [];
+      for (let i = n - show; i < n; i++) {
+        const isCs = i < cs;
+        blocks.push(isCs ? el("div", { class: "chk cs" + (opts.popFrom != null && i >= opts.popFrom ? " pop" : ""), title: `${label} ${i + 1}: in the columnstore (compressed)` }, el("i", { style: { height: fill } }))
+          : el("div", { class: "chk hot" + (i === n - 1 ? " newest" : ""), title: `${label} ${i + 1}: row store, taking new rows` }));
+      }
+      return el("div", { class: "strip" }, n > show ? el("span", { class: "more" }, `+${num(n - show)} older`) : null, blocks);
+    };
+    const hyper = (ov.hypertables || []).filter((h) => h.name.startsWith("cm_"));
+    const part = (name) => hyper.find((h) => h.name === name)?.partitioned_by;
+    const box = $("tables");
+    box.replaceChildren(
+      el("div", { class: "eyebrow" }, "Hypertables · what is stored"),
+      el("div", { class: "ht" },
+        el("div", { class: "h" }, el("code", {}, "cm_order_lines"), el("span", { class: "m" }, `every order line as it streams in · one chunk per simulated day${part("cm_order_lines") ? " · " + part("cm_order_lines") : ""}`),
+          el("span", { class: "r" }, el("b", {}, words(t.order_lines ?? db.order_lines ?? 0)), " rows · ", el("b", {}, bytes(t.lines_bytes ?? db.lines_bytes)))),
+        strip(lineChunks, lineCs, 60, "Day chunk", { popFrom: lineCs > prevCs ? prevCs : null, empty: "No order chunks yet. The first chunk appears with the first live order; press Start on Live Commerce." })),
+      el("div", { class: "ht" },
+        el("div", { class: "h" }, el("code", {}, "cm_product_daily"), el("span", { class: "m" }, `14 months of daily sales per product · one chunk per month${part("cm_product_daily") ? " · " + part("cm_product_daily") : ""}`),
+          el("span", { class: "r" }, el("b", {}, words(t.history_rows ?? db.history_rows ?? 0)), " rows · ", el("b", {}, bytes(t.history_bytes ?? db.history_bytes)))),
+        strip(histChunks, histCs ? histChunks : 0, 60, "Month chunk", { empty: "The history backfill has not landed yet." })),
+      el("div", { class: "strip-leg" },
+        el("span", {}, el("i", { style: { background: "var(--violet)" } }), "row store: today's chunk, taking writes"),
+        el("span", {}, el("i", { style: { background: "repeating-linear-gradient(135deg,var(--cyan) 0 3px,transparent 3px 6px)", border: "1px dashed var(--border-hi)" } }), "columnstore: compressed, the dashed outline is its original size")),
+      ...this.rollups(rr, ov.rollups || []));
+  },
+  rollups(rr, defs) {
+    const D = { cm_sales_1h: "orders, units and revenue per merchant per hour", cm_sales_1d: "per merchant per day, built on the hourly totals (an aggregate of an aggregate)", cm_sku_1d: "units and revenue per product per day" };
+    const names = defs.length ? defs.map((d) => d.name) : Object.keys(D);
+    return [el("div", { class: "eyebrow", style: { marginTop: "18px" } }, "Continuous aggregates · totals kept up to date"),
+      ...names.map((n) => {
+        const def = defs.find((d) => d.name === n), pre = el("div", { class: "hidden" }, sqlBlock(def?.definition?.trim() || ""));
+        return el("div", { class: "roll" },
+          el("div", { class: "h" }, el("code", {}, n), def && def.materialized_only === false ? el("span", { class: "rt", title: "Answers include rows that arrived seconds ago, not only the last refresh" }, "real-time") : null,
+            el("span", { class: "n" }, num(rr[n]), el("span", { class: "muted", style: { fontWeight: 500 } }, " rows"))),
+          el("div", { class: "x" }, D[n] || "", def ? [" · ", el("button", { onclick: (e) => { pre.classList.toggle("hidden"); e.target.textContent = pre.classList.contains("hidden") ? "show its SQL" : "hide SQL"; } }, "show its SQL")] : null),
+          pre);
+      })];
+  },
+};
+
+const COMPRESS = {
+  key: "",
+  render() {
+    const t = S.ts || {}, ratio = nOr(t.columnstore_ratio), before = +t.columnstore_before_bytes || 0, after = +t.columnstore_after_bytes || 0;
+    const k = [ratio, before, after, !!S.ts].join("|");
+    if (k === this.key) return; this.key = k;
+    const box = $("compress");
+    if (!S.ts) {
+      const db = S.overview?.database || {};
+      box.replaceChildren(el("div", { class: "eyebrow" }, "Columnstore · compression"),
+        el("div", { class: "big", style: { marginTop: "10px" } }, bytes((db.lines_bytes || 0) + (db.history_bytes || 0)), el("small", {}, "on disk")),
+        el("p", { class: "muted", style: { fontSize: "13.5px" } }, `${words((db.order_lines || 0) + (db.history_rows || 0))} rows. The live compression ratio arrives with the first stats message.`));
+      return;
+    }
+    const pctAfter = before ? Math.max(0.6, (after / before) * 100) : 0;
+    box.replaceChildren(
+      el("div", { class: "eyebrow" }, "Columnstore · compression"),
+      el("div", { class: "big", style: { marginTop: "10px" } }, ratio ? ratio.toFixed(1) + "×" : el("span", { class: "measuring" }, "measuring…"), ratio ? el("small", {}, "smaller") : null),
+      el("p", { class: "muted", style: { fontSize: "13.5px", margin: "8px 0 0" } }, ratio
+        ? `The same rows, the same SQL, a ${Math.round(100 - 100 / ratio)}% smaller footprint. Fourteen months of every product at every merchant fit in ${bytes(after)}.`
+        : "The ratio is measured once a few MB have been compressed. Finished days move to the columnstore after two simulated days."),
+      el("div", { class: "cbar before" }, el("div", { class: "lb" }, el("span", {}, "Before: ordinary rows"), el("b", {}, bytes(before))), el("div", { class: "tr" }, el("i", { style: { width: before ? "100%" : "0" } }))),
+      el("div", { class: "cbar after" }, el("div", { class: "lb" }, el("span", {}, "After: columnstore"), el("b", {}, bytes(after))), el("div", { class: "tr" }, el("i", { style: { width: pctAfter + "%" } }))),
+      el("p", { class: "faint", style: { fontSize: "12.5px", marginTop: "14px" } },
+        "Why it matters: storage and memory cost scale with this number, and scans over compressed history read less from disk. Values of one merchant are stored together (segmented by merchant), so a merchant's year is one small read."));
+  },
+};
+
+// ================================================================ 4. query timings
+const SPEED = {
+  key: "",
+  render() {
+    const wq = (S.ts && S.ts.query_ms) || {}, pq = S.pageQueries;
+    const k = JSON.stringify(wq) + JSON.stringify(Object.fromEntries(Object.entries(pq).map(([a, b]) => [a, b.ms])));
+    if (k === this.key) return; this.key = k;
+    const all = [...Object.entries(wq).map(([n, v]) => [n, +v]), ...Object.entries(pq).map(([n, q]) => [n, +q.ms])].filter(([, v]) => isFinite(v));
+    const quick = all.filter(([n]) => !BATCH_JOBS.has(n)).map(([, v]) => v).sort((a, b) => a - b);
+    const med = quick.length ? quick[Math.floor(quick.length / 2)] : null;
+    const maxMs = Math.max(10, ...all.map(([, v]) => v));
+    const L = (v) => Math.log10(v + 1) / Math.log10(maxMs + 1);
+    const color = (n, v) => (BATCH_JOBS.has(n) ? "linear-gradient(90deg,var(--faint),var(--muted))" : v < 50 ? "var(--good)" : v < 500 ? "var(--cyan)" : "var(--warn)");
+    const row = (n, v, src) => {
+      const [a, b] = (src === "p:" && QPAGE[n]) || QNAME[n] || [n, ""];
+      const fresh = S.freshQ.has(src + n);
+      return el("div", { class: "qrow" + (fresh ? " fresh" : "") }, el("div", { class: "n" }, el("b", {}, a), el("span", {}, b)),
+        el("div", { class: "b" }, el("i", { style: { width: Math.max(1.5, L(v) * 100) + "%", background: color(n, v) } })), el("div", { class: "v" }, ms(v)));
+    };
+    const order = ["hour check", "stock-out check", "out-of-stock streak", "close day", "refresh cm_sales_1h", "refresh cm_sales_1d", "refresh cm_sku_1d", "convert_to_columnstore", "history to columnstore", "chunks", "size", "columnstore", "rollups"];
+    const wNames = Object.keys(wq).filter((n) => !STATS_Q.has(n)).sort((a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99));
+    const hc = wq["hour check"];
+    const box = $("speed");
+    box.replaceChildren(
+      el("div", { class: "claim" },
+        el("div", { class: "eyebrow" }, "Typical question"),
+        el("div", { class: "big", style: { marginTop: "8px" } }, med != null ? (med >= 1000 ? (med / 1000).toFixed(1) : med < 10 ? med.toFixed(1) : Math.round(med)) : "—", el("small", {}, med != null && med >= 1000 ? "s" : "ms")),
+        el("p", {}, hc != null ? `Comparing all 600 merchants' last hour with the same hour on the previous seven days took ${ms(hc)}. That runs every simulated hour, while orders keep streaming in.`
+          : "Median time of the queries below. The hourly check over all 600 merchants appears after the first simulated hour."),
+        el("p", { class: "faint", style: { fontSize: "12.5px" } }, "Bars use a log scale so a 1 ms lookup and a one-off 10 s compression job fit on one chart.")),
+      el("div", {},
+        el("div", { class: "qgrp" }, el("h4", {}, "Inside the database · the watcher's jobs"),
+          wNames.length ? wNames.map((n) => row(n, +wq[n], "w:")) : el("div", { class: "muted", style: { fontSize: "13px" } }, "Waiting for the first stats message from the watcher.")),
+        el("div", { class: "qgrp" }, el("h4", {}, "Asked by this page · just now"),
+          Object.keys(pq).length ? Object.entries(pq).map(([n, q]) => row(n, +q.ms, "p:")) : el("div", { class: "muted", style: { fontSize: "13px" } }, "Loading…"))));
+    S.freshQ.clear();
+  },
+};
+
+// ================================================================ 5. signals
+const SIG_KEY = "sb-ts-signals";
+const SIGS = {
+  init() {
+    const saved = SB.store.get(SIG_KEY);
+    if (Array.isArray(saved)) S.signals = saved.slice(0, 60);
+    S.sel = S.signals[0]?.id || null;
+    this.render(); this.detail();
+    // the findings so far, as TimescaleDB kept them (cm_findings); live ones arrive over MQTT
+    fetch("/commerce/tsdb/signals?limit=60").then((r) => (r.ok ? r.json() : null)).then((d) => {
+      if (!d || !Array.isArray(d.findings)) return;
+      const seen = new Set(S.signals.map((x) => x.id));
+      S.signals = [...S.signals, ...d.findings.filter((x) => x && x.id && !seen.has(x.id))]
+        .sort((a, b) => String(b.sim_ts || "").localeCompare(String(a.sim_ts || ""))).slice(0, 60);
+      S.sel = S.sel || S.signals[0]?.id || null;
+      dirty("signals");
+    }).catch(() => {});
+  },
+  add(s) {
+    if (!s || !s.id || S.signals.some((x) => x.id === s.id)) return;
+    s._fresh = true;
+    S.signals.unshift(s);
+    S.signals.length = Math.min(S.signals.length, 60);
+    SB.store.set(SIG_KEY, S.signals.map(({ _fresh, ...x }) => x));
+    if (!S.sel || !this._userPicked) S.sel = s.id;
+    FLOW.spawn([4, 5, 6], "var(--pink)", 5);
+    this.toast(s);
+    dirty("signals");
+  },
+  toast: SB.batcher(700, (all) => {
+    if (all.length === 1) { const s = all[0], k = SKIND[s.kind] || ["🔎"]; SB.toast(k[0], s.title, "Found by SQL in TimescaleDB · " + (s.query_ms != null ? ms(s.query_ms) : ""), { onclick: () => SIGS.pick(s.id, true) }); }
+    else SB.toast("🔎", `${all.length} new findings from TimescaleDB`, "The SQL watcher just checked every merchant.", { onclick: () => $("sig-section").scrollIntoView({ behavior: "smooth" }) });
+  }),
+  pick(id, scroll) { S.sel = id; this._userPicked = true; this.render(); this.detail(); if (scroll) $("sig-section").scrollIntoView({ behavior: "smooth" }); },
+  vs() {
+    const t = S.ts || {}, e = S.eng || {};
+    $("vs").replaceChildren(
+      el("span", { class: "chip accent" }, "🔎 SQL watcher ", el("b", {}, num(t.signals_total ?? S.signals.length))),
+      el("span", { class: "chip" }, "🧠 AI engine signals ", el("b", {}, num(e.signals_total || 0))),
+      t.checked_hour ? el("span", { class: "chip" }, "last hour checked ", el("b", {}, String(t.checked_hour).slice(11, 16))) : null);
+  },
+  render() {
+    const e = S.eng || {};
+    this.vs();
+    const feed = $("feed");
+    if (!S.signals.length) {
+      feed.replaceChildren(el("div", { class: "sigempty" }, el("div", { class: "orb" }),
+        el("div", {}, el("b", { style: { color: "var(--text)" } }, "No findings yet."), " The watcher checks every merchant each simulated hour and every product each simulated day. ",
+          e.running ? "Findings appear here the moment one stands out." : el("span", {}, el("a", { href: "/commerce" }, "Press Start on Live Commerce"), " to run the clock."))));
+      return;
+    }
+    feed.replaceChildren(...S.signals.map((s) => {
+      const k = SKIND[s.kind] || ["🔎", s.kind, ""];
+      const b = el("button", { class: `sg ${k[2]} ${s.id === S.sel ? "sel" : ""} ${s._fresh ? "fresh" : ""}`, onclick: () => this.pick(s.id) },
+        el("div", { class: "top" }, el("span", { class: "kind" }, k[0] + " " + k[1]), pbadge(s.platform), el("span", {}, s.city || ""),
+          el("span", { class: "when" }, s.period_start ? (s.window === "day" ? dayLabel(String(s.period_start).slice(0, 10)) : dayLabel(String(s.period_start).slice(0, 10)) + " " + String(s.period_start).slice(11, 16)) : "")),
+        el("h3", {}, s.title || s.merchant_name), el("p", {}, s.detail || ""));
+      s._fresh = false;
+      return b;
+    }));
+  },
+  detail() {
+    const box = $("detail"), s = S.signals.find((x) => x.id === S.sel);
+    if (!s) {
+      box.replaceChildren(el("div", { class: "eyebrow" }, "The query behind a finding"),
+        el("h3", {}, "Click a finding to see the SQL that found it"),
+        el("p", { class: "dd" }, "Each finding carries the exact query it came from, with its parameters filled in, and how long it took. Here is the hourly check the watcher runs:"),
+        sqlBlock(HOUR_SQL_HINT));
+      return;
+    }
+    const k = SKIND[s.kind] || ["🔎", s.kind];
+    const unit = s.window === "hour" ? "orders" : "units";
+    const nums = s.kind === "stockout_streak" ? [
+      el("div", {}, el("div", { class: "k" }, "Sales lost so far"), el("div", { class: "v bad" }, SB.shortMoney(+s.value || 0))),
+      el("div", {}, el("div", { class: "k" }, "Days out"), el("div", { class: "v" }, num(s.days))),
+      el("div", {}, el("div", { class: "k" }, "Sells in stock"), el("div", { class: "v" }, (s.usual != null ? (+s.usual).toFixed(0) : "—") + " a day")),
+      el("div", {}, el("div", { class: "k" }, "Query time"), el("div", { class: "v" }, ms(s.query_ms)))] : s.kind === "stockout_loss" ? [
+      el("div", {}, el("div", { class: "k" }, "Sales lost"), el("div", { class: "v bad" }, SB.shortMoney(+s.value || 0))),
+      el("div", {}, el("div", { class: "k" }, "Products sold out"), el("div", { class: "v" }, num(s.products))),
+      el("div", {}, el("div", { class: "k" }, "Day"), el("div", { class: "v" }, s.period_start ? dayLabel(String(s.period_start).slice(0, 10)) : "—")),
+      el("div", {}, el("div", { class: "k" }, "Query time"), el("div", { class: "v" }, ms(s.query_ms)))] : [
+      el("div", {}, el("div", { class: "k" }, `This ${s.window || "period"}`), el("div", { class: "v" }, num(s.value) + " " + unit)),
+      el("div", {}, el("div", { class: "k" }, "Usual"), el("div", { class: "v" }, (s.usual != null ? (+s.usual).toLocaleString("en-IN", { maximumFractionDigits: 1 }) : "—") + " " + unit)),
+      el("div", {}, el("div", { class: "k" }, "Ratio"), el("div", { class: "v " + ((+s.ratio || 1) >= 1 ? "good" : "bad") }, s.ratio != null ? (+s.ratio).toFixed(1) + "×" : "—")),
+      el("div", {}, el("div", { class: "k" }, "Query time"), el("div", { class: "v" }, ms(s.query_ms)))];
+    box.replaceChildren(
+      el("div", { class: "row" }, el("span", { class: "eyebrow" }, k[1]), pbadge(s.platform), el("span", { class: "muted", style: { fontSize: "12.5px" } }, [s.merchant_name, s.city, s.category].filter(Boolean).join(" · "))),
+      el("h3", {}, s.title || ""), el("p", { class: "dd" }, s.detail || ""),
+      el("div", { class: "nums" }, nums),
+      el("div", { class: "qmeta" }, el("span", {}, "The query as it ran"), s.z != null ? el("span", { class: "chip" }, `z-score ${(+s.z).toFixed(1)}: how many "normal wobbles" away`) : null,
+        el("button", { class: "btn sm", style: { marginLeft: "auto" }, onclick: () => { MX.load(s.merchant); $("explorer").scrollIntoView({ behavior: "smooth" }); } }, "Open this merchant's history →")),
+      sqlBlock(s.sql));
+  },
+};
+const HOUR_SQL_HINT = `-- each store's last hour vs its usual, moved the way its platform's other stores moved
+WITH h AS MATERIALIZED (
+  SELECT platform, merchant, orders, revenue FROM cm_sales_1h WHERE bucket = :last_hour
+), past AS MATERIALIZED (
+  SELECT merchant, sum(orders)::float AS orders, count(*) AS hours FROM cm_sales_1h
+  WHERE bucket = ANY(:same_hour_last_7_days) GROUP BY merchant
+), j AS MATERIALIZED (
+  SELECT h.*, p.orders AS past, p.hours FROM h JOIN past p USING (merchant)
+), platform AS MATERIALIZED (
+  SELECT platform, sum(orders)::float AS orders, sum(past) AS past FROM j GROUP BY platform
+)
+SELECT j.merchant, j.orders,
+       j.past / j.hours * (p.orders - j.orders) / ((p.past - j.past) / j.hours) AS usual
+FROM j JOIN platform p USING (platform);`;
+
+// ================================================================ 6. merchant explorer
+const MX = {
+  hi: -1,
+  init() {
+    const inp = $("msearch"), drop = $("mdrop");
+    const show = () => {
+      const q = inp.value.trim().toLowerCase();
+      if (!q) { drop.classList.add("hidden"); return; }
+      const hits = S.merchants.filter((m) => (m.name + " " + m.city + " " + m.id + " " + pname(m.platform) + " " + m.category).toLowerCase().includes(q)).slice(0, 8);
+      this.hits = hits; this.hi = hits.length ? 0 : -1;
+      drop.replaceChildren(...(hits.length ? hits.map((m, i) => el("button", { class: i === 0 ? "on" : "", onmousedown: (e) => { e.preventDefault(); this.choose(m.id); } },
+        pbadge(m.platform), el("span", {}, m.name), el("span", { class: "c" }, `${m.city || ""} · ${m.category || ""}`))) : [el("div", { class: "muted", style: { padding: "10px 12px", fontSize: "13px" } }, "No merchant matches")]));
+      drop.classList.remove("hidden");
+    };
+    inp.addEventListener("input", show);
+    inp.addEventListener("focus", show);
+    inp.addEventListener("blur", () => setTimeout(() => drop.classList.add("hidden"), 120));
+    inp.addEventListener("keydown", (e) => {
+      if (!this.hits || drop.classList.contains("hidden")) return;
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault(); this.hi = (this.hi + (e.key === "ArrowDown" ? 1 : -1) + this.hits.length) % this.hits.length;
+        [...drop.children].forEach((b, i) => b.classList.toggle("on", i === this.hi));
+      } else if (e.key === "Enter" && this.hits[this.hi]) { e.preventDefault(); this.choose(this.hits[this.hi].id); }
+      else if (e.key === "Escape") drop.classList.add("hidden");
+    });
+    $("range").addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-d]"); if (!b) return;
+      [...$("range").children].forEach((x) => x.classList.toggle("on", x === b));
+      S.m.days = +b.dataset.d;
+      if (S.m.id) this.load(S.m.id, true);
+    });
+  },
+  choose(id) { $("msearch").value = ""; $("mdrop").classList.add("hidden"); $("msearch").blur(); this.load(id); },
+  quick(top) {
+    const ids = [];
+    for (const r of top || []) if (!ids.includes(r.merchant)) ids.push(r.merchant);
+    for (const d of ["shopify-0001", "reliance-0001", "dmart-0001"]) if (S.byId.has(d) && !ids.includes(d)) ids.push(d);
+    const box = $("quick");
+    box.replaceChildren(el("span", {}, top && top.length ? "Busiest in the last 24 h:" : "Try:"),
+      ...ids.slice(0, 6).filter((id) => S.byId.has(id)).map((id) => el("button", { onclick: () => this.load(id) }, S.byId.get(id).name)));
+  },
+  async load(id, keepFull) {
+    S.m.id = id; const days = S.m.days, seq = (this.seq = (this.seq || 0) + 1);
+    const view = $("mview");
+    if (!S.m.data || S.m.data.merchant !== id) view.replaceChildren(el("div", { class: "shimmer", style: { height: "320px", marginTop: "18px" } }));
+    try {
+      const [data, full] = await Promise.all([
+        getJSON(`/commerce/tsdb/merchants/${encodeURIComponent(id)}?days=${days}`),
+        keepFull && S.m.full && S.m.full.merchant === id ? S.m.full : getJSON(`/commerce/tsdb/merchants/${encodeURIComponent(id)}?days=430`),
+      ]);
+      if (seq !== this.seq) return;
+      S.m.data = data; S.m.full = full;
+      notePage(data.queries);
+      this.render();
+    } catch (e) {
+      if (seq !== this.seq) return;
+      view.replaceChildren(el("div", { class: "empty" }, e.status === 503 ? "TimescaleDB is not reachable from the app right now." : "Could not load this merchant from TimescaleDB."));
+    }
+  },
+  // refresh quietly when the live day moves on
+  refresh() { if (S.m.id && !document.hidden) this.load(S.m.id, false); },
+  render() {
+    const d = S.m.data, full = S.m.full, m = S.byId.get(d.merchant) || { name: d.merchant, platform: d.merchant.split("-")[0] };
+    const view = $("mview");
+    if (!d.days || !d.days.length) {
+      view.replaceChildren(el("div", { class: "mhead" }, el("h3", {}, m.name), pbadge(m.platform)), el("div", { class: "empty" }, "No rows for this merchant in TimescaleDB yet."));
+      return;
+    }
+    const days = d.days.map((x) => ({ ...x, day: String(x.day).slice(0, 10), revenue: +x.revenue || 0, units: +x.units || 0 }));
+    const byDay = new Map((full?.days || []).map((x) => [String(x.day).slice(0, 10), +x.revenue || 0]));
+    const ly = (iso) => byDay.get(SB.addDays(iso, -364));
+    const rev = sum(days, (x) => x.revenue), units = sum(days, (x) => x.units);
+    // compare only days that exist in both years (the history starts 14 months back, so long windows overlap partly)
+    const comp = days.filter((x) => ly(x.day) != null);
+    const lyRev = sum(comp, (x) => ly(x.day)), compRev = sum(comp, (x) => x.revenue);
+    const chg = comp.length >= 7 && lyRev ? compRev / lyRev - 1 : null;
+    const histFrom = S.overview?.database?.history_from;
+    const best = days.reduce((a, b) => (b.revenue > a.revenue ? b : a), days[0]);
+    const liveDays = days.filter((x) => x.live).length, soldOutDays = days.filter((x) => +x.sold_out_products > 0).length;
+    const q = d.queries || {};
+    const qms = sum(Object.values(q), (x) => x.ms);
+    const tabs = el("div", { class: "qtabs" });
+    const pre = el("div");
+    const showQ = (key) => {
+      S.m.qtab = key;
+      [...tabs.children].forEach((b) => b.classList.toggle("on", b.dataset.k === key));
+      const qq = q[key]; if (!qq) return;
+      pre.replaceChildren(el("div", { class: "qmeta" }, el("span", {}, (QNAME[key] || [key])[0]), el("span", {}, "·"), el("b", {}, ms(qq.ms)), el("span", {}, `· ${num(qq.rows)} rows returned`)), sqlBlock(inlineSql(qq)));
+    };
+    for (const k of Object.keys(q)) tabs.append(el("button", { "data-k": k, onclick: () => showQ(k) }, `${(QNAME[k] || [k])[0]} · ${ms(q[k].ms)}`));
+    view.replaceChildren(
+      el("div", { class: "mhead" }, el("h3", {}, m.name), pbadge(m.platform), el("span", { class: "w" }, [m.city, m.category, d.merchant].filter(Boolean).join(" · "))),
+      el("div", { class: "mstats" },
+        el("div", {}, el("div", { class: "k" }, `Revenue, ${days.length} days`), el("div", { class: "v" }, SB.shortMoney(rev)), el("div", { class: "s" }, `${num(units)} units`)),
+        el("div", { title: chg == null ? "" : `This year ${SB.money(compRev)} vs ${SB.money(lyRev)} on the same ${comp.length} days last year (364 days back, same weekday)` },
+          el("div", { class: "k" }, comp.length === days.length ? "Same days last year" : `Last year, ${comp.length} of ${days.length} days`),
+          el("div", { class: "v" }, chg != null ? SB.shortMoney(lyRev) : "—"),
+          el("div", { class: "s " + (chg == null ? "" : chg >= 0 ? "good" : "bad") }, chg == null ? `history starts ${histFrom ? dayLabel(String(histFrom).slice(0, 10)) : "14 months back"}`
+            : `${chg >= 0 ? "+" : "−"}${Math.abs(Math.round(chg * 100))}% this year${comp.length < days.length ? " on those days" : ""}`)),
+        el("div", {}, el("div", { class: "k" }, "Best day"), el("div", { class: "v" }, SB.shortMoney(best.revenue)), el("div", { class: "s" }, dayLabel(best.day) + (SB.festivalNote(best.day, 2) ? " · " + SB.festivalNote(best.day, 2) : ""))),
+        el("div", {}, el("div", { class: "k" }, "Live days streamed"), el("div", { class: "v" }, num(liveDays)), el("div", { class: "s" }, liveDays ? "orders written as they happened" : "all history so far")),
+        el("div", {}, el("div", { class: "k" }, "Days with a sell-out"), el("div", { class: "v " + (soldOutDays ? "bad" : "") }, num(soldOutDays)), el("div", { class: "s" }, "a product ran out of stock"))),
+      this.chart(days, ly),
+      el("div", { class: "cleg" },
+        el("span", {}, el("i", { style: { background: "color-mix(in srgb, var(--violet) 60%, transparent)" } }), "history (backfill)"),
+        el("span", {}, el("i", { style: { background: "var(--cyan)" } }), "live days (streamed orders)"),
+        el("span", {}, el("i", { class: "ln" }), "same day last year"),
+        el("span", {}, el("i", { style: { background: "var(--bad)", borderRadius: "50%", width: "8px", height: "8px" } }), "a product sold out"),
+        el("span", {}, "🪔 festival")),
+      el("div", { class: "subh" }, "Last 48 hours, by hour", el("span", {}, "from the hourly continuous aggregate")),
+      this.hours(d.hours || []),
+      el("div", { class: "subh" }, "The SQL behind this view", el("span", {}, `${Object.keys(q).length} queries · ${ms(qms)} in total`)),
+      tabs, pre);
+    showQ(q[S.m.qtab] ? S.m.qtab : Object.keys(q)[0]);
+  },
+  chart(days, ly) {
+    const W = 1100, H = 310, L = 62, R = 14, T = 40, B = 40, n = days.length;
+    const lyv = days.map((x) => ly(x.day));
+    const maxV = Math.max(1, ...days.map((x) => x.revenue), ...lyv.filter((v) => v != null)) * 1.08;
+    const bw = (W - L - R) / n, X = (i) => L + i * bw, Y = (v) => T + (H - T - B) * (1 - v / maxV);
+    const s = svg("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Daily revenue" });
+    const g = svg("g", { class: "grid" });
+    for (let k = 0; k <= 4; k++) {
+      const v = (maxV / 4) * k, y = Y(v);
+      g.append(svg("line", { x1: L, x2: W - R, y1: y, y2: y }), svg("text", { class: "axis", x: L - 8, y: y + 4, "text-anchor": "end" }, SB.shortMoney(v)));
+    }
+    s.append(g);
+    // the live stretch gets a soft band so history vs live reads at a glance
+    const firstLive = days.findIndex((x) => x.live);
+    if (firstLive >= 0) {
+      s.append(svg("rect", { x: X(firstLive), y: T, width: W - R - X(firstLive), height: H - T - B, fill: "rgba(51,214,242,0.07)", rx: 6 }),
+        svg("text", { x: W - R - 6, y: T + 12, fill: "var(--cyan)", "font-size": 11, "font-weight": 800, "letter-spacing": "0.1em", "text-anchor": "end" }, "LIVE"));
+    }
+    // festivals
+    let lastX = -1e9, lift = 0;
+    for (const f of SB.festivalsBetween(days[0].day, days[n - 1].day)) {
+      const i = days.findIndex((x) => x.day === f.day); if (i < 0) continue;
+      const x = X(i) + bw / 2;
+      lift = x - lastX < 90 ? (lift ? 0 : 14) : 0; lastX = x;   // close festivals (Dhanteras, Diwali) stack instead of overlapping
+      const y = T - 22 - lift + 14, anchor = x > W - R - 60 ? "end" : x < L + 50 ? "start" : "middle";
+      s.append(svg("line", { x1: x, x2: x, y1: y + 4, y2: H - B, stroke: "#f5c451", "stroke-dasharray": "2 4", opacity: 0.6 }),
+        svg("text", { x: anchor === "end" ? x + 4 : x, y: y - 14 + 14 - 4, fill: "#f5c451", "font-size": 11, "font-weight": 700, "text-anchor": anchor }, "🪔 " + f.name));
+    }
+    const bars = svg("g", {});
+    days.forEach((x, i) => {
+      const y = Y(x.revenue);
+      bars.append(svg("rect", { x: X(i) + (bw > 4 ? bw * 0.12 : 0), y, width: Math.max(0.8, bw > 4 ? bw * 0.76 : bw - 0.3), height: Math.max(0, H - B - y), rx: bw > 6 ? 2 : 0,
+        fill: x.live ? "var(--cyan)" : "color-mix(in srgb, var(--violet) 60%, transparent)" }));
+      if (+x.sold_out_products > 0) bars.append(svg("circle", { cx: X(i) + bw / 2, cy: H - B + 8, r: Math.min(3.5, Math.max(1.8, bw / 2.5)), fill: "var(--bad)" }));
+    });
+    s.append(bars);
+    // last year, same weekday-aligned day (364 days back)
+    let dpath = "", pen = false;
+    lyv.forEach((v, i) => { if (v == null) { pen = false; return; } dpath += (pen ? "L" : "M") + (X(i) + bw / 2).toFixed(1) + "," + Y(v).toFixed(1); pen = true; });
+    if (dpath) s.append(svg("path", { d: dpath, fill: "none", stroke: "var(--warn)", "stroke-width": 1.8, "stroke-dasharray": "5 4", opacity: 0.9 }));
+    // x labels
+    const every = Math.max(1, Math.ceil(n / 8));
+    for (let i = 0; i < n; i += every) s.append(svg("text", { class: "axis", x: X(i) + bw / 2, y: H - B + 26, "text-anchor": "middle" }, dayLabel(days[i].day)));
+    // hover
+    const hl = svg("rect", { x: 0, y: T, width: bw, height: H - T - B, fill: "rgba(255,255,255,0.08)", opacity: 0, "pointer-events": "none" });
+    s.append(hl);
+    const tip = el("div", { class: "ctip hidden" });
+    const ov = svg("rect", { x: L, y: T, width: W - L - R, height: H - T - B + 14, fill: "transparent" });
+    const box = el("div", { class: "chartbox" }, s, tip);
+    ov.addEventListener("mousemove", (e) => {
+      const r = s.getBoundingClientRect(), sx = ((e.clientX - r.left) / r.width) * W;
+      const i = Math.max(0, Math.min(n - 1, Math.floor((sx - L) / bw))), x = days[i], l = lyv[i];
+      hl.setAttribute("x", X(i)); hl.setAttribute("opacity", 1);
+      const fest = SB.festivalNote(x.day, 0);
+      tip.replaceChildren(el("div", {}, el("b", {}, fmtDate(Date.parse(x.day + "T00:00:00Z"))), " · ", x.live ? el("span", { style: { color: "var(--cyan)" } }, x.day === simDay() ? "live · today so far" : "live") : "history", fest ? " · 🪔 " + fest : ""),
+        el("div", { class: "r" }, el("span", {}, "Revenue"), el("b", {}, SB.money(x.revenue))),
+        el("div", { class: "r" }, el("span", {}, "Units"), el("b", {}, num(x.units))),
+        l != null ? el("div", { class: "r" }, el("span", {}, "Last year"), el("b", {}, SB.money(l))) : null,
+        +x.sold_out_products > 0 ? el("div", { class: "r bad" }, el("span", {}, "Sold out"), el("b", {}, `${x.sold_out_products} product${x.sold_out_products > 1 ? "s" : ""}`)) : null);
+      tip.classList.remove("hidden");
+      const px = ((X(i) + bw / 2) / W) * r.width, py = (Y(Math.max(x.revenue, l || 0)) / H) * r.height;
+      tip.style.left = Math.max(90, Math.min(r.width - 90, px)) + "px"; tip.style.top = Math.max(60, py) + "px";
+    });
+    ov.addEventListener("mouseleave", () => { hl.setAttribute("opacity", 0); tip.classList.add("hidden"); });
+    s.append(ov);
+    return box;
+  },
+  hours(hours) {
+    if (!hours.length) return el("div", { class: "strip-empty", style: { marginTop: "8px" } },
+      "No live hours for this merchant yet. Hourly totals appear here as soon as the simulation streams orders; ", el("a", { href: "/commerce" }, "press Start on Live Commerce"), ".");
+    const all = hours.map((h) => ({ t: istMs(h.bucket), orders: +h.orders || 0, revenue: +h.revenue || 0, units: +h.units || 0 }));
+    const end = Math.max(...all.map((h) => h.t)), start = end - 47 * 3600e3;
+    const hs = all.filter((h) => h.t >= start).map((h) => ({ ...h, slot: Math.round((h.t - start) / 3600e3) }));
+    const W = 1100, H = 130, L = 62, R = 14, T = 10, B = 26, n = 48;
+    const maxV = Math.max(1, ...hs.map((h) => h.orders)) * 1.1, bw = (W - L - R) / n;
+    const Y = (v) => T + (H - T - B) * (1 - v / maxV);
+    const s = svg("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Orders by hour" });
+    s.append(svg("line", { x1: L, x2: W - R, y1: H - B, y2: H - B, stroke: "var(--border)" }),
+      svg("text", { class: "axis", x: L - 8, y: T + 8, "text-anchor": "end" }, num(maxV / 1.1) + " orders"));
+    hs.forEach((h) => {
+      const x = L + h.slot * bw, y = Y(h.orders);
+      s.append(svg("rect", { x: x + bw * 0.12, y, width: bw * 0.76, height: H - B - y, rx: 2, fill: "var(--cyan)", opacity: h.t === end ? 1 : 0.7 },
+        svg("title", {}, `${fmtDate(h.t)} ${fmtTime(h.t)}: ${num(h.orders)} orders · ${SB.money(h.revenue)}`)));
+    });
+    for (let k = 0; k < n; k++) {
+      const d = new Date(start + k * 3600e3), x = L + k * bw;
+      if (d.getUTCHours() % 6 === 0) s.append(svg("text", { class: "axis", x: x + bw / 2, y: H - 8, "text-anchor": "middle" }, d.getUTCHours() === 0 ? `${d.getUTCDate()} ${MON[d.getUTCMonth()]}` : pad(d.getUTCHours()) + ":00"));
+    }
+    return el("div", { class: "chartbox" }, s);
+  },
+};
+
+// ================================================================ 7. platforms over time + top merchants
+const PLATS = {
+  key: "",
+  render() {
+    const ov = S.overview; if (!ov) return;
+    const rows = ov.platform_days || [];
+    const k = JSON.stringify(rows.length ? [rows.length, rows[rows.length - 1]] : 0) + isLight();
+    if (k === this.key) return; this.key = k;
+    const box = $("plats"), q = ov.queries?.platform_days;
+    const foot = q ? [el("div", { class: "qmeta" }, el("span", {}, "Query"), el("b", {}, ms(q.ms)), el("span", {}, `· ${num(q.rows)} rows`)), sqlBlock(inlineSql(q))] : [];
+    if (!rows.length) {
+      box.replaceChildren(el("div", { class: "eyebrow" }, "Daily revenue per platform"),
+        el("div", { class: "empty" }, "No live days in TimescaleDB yet. ", el("a", { href: "/commerce" }, "Press Start on Live Commerce"),
+          ": each simulated day then lands here as one row per platform, straight from the daily continuous aggregate."), ...foot);
+      return;
+    }
+    const days = [...new Set(rows.map((r) => istDay(r.day)))].sort();
+    const ids = [...new Set([...PLAT_ORDER.filter((p) => rows.some((r) => r.platform === p)), ...rows.map((r) => r.platform)])];
+    const cell = (p) => {
+      const m = new Map(rows.filter((r) => r.platform === p).map((r) => [istDay(r.day), r]));
+      const vals = days.map((d) => +(m.get(d)?.revenue) || 0), orders = sum([...m.values()], (r) => r.orders);
+      const W = 300, H = 90, max = Math.max(1, ...vals), X = (i) => (days.length <= 1 ? W / 2 : (i / (days.length - 1)) * W), Y = (v) => H - 4 - (v / max) * (H - 12);
+      const c = pcol(p), id = "pg" + p;
+      // the simulated day still running is partial: its segment is dashed, not a "drop"
+      const partial = isFinite(S.simMs) && days[days.length - 1] === new Date(S.simMs).toISOString().slice(0, 10) && days.length > 1;
+      const P = (i) => `${X(i).toFixed(1)},${Y(vals[i]).toFixed(1)}`;
+      const pts = vals.map((v, i) => P(i)).join(" ");
+      const solid = vals.slice(0, partial ? -1 : undefined).map((v, i) => P(i)).join(" ");
+      const sv = svg("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none" },
+        svg("defs", {}, svg("linearGradient", { id, x1: 0, y1: 0, x2: 0, y2: 1 }, svg("stop", { offset: "0%", "stop-color": c, "stop-opacity": 0.45 }), svg("stop", { offset: "100%", "stop-color": c, "stop-opacity": 0 }))),
+        days.length > 1 ? svg("polygon", { points: `0,${H} ${pts} ${W},${H}`, fill: `url(#${id})` }) : null,
+        partial ? svg("polyline", { points: `${P(days.length - 2)} ${P(days.length - 1)}`, fill: "none", stroke: c, "stroke-width": 2, "stroke-dasharray": "4 4", "vector-effect": "non-scaling-stroke", opacity: 0.7 }) : null,
+        days.length > 1 ? svg("polyline", { points: solid, fill: "none", stroke: c, "stroke-width": 2, "vector-effect": "non-scaling-stroke" })
+          : svg("rect", { x: W / 2 - 14, y: Y(vals[0]), width: 28, height: H - Y(vals[0]), fill: c, rx: 3 }));
+      return el("div", { class: "pm", style: `--pc:${c}` }, pbadge(p), el("div", { class: "v" }, SB.shortMoney(sum(vals, (v) => v))),
+        el("div", { class: "s" }, `${num(orders)} orders · ${days.length} live day${days.length > 1 ? "s" : ""} · ${partial ? "today so far" : "latest"} ${SB.shortMoney(vals[vals.length - 1])}`), sv);
+    };
+    box.replaceChildren(el("div", { class: "eyebrow", style: { marginBottom: "10px" } }, `Daily revenue per platform · ${dayLabel(days[0])} – ${dayLabel(days[days.length - 1])}`),
+      el("div", { class: "pmult" }, ids.map(cell)), ...foot);
+  },
+  async top() {
+    try {
+      const d = await getJSON("/commerce/tsdb/top?hours=24&limit=8");
+      notePage(d.queries);
+      const rows = d.merchants || [], box = $("top");
+      if (!MX._quickSet || rows.length) { MX.quick(rows); MX._quickSet = true; }
+      const q = d.queries?.top;
+      box.replaceChildren(el("div", { class: "eyebrow" }, "Top merchants · last 24 simulated hours"),
+        rows.length ? el("table", { class: "sb", style: { marginTop: "8px" } },
+          el("thead", {}, el("tr", {}, el("th", {}, "Merchant"), el("th", { style: { textAlign: "right" } }, "Orders"), el("th", { style: { textAlign: "right" } }, "Revenue"))),
+          el("tbody", {}, rows.map((r) => {
+            const m = S.byId.get(r.merchant);
+            return el("tr", { class: "click", title: "Open in the explorer", onclick: () => { MX.load(r.merchant); $("explorer").scrollIntoView({ behavior: "smooth" }); } },
+              el("td", {}, el("div", { style: { fontWeight: 600 } }, m ? m.name : r.merchant), el("div", { class: "faint", style: { fontSize: "12px" } }, pname(r.platform) + (m?.city ? " · " + m.city : ""))),
+              el("td", { class: "n" }, num(r.orders)), el("td", { class: "n" }, SB.shortMoney(+r.revenue)));
+          })))
+          : el("div", { class: "empty" }, "No live orders in the last 24 simulated hours. ", el("a", { href: "/commerce" }, "Start the simulation"), " and the busiest merchants appear here."),
+        q ? el("div", { class: "qmeta" }, el("span", {}, "Answered in"), el("b", {}, ms(q.ms)), el("span", {}, "from cm_sales_1h")) : null);
+    } catch { /* table stays as it was */ }
+  },
+};
+
+// ================================================================ live data
+function onMessage(topic, m) {
+  const rest = SB.commerceRest(topic);
+  if (rest == null || !m) return;
+  if (rest === "tsdb/stats") onTsStats(m);
+  else if (rest.startsWith("tsdb/signals/")) SIGS.add(m);
+  else if (rest === "stats") onEngine(m);
+}
+function onTsStats(m) {
+  const now = Date.now(), p = S.ts;
+  m.columnstore_ratio = nOr(m.columnstore_ratio);
+  // the simulation was reset: findings from the old run no longer match the tables
+  if (p && (m.signals_total || 0) < (p.signals_total || 0)) { S.signals = []; S.sel = null; SB.store.set(SIG_KEY, null); dirty("signals"); }
+  if (p && now - S.tsAt < 10000) {
+    const dt = Math.max(0.3, (now - S.tsAt) / 1000), d = (m.rows_total || 0) - (p.rows_total || 0);
+    S.rate = d > 0 ? d / dt : 0;
+    if (d > 0 && m.order_lines > p.order_lines) FLOW.flash(2);
+    // a check ran: a cyan dot from the rollups into the watcher
+    if (m.checked_hour && m.checked_hour !== p.checked_hour) FLOW.spawn([3, 4], "var(--cyan)", 5);
+    if (m.checked_day && m.checked_day !== p.checked_day) { FLOW.spawn([2, 3, 4], "var(--cyan)", 6); setTimeout(refreshOverview, 1500); setTimeout(() => MX.refresh(), 2500); setTimeout(() => PLATS.top(), 2000); }
+    for (const [k, v] of Object.entries(m.query_ms || {})) if (p.query_ms?.[k] !== v) S.freshQ.add("w:" + k);
+  }
+  if (m.rows_per_sec > 0 && (!p || m.rows_total !== p.rows_total)) S.peakRate = Math.max(S.peakRate, m.rows_per_sec);
+  else if (!S.peakRate && m.rows_per_sec > 0) S.peakRate = m.rows_per_sec;
+  S.rateHist.push(S.rate); if (S.rateHist.length > 90) S.rateHist.shift();
+  S.ts = m; S.tsAt = now; S.live = true;
+  if (!S.eng && m.sim_ts) setSim(m.sim_ts);
+  dirty("kpi", "hero", "tables", "compress", "speed", "vs");
+  if (!p || p.signals_total !== m.signals_total) dirty("signals");
+}
+function setSim(ts) { const t = parseSim(ts); if (isFinite(t)) { S.simMs = t; S.simWall = Date.now(); } }
+function onEngine(m) {
+  const wasRunning = S.eng?.running;
+  S.eng = m; S.engAt = Date.now();
+  setSim(m.sim_ts);
+  if (wasRunning !== m.running) dirty("hero", "signals");
+  dirty("vs");
+}
+// Without the live feed: rebuild the numbers from what is stored.
+function statsFromOverview(ov) {
+  const db = ov.database || {};
+  return { rows_total: (+db.order_lines || 0) + (+db.history_rows || 0), order_lines: +db.order_lines || 0, history_rows: +db.history_rows || 0,
+    chunks: db.chunks, columnstore_chunks: db.columnstore_chunks, lines_bytes: db.lines_bytes, history_bytes: db.history_bytes, rollup_rows: null, query_ms: {} };
+}
+async function refreshOverview() {
+  try {
+    const ov = await getJSON("/commerce/tsdb/overview");
+    S.overview = ov;
+    notePage(ov.queries);
+    if (!S.ts || Date.now() - S.tsAt > 8000) {
+      const pseudo = statsFromOverview(ov);
+      KPI.tiles.rows.tw.set(pseudo.rows_total);
+      KPI.tiles.rows.d.textContent = `${words(pseudo.order_lines)} live order lines · ${words(pseudo.history_rows)} history`;
+      KPI.tiles.chunks.tw.set((+db0(ov).chunks || 0) + (+db0(ov).history_chunks || 0));
+    }
+    dirty("tables", "compress", "plats", "hero", "kpi");
+  } catch (e) {
+    if (e.status === 503 && !S.overview) $("tables").replaceChildren(el("div", { class: "empty" }, "TimescaleDB is not reachable from the app right now."));
+  }
+}
+const db0 = (ov) => ov.database || {};
+
+// ---------------------------------------------------------------- render loop (sections redraw at most twice a second)
+let lastFrame = 0;
+function frame(t) {
+  const dt = Math.min(100, t - lastFrame); lastFrame = t;
+  for (const tw of TWEENS) tw.step(dt);
+  FLOW.step(dt);
+  requestAnimationFrame(frame);
+}
+function tick() {
+  HERO.clock();
+  if (!S.dirty.size) return;
+  const d = S.dirty; S.dirty = new Set();
+  if (d.has("hero")) HERO.render();
+  if (d.has("kpi")) { KPI.render(); FLOW.counters(); }
+  if (d.has("tables")) TABLES.render();
+  if (d.has("compress")) COMPRESS.render();
+  if (d.has("speed")) SPEED.render();
+  if (d.has("signals")) { SIGS.render(); SIGS.detail(); } else if (d.has("vs")) SIGS.vs();
+  if (d.has("plats")) PLATS.render();
+}
+
+// ---------------------------------------------------------------- boot
+function gate() {
+  if (document.querySelector(".gate-wrap")) return;
+  const input = el("input", { type: "password", placeholder: "Admin token", autocomplete: "off", "aria-label": "Admin token" });
+  const wrap = el("div", { class: "gate-wrap" }, el("div", { class: "card gate pop" }, el("div", { class: "eyebrow" }, "Root brain"),
+    el("h2", {}, "TimescaleDB, live"), el("p", { class: "muted" }, "The live feed of database stats and findings needs the root operator's admin token. Stored data is shown either way."),
+    el("form", { onsubmit: (e) => { e.preventDefault(); try { sessionStorage.setItem("sb-admin-token", input.value.trim()); } catch {} wrap.remove(); connectLive(); } },
+      input, el("button", { class: "btn primary" }, "Open")),
+    el("button", { class: "link", onclick: () => wrap.remove() }, "Continue without the live feed")));
+  document.body.append(wrap); setTimeout(() => input.focus(), 50);
+}
+async function connectLive() {
+  if (!token()) return gate();
+  let res;
+  try { res = await fetch("/admin/live/monitor", { headers: { "X-Admin-Token": token() || "" } }); } catch { res = null; }
+  if (res && res.status === 401) { try { sessionStorage.removeItem("sb-admin-token"); } catch {} return gate(); }
+  if (res && res.ok) {
+    const client = await SB.live("/admin/live/monitor", { "X-Admin-Token": token() }, onMessage);
+    if (client) { client.on("connect", () => { S.live = true; dirty("hero", "kpi"); }); client.on("offline", () => { S.live = false; dirty("hero", "kpi"); }); }
+  }
+}
+async function boot() {
+  FLOW.init(); KPI.init(); MX.init(); SIGS.init();
+  requestAnimationFrame((t) => { lastFrame = t; frame(t); });
+  setInterval(tick, 500);
+  LIGHT.addEventListener("change", () => { PLATS.key = ""; dirty("plats"); if (S.m.data) MX.render(); });
+
+  const cfg = await SB.commerceConfig();
+  S.config = cfg;
+  if (cfg && cfg.tsdb === false) {
+    document.querySelectorAll("main > .section").forEach((n) => n.classList.add("hidden"));
+    $("hero").after(el("div", { class: "card nots section" }, el("h2", {}, "TimescaleDB is not switched on in this copy"),
+      el("p", { class: "muted" }, "Run Live Commerce with ", el("code", {}, "--tsdb"), " (and TimescaleDB from docker-compose.timescale.yml) to see this page come alive.")));
+    $("mode").textContent = "Not connected";
+    return;
+  }
+  getJSON("/commerce/api/status", 4000).then(onEngine).catch(() => {}).finally(() => dirty("hero", "kpi"));
+  refreshOverview();
+  getJSON("/commerce/api/merchants", 8000).then((ms) => {
+    S.merchants = Array.isArray(ms) ? ms : [];
+    S.byId = new Map(S.merchants.map((m) => [m.id, m]));
+    MX.quick([]);
+    PLATS.top().then(() => {
+      if (!S.m.id) MX.load(S.byId.has("shopify-0001") ? "shopify-0001" : S.merchants[0]?.id);
+    });
+  }).catch(() => { $("mview").replaceChildren(el("div", { class: "empty" }, "The Live Commerce engine is not reachable, so merchant names are unavailable.")); });
+  connectLive();
+  // the stored picture refreshes on its own; the live feed fills in between
+  setInterval(refreshOverview, 15000);
+  setInterval(() => PLATS.top(), 20000);
+  setInterval(async () => { if (Date.now() - S.engAt > 3000) { try { onEngine(await getJSON("/commerce/api/status", 3000)); } catch {} } dirty("hero"); }, 3000);
+}
+boot();
+</script>
+</body>
+</html>
