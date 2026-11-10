@@ -316,11 +316,14 @@ function rgba(hex, a) {
 
 // A number that eases toward its target every frame.
 const TWEENS = [];
+// A number on screen. Rates (per second, accuracy, hit rate) show each new measurement as it is;
+// totals roll forward like an odometer, and never count up from zero or back down: a first value or
+// a reset shows at once.
 class Tween {
-  constructor(node, fmt) { this.node = node; this.fmt = fmt; this.v = null; this.t = null; this.txt = ""; TWEENS.push(this); }
+  constructor(node, fmt, rate = false) { this.node = node; this.fmt = fmt; this.rate = rate; this.v = null; this.t = null; this.txt = ""; TWEENS.push(this); }
   set(t) {
     if (t == null || !isFinite(t)) { this.t = this.v = null; this.write("—"); return; }
-    if (this.v == null || reduced()) this.v = reduced() ? t : 0;
+    if (this.rate || this.v == null || t < this.v || reduced()) this.v = t;
     this.t = t;
   }
   step(dt) {
@@ -586,11 +589,11 @@ function setMode(mode, off) {
 
 const KDEF = [
   { k: "rev", label: "Revenue today", fmt: (v) => inr(v, 2), glow: "glow", spark: "var(--violet)" },
-  { k: "ops", label: "Orders / sec", fmt: num, spark: "var(--cyan)" },
+  { k: "ops", label: "Orders / sec", fmt: num, spark: "var(--cyan)", rate: true },
   { k: "sig", label: "Signals raised", fmt: num },
   { k: "upl", label: "Uplift from offers", fmt: (v) => plusInr(v), glow: "glow-good" },
-  { k: "acc", label: "Store-day accuracy", fmt: (v) => v.toFixed(1) + "%", tip: "Store-day accuracy: 100% − WAPE of each store's daily sales, scored on days the forecast never saw, over products that stayed in stock (a sold-out day shows the shelf, not demand). 'Naive' repeats last week's sales." },
-  { k: "hit", label: "Offer hit rate", fmt: (v) => Math.round(v) + "%", tip: "Share of completed offers that sold more than the forecast without the offer" },
+  { k: "acc", label: "Store-day accuracy", rate: true, fmt: (v) => v.toFixed(1) + "%", tip: "Store-day accuracy: 100% − WAPE of each store's daily sales, scored on days the forecast never saw, over products that stayed in stock (a sold-out day shows the shelf, not demand). 'Naive' repeats last week's sales." },
+  { k: "hit", label: "Offer hit rate", rate: true, fmt: (v) => Math.round(v) + "%", tip: "Share of completed offers that sold more than the forecast without the offer" },
 ];
 const K = {};
 const KPI = {
@@ -600,7 +603,7 @@ const KPI = {
       const node = el("div", { class: `kpi rise ${d.glow || ""}`, title: d.tip, style: { animationDelay: i * 50 + "ms" } }, el("div", { class: "k" }, d.label), v, sub);
       const sp = d.spark ? makeSpark(d.spark) : null;
       if (sp) node.append(sp.node);
-      K[d.k] = { node, v, sub, tw: new Tween(v, d.fmt), sp };
+      K[d.k] = { node, v, sub, tw: new Tween(v, d.fmt, d.rate), sp };
       return node;
     }));
   },
@@ -690,8 +693,8 @@ const PLATS = {
     });
   },
   build(p, i) {
-    const t = (fmt) => { const n = el("span", {}, "—"); return { n, tw: new Tween(n, fmt) }; };
-    const c = { rev: t((v) => inr(v, 2)), ops: t(num), spark: makeSpark(pcol(p.id, p.color), { w: 100, h: 34 }) };
+    const t = (fmt, rate) => { const n = el("span", {}, "—"); return { n, tw: new Tween(n, fmt, rate) }; };
+    const c = { rev: t((v) => inr(v, 2)), ops: t(num, true), spark: makeSpark(pcol(p.id, p.color), { w: 100, h: 34 }) };
     const toggle = () => setScope(S.scope === p.id ? null : p.id);
     c.node = el("article", { class: "card pcard rise", tabindex: 0, role: "button", style: { animationDelay: i * 70 + "ms" },
       onclick: toggle, onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } } },

@@ -441,12 +441,14 @@ function rgba(hex, a) {
 // ---------------------------------------------------------------- small widgets
 const TWEENS = [];
 // A number that eases toward its target every frame (the strip counts, never jumps).
+// A number on screen. Rates (per second, latency, accuracy) show each new measurement as it is;
+// totals roll forward like an odometer, and never count up from zero or back down: a first value or
+// a reset shows at once.
 class Tween {
-  constructor(node, fmt) { this.node = node; this.fmt = fmt; this.v = null; this.t = null; this.txt = ""; TWEENS.push(this); }
+  constructor(node, fmt, rate = false) { this.node = node; this.fmt = fmt; this.rate = rate; this.v = null; this.t = null; this.txt = ""; TWEENS.push(this); }
   set(t) {
     if (t == null || !isFinite(t)) { this.t = null; this.write("—"); return; }
-    if (this.v == null) this.v = reduced() ? t : 0;
-    if (reduced()) this.v = t;
+    if (this.rate || this.v == null || t < this.v || reduced()) this.v = t;
     this.t = t;
   }
   step(dt) {
@@ -608,14 +610,14 @@ function setMode(mode, label) {
 
 // ---------------------------------------------------------------- 2. KPI strip
 const KDEF = [
-  { k: "ops", label: "Orders / sec", fmt: (v) => num(v), spark: "var(--cyan)" },
+  { k: "ops", label: "Orders / sec", fmt: (v) => num(v), spark: "var(--cyan)", rate: true },
   { k: "rev", label: "Revenue (live)", fmt: (v) => inr(v, 2), glow: "glow", spark: "var(--violet)" },
   { k: "cust", label: "Customers active today", fmt: num },
   { k: "sig", label: "Signals raised", fmt: num },
   { k: "off", label: "Offers applied", fmt: num },
   { k: "upl", label: "Uplift from offers", fmt: (v) => inr(v), glow: "glow-good" },
-  { k: "acc", label: "Forecast accuracy · store-day", fmt: (v) => v.toFixed(1) + "%", tip: "100% − WAPE of each store's daily sales, on days the forecast never saw, over products that stayed in stock; the subline is the stricter product-level score" },
-  { k: "lat", label: "End-to-end latency p50", fmt: (v) => (v < 10 ? v.toFixed(1) : Math.round(v)) + " ms", tip: "Order sent by the platform → signal published" },
+  { k: "acc", label: "Forecast accuracy · store-day", rate: true, fmt: (v) => v.toFixed(1) + "%", tip: "100% − WAPE of each store's daily sales, on days the forecast never saw, over products that stayed in stock; the subline is the stricter product-level score" },
+  { k: "lat", label: "End-to-end latency p50", rate: true, fmt: (v) => (v < 10 ? v.toFixed(1) : Math.round(v)) + " ms", tip: "Order sent by the platform → signal published" },
 ];
 const K = {};
 function initKpis() {
@@ -624,7 +626,7 @@ function initKpis() {
     const node = el("div", { class: `kpi ${d.glow || ""}`, title: d.tip }, el("div", { class: "k" }, d.label), v, sub);
     const sp = d.spark ? makeSpark(d.spark) : null;
     if (sp) node.append(sp.node);
-    K[d.k] = { node, v, sub, tw: new Tween(v, d.fmt), sp };
+    K[d.k] = { node, v, sub, tw: new Tween(v, d.fmt, d.rate), sp };
     return node;
   }));
 }
@@ -841,7 +843,7 @@ const LEGEND = {
     $("legend").replaceChildren(...pids.map((pid) => {
       const n = S.list.filter((m) => m.platform === pid).length;
       const opsN = el("span", {}, "—"), ops = el("div", { class: "ops" }, opsN, el("small", {}, " orders/s")), sp = makeSpark(pcol(pid), { h: 34 });
-      this.rows[pid] = { ops, sp, tw: new Tween(opsN, (v) => num(v)) };
+      this.rows[pid] = { ops, sp, tw: new Tween(opsN, (v) => num(v), true) };
       const card = el("div", { class: "plat", style: `--pc: ${pcol(pid)}` },
         el("div", { class: "nm" }, el("i"), plat(pid).name),
         el("div", { class: "meta" }, `${num(n)} merchants · ${kinds[pid] || "connected"}`), ops, sp.node);
@@ -876,7 +878,7 @@ const PIPE = {
       const ring = el("div", { class: "ring" }, icon(s.ic)), pv = el("div", { class: "pv" }, "—"), pl = el("div", { class: "pl" }, "—");
       const node = el("div", { class: "pnode " + (s.cls || "") }, ring, el("div", { class: "txt" }, el("b", {}, s.t), pv, el("div", { class: "pc" }, s.cap)), pl);
       this.box.append(node);
-      this.nodes.push({ node, ring, pv, pl, tw: new Tween(pv, s.k === "screens" ? (v) => "+" + ms(v) : (v) => num(v)) });
+      this.nodes.push({ node, ring, pv, pl, tw: new Tween(pv, s.k === "screens" ? (v) => "+" + ms(v) : (v) => num(v), true) });
     }
     for (let i = 0; i < 6; i++) { const r = el("div", { class: "rate" }, "—"); this.box.append(r); this.rateEls.push(r); }
     $("latbar").replaceChildren(...["broker", "process", "signal", "deliv"].map((k) => el("i", { "data-k": k })));
@@ -1408,7 +1410,7 @@ const LEARN = {
   build() {
     const hit = el("div", { class: "v" }, "—"), hitS = el("div", { class: "s" }, " ");
     const acc = el("div", { class: "v" }, "—"), accS = el("div", { class: "s" }, " "), sp = makeSpark("var(--cyan)", { base: true });
-    this.el = { hit, hitS, acc, accS, sp, hitTw: new Tween(hit, (v) => Math.round(v) + "%"), accTw: new Tween(acc, (v) => v.toFixed(1) + "%"), els: el("div"), outs: el("div", { class: "outs" }) };
+    this.el = { hit, hitS, acc, accS, sp, hitTw: new Tween(hit, (v) => Math.round(v) + "%", true), accTw: new Tween(acc, (v) => v.toFixed(1) + "%", true), els: el("div"), outs: el("div", { class: "outs" }) };
     $("learn").replaceChildren(el("div", { class: "learn-top" },
       el("div", { class: "t" }, el("div", { class: "k" }, "Offer hit rate"), hit, hitS),
       el("div", { class: "t" }, el("div", { class: "k" }, "Forecast accuracy over time"), acc, accS, sp.node)),

@@ -134,6 +134,7 @@ class Engine:
         self.signals_by_kind: dict[str, int] = {}
         self.lat = {k: deque(maxlen=4000) for k in ("broker", "process", "signal", "end_to_end")}
         self.window: deque = deque()       # (wall s, orders, revenue, msgs, busy s, {platform: orders})
+        self.run_since = 0.0               # wall time the clock last started or stopped
         self.batch_platform: dict[str, int] = {}
         self.ticker: list = []
         self.ticker_seen = 0
@@ -269,7 +270,11 @@ class Engine:
     def _on_clock(self, msg: dict) -> None:
         self.speed = msg.get("requested", msg.get("speed", self.speed))  # the label the wall shows
         self.speed_actual = msg.get("speed")
-        self.running = bool(msg.get("running", self.running))
+        running = bool(msg.get("running", self.running))
+        if running != self.running:   # rates measure this run only: 0 the moment it pauses, no ramp after Start
+            self.window.clear()
+            self.run_since = time.time()
+        self.running = running
         self.catching_up = bool(msg.get("catching_up"))
         self.last_clock_sent = msg.get("sent_ms", self.last_clock_sent)
         self.run_until = msg.get("run_until")
@@ -1124,9 +1129,9 @@ class Engine:
         now = time.time()
         while self.window and self.window[0][0] < now - 3:
             self.window.popleft()
-        if not self.window:
+        if not self.window or not self.running:   # paused: nothing is flowing, whatever was in flight
             return {"orders": 0.0, "revenue": 0.0, "msgs": 0.0, "capacity": None, "platforms": {}}
-        span = max(min(3.0, now - self.started), 0.5)
+        span = max(min(3.0, now - max(self.started, self.run_since)), 0.25)
         orders = sum(w[1] for w in self.window)
         busy = sum(w[4] for w in self.window)
         plat: dict[str, float] = {}

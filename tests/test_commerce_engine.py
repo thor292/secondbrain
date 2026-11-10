@@ -1,5 +1,6 @@
 """Live Commerce engine: forecaster, decisions and payloads on synthetic data, no broker needed."""
 import json
+import time
 from datetime import date, datetime, timedelta
 
 import numpy as np
@@ -516,3 +517,19 @@ def test_run_days_control_is_validated_and_published(engine):
     assert engine.control[-1] == {"cmd": "run_days", "days": 7}
     for bad in (0, 61, "7", 2.5, None, True):
         assert client.post("/control", json={"cmd": "run_days", "days": bad}).status_code == 400
+
+
+def test_rates_measure_the_current_run_only(engine):
+    """Orders/sec is 0 the moment the clock pauses, and right after Start it isn't diluted over 3 s."""
+    skus = feed_setup(engine)
+    now = C.wall_ms()
+    engine.process([(C.CLOCK, {"sent_ms": now, "sim_ts": "2026-10-20T00:00:00", "speed": 3600, "running": True}, now)])
+    live_hours(engine, skus, range(10, 13), {})
+    assert engine.stats()["orders_per_sec"] > 0
+    engine.process([(C.CLOCK, {"sent_ms": now, "sim_ts": "2026-10-20T13:00:00", "speed": 0, "running": False}, now)])
+    assert engine.stats()["orders_per_sec"] == 0 and engine.stats()["revenue_per_sec"] == 0
+    engine.process([(C.CLOCK, {"sent_ms": now, "sim_ts": "2026-10-20T13:00:00", "speed": 3600, "running": True}, now)])
+    engine.started -= 60
+    engine.run_since -= 0.5   # half a second into the run
+    engine.window.append((time.time(), 100, 1000.0, 1, 0.001, {"shopify": 100}))
+    assert engine.stats()["orders_per_sec"] == pytest.approx(200, rel=0.05)   # 100 orders / 0.5 s, not / 3 s
