@@ -31,7 +31,7 @@ from secondbrain.memory.short_term import ShortTermMemory
 from secondbrain.memory.store import MemoryStore
 from secondbrain.models import build_models
 from secondbrain.sensitivity import Sensitivity
-from secondbrain.relationships import GraphUnavailable, RelationshipGraph
+from secondbrain.relationships import GraphUnavailable, connect_graph
 from secondbrain.service import SecondBrain, UnknownUser
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -62,10 +62,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        settings.check_required()
         llm, embedder = build_models(settings)
-        store = MemoryStore(settings.app_database_url, settings.embedding_dim)
+        app_dsn, app_role = settings.app_connection()
+        store = MemoryStore(app_dsn, settings.embedding_dim, role=app_role)
         short_term = ShortTermMemory(settings.redis_url, settings.short_term_ttl)
-        graph = RelationshipGraph(settings.falkordb_url, settings.graph_prefix)
+        graph = connect_graph(settings)
         app.state.brain = SecondBrain(settings, store, short_term, llm, embedder, graph)
         yield
         store.close()

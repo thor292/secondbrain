@@ -40,8 +40,25 @@ def vector_literal(embedding: list[float]) -> str:
 
 
 class MemoryStore:
-    def __init__(self, database_url: str, embedding_dim: int) -> None:
-        self._pool = ConnectionPool(database_url, kwargs={"row_factory": dict_row}, open=True)
+    def __init__(self, database_url: str, embedding_dim: int, role: str | None = None) -> None:
+        kwargs: dict = {"row_factory": dict_row}
+        if role:
+            # Switch role at login, before any query, so row-level security applies
+            # even though the login itself owns the tables.
+            kwargs["options"] = f"-c role={role}"
+        # One connection up front, so a wrong address, password or missing role
+        # stops startup with a single clear error instead of pool retries.
+        host = psycopg.conninfo.conninfo_to_dict(database_url).get("host", "?")
+        try:
+            with psycopg.connect(database_url, connect_timeout=10, **kwargs) as conn:
+                current = conn.execute("SELECT current_user AS u").fetchone()["u"]
+        except psycopg.OperationalError as e:
+            hint = (f" Create role {role!r} and run GRANT {role} TO <login>."
+                    if role and "role" in str(e) else "")
+            raise RuntimeError(f"Can't connect to PostgreSQL at {host}: {e}".strip() + hint) from None
+        if role and current != role:
+            raise RuntimeError(f"API connection runs as {current!r}, expected {role!r}")
+        self._pool = ConnectionPool(database_url, kwargs=kwargs, open=True)
         self._cast = vector_type(embedding_dim)[0].split("(")[0]
 
     def close(self) -> None:

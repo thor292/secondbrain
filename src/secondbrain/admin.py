@@ -158,10 +158,10 @@ def main() -> None:
             )
             print(f"Imported {count} chunks into {args.brain_path}")
     if args.command == "import" and count and tree.level(args.brain_path) >= tree.COMPANY_LEVEL:
-        from secondbrain.relationships import RelationshipGraph, run
+        from secondbrain.relationships import connect_graph, run
 
         # After the import committed: extraction reads the new chunks on its own connection.
-        graph = RelationshipGraph(settings.falkordb_url, settings.graph_prefix)
+        graph = connect_graph(settings)
         found = run(settings, llm, graph, tree.company_of(args.brain_path))
         print(f"Extracted entities from {found} memories")
 

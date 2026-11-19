@@ -248,6 +248,21 @@ class GraphUnavailable(Exception):
     pass
 
 
+def connect_graph(settings) -> "RelationshipGraph | None":
+    """The relationship graph, or None when SB_FALKORDB_URL is empty or FalkorDB can't be reached.
+
+    The graph is optional: without it only the "who knows what" features answer 503.
+    """
+    if not settings.falkordb_url:
+        log.warning("SB_FALKORDB_URL is not set: relationship graph features are off")
+        return None
+    try:
+        return RelationshipGraph(settings.falkordb_url, settings.graph_prefix)
+    except redis.exceptions.RedisError as exc:
+        log.warning("FalkorDB unreachable (%s): relationship graph features are off", exc)
+        return None
+
+
 class RelationshipGraph:
     """One FalkorDB graph per company: (:Brain), (:Person), (:Memory), (:Entity).
 
@@ -517,7 +532,7 @@ def main() -> None:
     if ensure_relationship_schema(settings):
         print("Added the relationship tables.")
     llm, _ = build_models(settings)
-    graph = RelationshipGraph(settings.falkordb_url, settings.graph_prefix)
+    graph = connect_graph(settings)
     with psycopg.connect(settings.admin_database_url, row_factory=dict_row) as conn:
         done = extract_pending(conn, llm, args.company)
         print(f"Extracted entities from {sum(len(ids) for ids in done.values())} new memories.")
@@ -525,6 +540,9 @@ def main() -> None:
             row["path"] for row in conn.execute("SELECT path::text FROM brains WHERE kind = 'company' ORDER BY path")
         ]
         for company in companies:
+            if graph is None:
+                print("No FalkorDB: entities saved in PostgreSQL, graphs not rebuilt.")
+                break
             graph.rebuild(conn, company)
             count = conn.execute(
                 "SELECT count(*) AS n FROM entities WHERE company = %s::ltree", (company,)

@@ -18,25 +18,38 @@ Replace `PROJECT`, `REGION`, `VPC`, `SUBNET`, `DB_PRIVATE_IP` below with your va
 
 ---
 
+## 0. Minimum to start
+
+The image has **no** built-in addresses. With nothing set it stops at once with
+`SecondBrain can't start: SB_ADMIN_DATABASE_URL is not set`. The only required settings are:
+
+- `SB_ADMIN_DATABASE_URL` (secret): `postgresql://secondbrain_admin:<pw>@<cloud sql private ip>:5432/secondbrain`
+- the LiteLLM settings (`SB_MODEL_PROVIDER`, `SB_LITELLM_BASE_URL`, `SB_LLM_MODEL`, `SB_EMBEDDING_MODEL`, `SB_EMBEDDING_DIM`, and the `SB_LITELLM_API_KEY` secret)
+
+and the schema job (step 5) must have run once. If the database can't be reached, the log says
+`Can't connect to PostgreSQL at <host>: ...` (then check the VPC egress and the Cloud SQL private IP).
+
 ## 1. What the GCP team must set up (or confirm)
 
 1. **Cloud SQL Postgres** with a **private IP** in `VPC`, database `secondbrain`.
-2. **Two database users**, created with SQL (not the console, so the app user is not a member of `cloudsqlsuperuser`):
-   - `secondbrain_admin`: owns the tables, runs the schema and the nightly jobs. Create this one in the console (it gets `cloudsqlsuperuser`, which is needed to create extensions).
-   - `secondbrain_app`: the API's login. **The name must be exactly `secondbrain_app`**: the schema grants permissions to it, and row-level security (each company sees only its own data) relies on it not owning the tables.
+2. **One database login**, `secondbrain_admin` (create it in the console). Everything uses it: the API, the schema job and the nightly jobs.
+
+   Plus one **role without a login**, `secondbrain_app`. The API switches to it on every connection, so row-level security (each company sees only its own data) still applies even though the login owns the tables. **The name must be exactly `secondbrain_app`**: the schema grants permissions to it.
 
    Connected as `secondbrain_admin`:
    ```sql
    CREATE EXTENSION IF NOT EXISTS vector;
    CREATE EXTENSION IF NOT EXISTS ltree;
-   CREATE ROLE secondbrain_app LOGIN PASSWORD '<strong password>';
-   GRANT CONNECT ON DATABASE secondbrain TO secondbrain_app;
+   CREATE ROLE secondbrain_app NOLOGIN;
+   GRANT secondbrain_app TO secondbrain_admin;   -- lets the login switch to it
    GRANT USAGE ON SCHEMA public TO secondbrain_app;
    ```
+   The API refuses to start if it can't switch to `secondbrain_app`, so a missing `GRANT` shows up straight away.
+
 3. **Cloud Run → VPC**: Direct VPC egress (or a Serverless VPC Access connector) on `VPC`/`SUBNET`, with routes and firewall open to:
    - Cloud SQL private IP, port 5432
    - Memorystore Redis, port 6379
-   - LiteLLM server `10.21.64.70`, port 4000
+   - the company LiteLLM server (address from the local `.env`), port 4000
    - FalkorDB VM, port 6379 (if used)
 4. **Artifact Registry** Docker repository, e.g. `REGION-docker.pkg.dev/PROJECT/secondbrain`.
 5. A **service account** for Cloud Run, e.g. `secondbrain-run@PROJECT.iam.gserviceaccount.com`, with `roles/secretmanager.secretAccessor` and `roles/cloudsql.client`.
@@ -60,7 +73,6 @@ gcloud builds submit --tag REGION-docker.pkg.dev/PROJECT/secondbrain/api:shoppi 
 
 ```bash
 printf '%s' 'postgresql://secondbrain_admin:<pw>@DB_PRIVATE_IP:5432/secondbrain' | gcloud secrets create sb-admin-db-url --data-file=-
-printf '%s' 'postgresql://secondbrain_app:<pw>@DB_PRIVATE_IP:5432/secondbrain'   | gcloud secrets create sb-app-db-url   --data-file=-
 printf '%s' '<litellm key>'   | gcloud secrets create sb-litellm-key  --data-file=-
 printf '%s' "$(openssl rand -hex 24)" | gcloud secrets create sb-admin-token --data-file=-
 ```
@@ -70,14 +82,15 @@ printf '%s' "$(openssl rand -hex 24)" | gcloud secrets create sb-admin-token --d
 | Variable | Value |
 |---|---|
 | `SB_MODEL_PROVIDER` | `litellm` |
-| `SB_LITELLM_BASE_URL` | same as the local `.env` (the LiteLLM server at 10.21.64.70:4000) |
+| `SB_LITELLM_BASE_URL` | same as the local `.env` (the company LiteLLM server) |
 | `SB_LLM_MODEL` | same as the local `.env` |
 | `SB_EMBEDDING_MODEL` | same as the local `.env` |
 | `SB_EMBEDDING_DIM` | same as the local `.env` (must match the model) |
-| `SB_REDIS_URL` | `redis://<memorystore ip>:6379/0` |
-| `SB_FALKORDB_URL` | `redis://<falkordb vm ip>:6379` (or leave out) |
+| `SB_REDIS_URL` | `redis://<memorystore ip>:6379/0`. Optional: left out, recent chat is kept inside each instance (fine with one instance). |
+| `SB_FALKORDB_URL` | `redis://<falkordb vm ip>:6379`. Optional: left out, only the "who knows what" graph is off (503). |
 | `SB_GRAPH_PREFIX` | `sb` |
 | `SB_DEMO_MODE` | `false` (already the image default) |
+| `SB_APP_DATABASE_URL` | leave it out (one login). Set it only if you later want a separate login for the API. |
 
 ## 5. Create the schema (once, and after each release)
 
@@ -86,7 +99,7 @@ gcloud run jobs create sb-schema \
   --image REGION-docker.pkg.dev/PROJECT/secondbrain/api:shoppi --region REGION \
   --service-account secondbrain-run@PROJECT.iam.gserviceaccount.com \
   --network VPC --subnet SUBNET --vpc-egress private-ranges-only \
-  --set-secrets SB_ADMIN_DATABASE_URL=sb-admin-db-url:latest,SB_APP_DATABASE_URL=sb-app-db-url:latest \
+  --set-secrets SB_ADMIN_DATABASE_URL=sb-admin-db-url:latest \
   --command python --args=-m,secondbrain.schema
 gcloud run jobs execute sb-schema --region REGION --wait
 ```
@@ -101,7 +114,7 @@ gcloud run deploy secondbrain-api \
   --ingress internal-and-cloud-load-balancing --no-allow-unauthenticated \
   --cpu 2 --memory 2Gi --min-instances 1 --max-instances 5 \
   --set-env-vars SB_MODEL_PROVIDER=litellm,SB_LITELLM_BASE_URL=<as in .env>,SB_LLM_MODEL=<model>,SB_EMBEDDING_MODEL=<model>,SB_EMBEDDING_DIM=<dim>,SB_REDIS_URL=redis://<ip>:6379/0 \
-  --set-secrets SB_ADMIN_DATABASE_URL=sb-admin-db-url:latest,SB_APP_DATABASE_URL=sb-app-db-url:latest,SB_LITELLM_API_KEY=sb-litellm-key:latest,SB_ADMIN_TOKEN=sb-admin-token:latest
+  --set-secrets SB_ADMIN_DATABASE_URL=sb-admin-db-url:latest,SB_LITELLM_API_KEY=sb-litellm-key:latest,SB_ADMIN_TOKEN=sb-admin-token:latest
 ```
 
 `--ingress internal-and-cloud-load-balancing` keeps it off the public internet: Shoppi and Media Planner reach it inside the VPC. Check:
@@ -111,7 +124,7 @@ curl -H "Authorization: Bearer $(gcloud auth print-identity-token)" https://<ser
 
 ## 7. Nightly jobs
 
-Same image as jobs, with `SB_ADMIN_DATABASE_URL`, `SB_APP_DATABASE_URL`, the LiteLLM settings and the same `--network`/`--subnet` flags as step 5:
+Same image as jobs, with `SB_ADMIN_DATABASE_URL`, the LiteLLM settings and the same `--network`/`--subnet` flags as step 5:
 
 | Job | Command | Schedule (Cloud Scheduler, IST) |
 |---|---|---|

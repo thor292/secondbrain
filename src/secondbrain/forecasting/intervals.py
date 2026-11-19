@@ -190,4 +190,4 @@ def coverage(rows: pd.DataFrame, pts: list[dict]) -> dict[int, float | None]:
             continue
         for level in LEVELS:
             hits[level].append(p[f"lo{level}"] <= units <= p[f"hi{level}"])
-    return {level: (float(np.mean(h)) if h else None) for level in LEVELS}
+    return {level: (float(np.mean(hits[level])) if hits[level] else None) for level in LEVELS}

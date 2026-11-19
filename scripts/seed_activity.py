@@ -63,7 +63,8 @@ NOTES = {
 def main() -> None:
     settings = get_settings()
     llm, embedder = build_models(settings)
-    store = MemoryStore(settings.app_database_url, settings.embedding_dim)
+    app_dsn, app_role = settings.app_connection()
+    store = MemoryStore(app_dsn, settings.embedding_dim, role=app_role)
     brain = SecondBrain(settings, store, ShortTermMemory(settings.redis_url, settings.short_term_ttl), llm, embedder)
     try:
         for user, notes in NOTES.items():

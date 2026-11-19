@@ -32,9 +32,16 @@ RUN uv sync --frozen --no-dev
 RUN useradd --system --uid 10001 --home /app app && chown -R app /app
 USER app
 
+# Clear the local-development defaults (localhost addresses) so a missing setting
+# fails with a clear message instead of trying 127.0.0.1. Set the real values on
+# the service. Redis and FalkorDB are optional: empty means off.
 ENV PATH=/app/.venv/bin:$PATH \
     PORT=8080 \
-    SB_DEMO_MODE=false
+    SB_DEMO_MODE=false \
+    SB_ADMIN_DATABASE_URL="" \
+    SB_APP_DATABASE_URL="" \
+    SB_REDIS_URL="" \
+    SB_FALKORDB_URL=""
 
 EXPOSE 8080
 CMD ["sh", "-c", "exec uvicorn secondbrain.api:app --host 0.0.0.0 --port ${PORT} --proxy-headers --forwarded-allow-ips='*'"]

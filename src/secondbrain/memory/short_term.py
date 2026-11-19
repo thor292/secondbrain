@@ -12,7 +12,10 @@ import redis
 
 class ShortTermMemory:
     def __init__(self, redis_url: str, ttl_seconds: int) -> None:
-        self._redis = redis.Redis.from_url(redis_url, decode_responses=True)
+        # No Redis configured: keep it in this process. Fine for one instance; with
+        # several, a person's recent chat may land on another instance and be missed.
+        self._redis = (redis.Redis.from_url(redis_url, decode_responses=True)
+                       if redis_url else _LocalLists())
         self._ttl = ttl_seconds
 
     @staticmethod
@@ -59,3 +62,47 @@ class ShortTermMemory:
 
     def clear_history(self, user_id: str) -> None:
         self._redis.delete(self._chat_key(user_id))
+
+
+class _LocalLists:
+    """The few Redis list commands ShortTermMemory uses, kept in memory (TTL ignored)."""
+
+    def __init__(self) -> None:
+        import threading
+        self._data: dict[str, list[str]] = {}
+        self._lock = threading.Lock()
+
+    def pipeline(self) -> "_LocalLists":
+        return self
+
+    def execute(self) -> list:
+        return []
+
+    def rpush(self, key: str, value: str) -> None:
+        with self._lock:
+            self._data.setdefault(key, []).append(value)
+
+    def expire(self, key: str, seconds: int) -> None:
+        pass
+
+    def _slice(self, items: list[str], start: int, end: int) -> list[str]:
+        n = len(items)
+        start = max(start + n, 0) if start < 0 else start
+        end = end + n if end < 0 else end
+        return items[start:end + 1]
+
+    def lrange(self, key: str, start: int, end: int) -> list[str]:
+        with self._lock:
+            return list(self._slice(self._data.get(key, []), start, end))
+
+    def ltrim(self, key: str, start: int, end: int) -> None:
+        with self._lock:
+            self._data[key] = self._slice(self._data.get(key, []), start, end)
+
+    def delete(self, key: str) -> None:
+        with self._lock:
+            self._data.pop(key, None)
+
+    def flushdb(self) -> None:
+        with self._lock:
+            self._data.clear()
