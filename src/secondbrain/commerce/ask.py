@@ -26,7 +26,7 @@ MAX_MERCHANTS = 4       # merchant details fetched (named in the question, or th
 MAX_PRODUCTS = 40
 OFFER_MERCHANTS = 5     # merchants with the most applied offers, for "which offers worked" questions
 
-SYSTEM = """You are SecondBrain, the command centre over the commerce platforms (Shopify, Reliance Retail, DMart) \
+SYSTEM = """You are SecondBrain, the command centre over the commerce platforms (Shoppi: Haldiram's, BigBasket, FabIndia, Bata) \
 and their merchants. You answer questions for one scope: {scope}.
 
 Rules:

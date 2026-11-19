@@ -284,7 +284,7 @@
     <div>
       <div class="eyebrow">SecondBrain · real-time decision signals</div>
       <h1>Live Commerce <span id="mode" class="mode">Connecting…</span> <button id="golive" class="btn sm good golive hidden">Engine online: go live</button></h1>
-      <div class="lc-sub" id="sub">Every merchant and customer on Shopify, Reliance Retail and DMart, streaming in as it happens.</div>
+      <div class="lc-sub" id="sub">Every Shoppi merchant and customer (Haldiram's, BigBasket, FabIndia, Bata), streaming in as it happens.</div>
     </div>
     <div class="lc-ctrl">
       <div class="clock">
@@ -388,7 +388,7 @@ const SPEEDS = [["pause", "Pause"], ["1x", "Real time"], ["1min", "1 min/s"], ["
 const SPEED_VAL = { "1x": 1, "1min": 60, "1h": 3600, "1day": 14400 };
 const FESTIVALS = [["2026-10-20", "Dussehra"], ["2026-11-06", "Dhanteras"], ["2026-11-08", "Diwali"], ["2026-11-11", "Bhai Dooj"], ["2026-11-24", "Wedding season"], ["2026-12-25", "Christmas"]];
 const KIND = { discount: ["🏷️", "Discount"], restock: ["📦", "Restock"], winback: ["💌", "Win-back"], surge: ["📈", "Demand surge"], festival: ["🪔", "Festival"], clearance: ["⏳", "Clearance"] };
-const PLAT = { shopify: ["Shopify", "#95BF47", "#5f8f1d"], reliance: ["Reliance Retail", "#4f8cff", "#2563eb"], dmart: ["DMart", "#f5a524", "#d97706"] };
+const PLAT = { shoppi: ["Shoppi", "#E4572E", "#c2410c"], shopify: ["Shopify", "#95BF47", "#5f8f1d"], reliance: ["Reliance Retail", "#4f8cff", "#2563eb"], dmart: ["DMart", "#f5a524", "#d97706"] };
 const PLAT_EXTRA = [["#f472b6", "#db2777"], ["#33d6f2", "#0e9fbf"], ["#a78bfa", "#7c3aed"]];
 const platCache = {};
 function plat(id) {
@@ -555,7 +555,7 @@ const HEAD = {
   init() {
     $("speed").replaceChildren(...SPEEDS.map(([k, label]) => el("button", { "data-k": k, onclick: () => this.pick(k) }, label)));
     const sub = $("sub");
-    sub.replaceChildren(el("span", {}, "Connected:"), ...["shopify", "reliance", "dmart"].map((p) => el("span", { class: "pl" }, el("i", { style: { background: pcol(p) } }), plat(p).name)),
+    sub.replaceChildren(el("span", {}, "Connected:"), ...["shoppi"].map((p) => el("span", { class: "pl" }, el("i", { style: { background: pcol(p) } }), plat(p).name)),
       el("span", { id: "sub-n" }, ""));
   },
   pick(k) {
@@ -834,7 +834,7 @@ const LEGEND = {
   rows: {}, built: "",
   build() {
     const pids = [...new Set(S.list.map((m) => m.platform))];
-    const ord = ["shopify", "reliance", "dmart"];
+    const ord = ["shoppi", "shopify", "reliance", "dmart"];
     pids.sort((a, b) => (ord.indexOf(a) + 1 || 9) - (ord.indexOf(b) + 1 || 9));
     const sig = pids.join(",") + S.list.length + isLight();
     if (sig === this.built) return;

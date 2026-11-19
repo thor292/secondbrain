@@ -131,7 +131,7 @@
 <body>
 <main class="page">
   <div class="head">
-    <div><div class="eyebrow" id="who-eyebrow">Desi Living</div><h1>Explore the brain</h1></div>
+    <div><div class="eyebrow" id="who-eyebrow">Shoppi</div><h1>Explore the brain</h1></div>
     <div class="tabs" id="tabs">
       <button type="button" data-tab="signals" class="on">⚡ Decision signals</button>
       <button type="button" data-tab="forecast">📈 Sales forecast</button>
@@ -666,7 +666,7 @@ async function init() {
   const params = new URLSearchParams(location.search), wanted = params.get("user");
   userSelect.value = users.some((u) => u.id === wanted) ? wanted : (users.find((u) => u.id === "kabir") || users[0]).id;
   state.user = userSelect.value;
-  $("who-eyebrow").textContent = "Desi Living · " + who();
+  $("who-eyebrow").textContent = "Shoppi · " + who();
   $("examples").replaceChildren(...EXAMPLES.map((q) => el("button", { type: "button", class: "chip", onclick: () => search(q) }, q)));
   const tab = params.get("tab");
   if (["experts", "forecast", "evolution"].includes(tab)) showTab(tab);
@@ -694,7 +694,7 @@ function goLive() {
 userSelect.onchange = () => {
   state.user = userSelect.value;
   goLive();
-  $("who-eyebrow").textContent = "Desi Living · " + who();
+  $("who-eyebrow").textContent = "Shoppi · " + who();
   const url = new URL(location); url.searchParams.set("user", state.user); history.replaceState(null, "", url);
   loadSignals(); loadProducts();
   if (!$("tab-evolution").classList.contains("hidden")) loadEvolution();

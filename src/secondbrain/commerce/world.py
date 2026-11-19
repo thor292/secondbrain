@@ -12,10 +12,19 @@ hypermarkets named by area. Customers belong to one home merchant, with their ow
 repurchase interval, and some of them lapse during the run (what win-back signals catch).
 """
 
+import csv
+import os
 from dataclasses import dataclass, replace
+from pathlib import Path
+
 import numpy as np
 
 from . import contract
+
+# Which world the live wall runs: "shoppi" (the Shoppi merchants in examples/shoppi) or
+# "india" (the original generated Shopify / Reliance / DMart network).
+WORLD = os.environ.get("SB_COMMERCE_WORLD", "shoppi")
+SHOPPI_DIR = Path(os.environ.get("SB_SHOPPI_DIR", Path(__file__).resolve().parents[3] / "examples" / "shoppi"))
 
 
 @dataclass(frozen=True)
@@ -32,6 +41,9 @@ PLATFORMS = (
     Platform("dmart", "DMart", "Value hypermarkets", "#00833E"),
 )
 PLATFORM_SHARE = {"shopify": 0.40, "reliance": 0.35, "dmart": 0.25}
+SHOPPI = Platform("shoppi", "Shoppi", "Marketplace merchants", "#E4572E")
+if WORLD == "shoppi":
+    PLATFORMS = (SHOPPI,)
 
 # (city, latitude, longitude, weight for D2C and Reliance placement)
 CITIES = {
@@ -491,8 +503,53 @@ def _customers(rng: np.random.Generator, merchants: list[Merchant], catalogs: li
     return merchant, days.astype(np.float32), lapse, start, pool.astype(np.int64)
 
 
+# Shoppi categories -> the demand categories the simulator knows (base rate, elasticity, festivals).
+SHOPPI_CATEGORY = {
+    "Namkeen": "Snacks", "Ready Meals": "Snacks", "Frozen": "Snacks", "Sweets": "Sweets", "Gifting": "Sweets",
+    "Staples": "Staples", "Beverages": "Staples", "Dairy": "Dairy", "Fruits & Vegetables": "Fresh",
+    "Household": "Household", "Clothing": "Fashion", "Outerwear": "Fashion", "Accessories": "Fashion",
+    "Footwear": "Fashion",
+}
+# Relative footfall (hidden demand scale) and order lines per visit, by merchant.
+SHOPPI_SIZE = {"haldirams": (6.0, 2.5), "bigbasket": (9.0, 6.0), "fabindia": (3.0, 1.4), "bata": (3.0, 1.2)}
+SHOPPI_LEAD = {"haldirams": 3, "bigbasket": 2, "fabindia": 14, "bata": 10}
+
+
+def _read_csv(name: str) -> list[dict]:
+    with open(SHOPPI_DIR / name, encoding="utf-8") as f:
+        return list(csv.DictReader(f))
+
+
+def _shoppi(rng: np.random.Generator) -> tuple[list[Merchant], list[list[Product]]]:
+    """The Shoppi merchants and their real catalogs (examples/shoppi), one dot per merchant."""
+    products = _read_csv("products.csv")
+    merchants, catalogs = [], []
+    for row in _read_csv("merchants.csv"):
+        slug = row["slug"]
+        size, basket = SHOPPI_SIZE.get(slug, (2.0, 1.5))
+        mine = [p for p in products if p["merchant_id"] == row["id"]]
+        cats = sorted({p["category"] for p in mine}, key=lambda c: -sum(p["category"] == c for p in mine))
+        x, y = map_xy(float(row["lat"]), float(row["lng"]))
+        merchants.append(Merchant(id=f"shoppi-{slug}", platform="shoppi", name=row["name"], city=row["city"],
+                                  category=" & ".join(cats[:2]), kind=slug, x=round(x, 4), y=round(y, 4),
+                                  size=size, basket=basket))
+        catalog = []
+        for p in mine:
+            cat = SHOPPI_CATEGORY.get(p["category"], "Home")
+            perishable = CATEGORIES[cat].perishable
+            catalog.append(Product(sku=p["sku"], name=p["title"], category=cat, price=float(p["price"]),
+                                   cost=float(p["cost"]), lead_days=1 if perishable else SHOPPI_LEAD.get(slug, 7),
+                                   perishable=perishable))
+        catalogs.append(catalog)
+    return merchants, catalogs
+
+
 def build_world(merchants: int = 600, customers: int = 120000, seed: int = 7) -> World:
     rng = np.random.default_rng(seed)
+    if WORLD == "shoppi":
+        ms, catalogs = _shoppi(rng)
+        cm, ci, cl, start, size = _customers(rng, ms, catalogs, min(customers, 40000))
+        return World(seed, PLATFORMS, ms, catalogs, cm, ci, cl, start, size)
     ms = _merchants(rng, merchants)
     catalogs = [_catalog(rng, m) for m in ms]
     cm, ci, cl, start, size = _customers(rng, ms, catalogs, customers)

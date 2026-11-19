@@ -213,7 +213,7 @@
   <div class="scopebar" id="scopebar"></div>
 
   <section class="section">
-    <div class="section-head"><div><h2>Three platforms, one brain</h2><p>Every merchant on each platform, forecast and coached in real time. Click a platform to focus the whole page on it.</p></div><span id="plats-demo"></span></div>
+    <div class="section-head"><div><h2>Shoppi merchants, one brain</h2><p>Every merchant on each platform, forecast and coached in real time. Click a platform to focus the whole page on it.</p></div><span id="plats-demo"></span></div>
     <div class="plats" id="plats"><div class="shimmer" style="height:380px"></div><div class="shimmer" style="height:380px"></div><div class="shimmer" style="height:380px"></div></div>
   </section>
 
@@ -243,7 +243,7 @@
   </section>
 
   <div class="foot">
-    <a href="/explore?user=meera">Inside one merchant's brain: Desi Living →</a>
+    <a href="/explore?user=haldirams_owner">Inside one merchant's brain: Haldiram's →</a>
     <div class="faint" style="margin-top:6px;font-size:12.5px">HQ sees totals and anonymous lessons. A merchant's own documents, notes and team stay inside that merchant's brain.</div>
   </div>
 </main>
@@ -264,11 +264,12 @@ const SPEED_LABEL = { "1x": "real time", "1min": "1 min/s", "1h": "1 hr/s", "1da
 const KIND = { discount: ["🏷️", "Discount"], restock: ["📦", "Restock"], winback: ["💌", "Win-back"], surge: ["📈", "Demand surge"], festival: ["🪔", "Festival"], clearance: ["⏳", "Clearance"] };
 const LKIND = { price_response: ["🏷️", "Price response"], no_discount: ["🛡️", "Hold the price"], festival_lift: ["🪔", "Festival lift"], winback: ["💌", "Win-back"], restock: ["📦", "Restock timing"], surge: ["📈", "Demand surges"] };
 const PLAT = {
+  shoppi: { name: "Shoppi", kind: "Haldiram's, BigBasket, FabIndia, Bata", dark: "#E4572E", light: "#c2410c", cust: 1, mark: "S" },
   shopify: { name: "Shopify", kind: "D2C online stores", dark: "#95BF47", light: "#5f8f1d", cust: 0.27, mark: "S" },
   reliance: { name: "Reliance Retail", kind: "Smart, Digital, Trends · JioMart sellers", dark: "#4f8cff", light: "#2563eb", cust: 0.4, mark: "R" },
   dmart: { name: "DMart", kind: "Hypermarkets", dark: "#f5a524", light: "#d97706", cust: 0.33, mark: "D" },
 };
-const PLAT_ORDER = ["shopify", "reliance", "dmart"];
+const PLAT_ORDER = ["shoppi"];
 const pinfo = (id) => PLAT[id] || { name: String(id || "").replace(/^\w/, (c) => c.toUpperCase()), kind: "", dark: "#a78bfa", light: "#7c3aed", cust: 0, mark: String(id || "?")[0].toUpperCase() };
 const pcol = (id, api) => (isLight() ? pinfo(id).light : (PLAT[id] ? PLAT[id].dark : api || pinfo(id).dark));
 // Merchant category -> the product categories it sells (the brain learns per product category).

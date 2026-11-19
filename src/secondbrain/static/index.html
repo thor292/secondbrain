@@ -114,40 +114,25 @@ const state = { user: null, mode: "ask", users: [] };
 const COLORS = ["#8b7bff", "#33d6f2", "#f472b6", "#fb923c", "#34d399", "#fbbf24", "#60a5fa", "#a78bfa"];
 const colorFor = (id) => COLORS[[...id].reduce((t, c) => t + c.charCodeAt(0), 0) % COLORS.length];
 // Questions that show the brain at its best, per person in the example companies.
-const SUGGEST = {
-  neha: [["What is our Diwali shipping cutoff?", "Shipping policy"], ["Can I give a customer a ₹2,000 credit without asking anyone?", "Department policy"], ["What's the free shipping threshold right now?", "The newest note wins"], ["How does Ananya Reddy like to be contacted?", "A VIP customer"]],
-  sana: [["What's the free shipping threshold right now?", "She can't see Operations' note"], ["What is the hotel cap for a manager?", "From a table in a Word handbook"]],
-  rohan: [["When does Ghar Club early access to the Wedding Edit start?", "The newer date wins"], ["What's the theme of the Diwali campaign?", "From the Word campaign plan"]],
-  vikram: [["Which carrier handles sofas and what does it cost?", "Restricted carrier contract"], ["Who handles damaged brass lamps?", "Process across teams"]],
-  priya: [["Who handles damaged brass lamps?", "Process across teams"]],
-  kabir: [["What happened with the damaged brass lamps from Noor Metalcraft?", "Supplier history"]],
-  tanvi: [["What was Q2 revenue?", "Restricted: not visible"]],
-  anand: [["What was Q2 revenue?", "From the restricted PDF"], ["What was gross margin in Q2 FY27?", "From the restricted PDF"]],
-  meera: [["What are our biggest risks before Diwali?", "Across the whole company"], ["What was Q2 revenue?", "Finance, seen by the CEO"], ["Which carrier handles sofas and what does it cost?", "Carrier contract"], ["What happened with the damaged brass lamps from Noor Metalcraft?", "Supplier history"]],
-};
+const SUGGEST = {};   // per-person suggestions; everyone gets GENERIC
 // Platforms (live): questions over the Live Commerce engine, one scope each (HQ, a platform, a merchant).
 const COMMERCE = [
-  { id: "commerce:hq", level: "hq", sid: null, name: "SecondBrain HQ", sub: "All platforms", color: "#8b7bff", glyph: "✦" },
-  { id: "commerce:shopify", level: "platform", sid: "shopify", name: "Shopify", sub: "D2C online stores", color: "#95BF47" },
-  { id: "commerce:reliance", level: "platform", sid: "reliance", name: "Reliance Retail", sub: "Smart, Digital, Trends, JioMart", color: "#0A3A82" },
-  { id: "commerce:dmart", level: "platform", sid: "dmart", name: "DMart", sub: "Value hypermarkets", color: "#00833E" },
-  { id: "commerce:shopify-0001", level: "merchant", sid: "shopify-0001", name: "Desi Living", sub: "Shopify merchant", color: "#95BF47" },
+  { id: "commerce:hq", level: "hq", sid: null, name: "SecondBrain HQ", sub: "All Shoppi merchants", color: "#8b7bff", glyph: "✦" },
+  { id: "commerce:shoppi", level: "platform", sid: "shoppi", name: "Shoppi", sub: "Haldiram's, BigBasket, FabIndia, Bata", color: "#E4572E" },
+  { id: "commerce:shoppi-haldirams", level: "merchant", sid: "shoppi-haldirams", name: "Haldiram's", sub: "Shoppi merchant", color: "#E4572E" },
+  { id: "commerce:shoppi-bigbasket", level: "merchant", sid: "shoppi-bigbasket", name: "BigBasket", sub: "Shoppi merchant", color: "#E4572E" },
+  { id: "commerce:shoppi-fabindia", level: "merchant", sid: "shoppi-fabindia", name: "FabIndia", sub: "Shoppi merchant", color: "#E4572E" },
+  { id: "commerce:shoppi-bata", level: "merchant", sid: "shoppi-bata", name: "Bata", sub: "Shoppi merchant", color: "#E4572E" },
 ].map((p) => ({ ...p, commerce: true }));
 const COMMERCE_SUGGEST = {
-  hq: [["Where should we act first across all platforms?", "Most valuable open signals"], ["Which DMart stores need restocking today?", "Restock across the network"],
-       ["What has the brain learned about pricing?", "Lessons from measured offers"], ["How accurate are the forecasts on each platform?", "Live forecast accuracy"]],
-  shopify: [["Which offers worked best on Shopify this week?", "Measured offer outcomes"], ["Which Shopify merchants need attention now?", "Open signals"],
-            ["Which categories should we not discount?", "Margin protection"]],
-  reliance: [["Which Reliance stores need attention now?", "Open signals"], ["Which offers worked best on Reliance Retail?", "Measured offer outcomes"],
-             ["Are regular customers coming back?", "Win-back"]],
-  dmart: [["Which DMart stores need restocking today?", "Restock signals"], ["Which DMart products are running out most often?", "Stockout patterns"],
-          ["What did the brain learn about festival demand?", "Festival lifts"]],
+  hq: [["Where should we act first across all merchants?", "Most valuable open signals"], ["Which merchants need restocking today?", "Restock across the network"],
+       ["What has the brain learned about pricing?", "Lessons from measured offers"], ["How accurate are the forecasts?", "Live forecast accuracy"]],
+  shoppi: [["Which merchants need attention now?", "Open signals"], ["Which offers worked best this week?", "Measured offer outcomes"],
+           ["Which categories should we not discount?", "Margin protection"]],
   merchant: [["What should we restock today?", "Your stock and lead times"], ["Did our last offers work?", "Measured outcomes"],
-             ["What should we do for Diwali?", "Festival plan from live data"]],
-  "shopify-0001": [["What should Desi Living do for Diwali?", "Festival plan from live data"], ["Which products will run out first?", "Stock cover"],
-                   ["Did our last offers work?", "Measured outcomes"]],
+             ["Which products will run out first?", "Stock cover"]],
 };
-const GENERIC = [["What is our Diwali shipping cutoff?", "Plans and dates"], ["Who handles damaged brass lamps?", "Process across teams"], ["What changed recently?", "Newest notes"]];
+const GENERIC = [["Which products had a price increase?", "Catalog and price changes"], ["Which products are selling more than last month?", "Sales trends"], ["Which products are low on stock?", "Stock cover"]];
 
 async function api(path, options = {}) {
   const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
@@ -187,15 +172,15 @@ function commerceWelcome(u) {
     el("div", { class: "suggest" }, items.map(([q, why]) => el("button", { type: "button", onclick: () => ask(q) }, q, el("small", {}, why))))));
 }
 
-// The live personas: HQ, the three platforms, Desi Living and the first DMart store the engine knows.
+// The live personas: HQ, the Shoppi platform and its merchants (names and cities from the engine).
 async function commercePersonas() {
   const list = COMMERCE.map((p) => ({ ...p }));
   try {
     const ms = await api("/commerce/api/merchants");
-    const desi = ms.find((m) => m.id === "shopify-0001");
-    if (desi) Object.assign(list.find((p) => p.sid === "shopify-0001"), { name: desi.name, sub: `Shopify · ${desi.city}` });
-    const store = ms.filter((m) => m.platform === "dmart").sort((a, b) => a.id.localeCompare(b.id))[0];
-    if (store) list.push({ id: "commerce:" + store.id, level: "merchant", sid: store.id, name: store.name, sub: `DMart store · ${store.city}`, color: "#00833E", commerce: true });
+    for (const p of list) {
+      const m = ms.find((x) => x.id === p.sid);
+      if (m) Object.assign(p, { name: m.name, sub: `Shoppi · ${m.city}` });
+    }
   } catch (e) { /* engine offline: the entries stay, asking says so */ }
   return list;
 }
@@ -203,7 +188,7 @@ async function commercePersonas() {
 async function loadUsers() {
   try {
     const [all, personas] = await Promise.all([api("/demo/users"), commercePersonas()]);
-    const people = all.filter((u) => u.home_brain.split(".")[1] === "desiliving");   // the demo's one example company
+    const people = all;   // every onboarded company's people
     state.users = [...personas, ...people];
     const box = $("people"), groups = {};
     for (const u of people) (groups[u.home_brain.split(".")[1]] ||= []).push(u);
@@ -211,7 +196,7 @@ async function loadUsers() {
       el("div", { class: "co" }, "Platforms (live)", el("span", { class: "live-dot", title: "Live Commerce engine" })),
       ...personas.map((u) => el("button", { class: "who", "data-id": u.id, onclick: () => pick(u) }, avatar(u), el("div", {}, el("b", {}, u.name), el("small", {}, u.sub)))),
       ...Object.entries(groups).flatMap(([co, users]) => [
-      el("div", { class: "co" }, co === "desiliving" ? "Desi Living" : co),
+      el("div", { class: "co" }, users[0].brain_name && users[0].home_brain.split(".").length === 2 ? users[0].brain_name : co),
       ...users.map((u) => el("button", { class: "who", "data-id": u.id, onclick: () => pick(u) }, avatar(u), el("div", {}, el("b", {}, short(u)), el("small", {}, role(u))))),
     ]));
     const wanted = new URLSearchParams(location.search).get("user");

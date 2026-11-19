@@ -1,0 +1,5 @@
+id,slug,name,status,plan,currency,country_code,city,lat,lng
+1,haldirams,Haldiram's,active,pro,INR,in,Nagpur,21.1458,79.0882
+2,bigbasket,BigBasket,active,enterprise,INR,in,Bengaluru,12.9716,77.5946
+3,fabindia,FabIndia,active,pro,INR,in,New Delhi,28.5355,77.21
+4,bata,Bata,active,pro,INR,in,Kolkata,22.5726,88.3639

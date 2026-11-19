@@ -69,11 +69,13 @@ WEEKDAY = {  # Monday .. Sunday
     "shopify": [1.05, 1.02, 1.0, 1.0, 0.98, 0.95, 1.0],
     "reliance": [0.92, 0.90, 0.92, 0.95, 1.05, 1.20, 1.25],
     "dmart": [0.85, 0.82, 0.85, 0.88, 1.05, 1.30, 1.45],
+    "shoppi": [0.95, 0.92, 0.94, 0.97, 1.03, 1.15, 1.20],
 }
 HOURLY = {  # relative demand per hour of day; nothing between 2 and 6 am anywhere
     "shopify": [.6, .3, 0, 0, 0, 0, .1, .3, .5, .7, .9, 1, 1.1, 1.1, 1, .9, .9, 1, 1.2, 1.4, 1.7, 1.9, 1.7, 1.2],
     "reliance": [.15, .05, 0, 0, 0, 0, .1, .3, .5, .8, 1, 1.1, 1.1, 1, .9, .9, 1, 1.2, 1.5, 1.8, 1.8, 1.4, .8, .4],
     "dmart": [0, 0, 0, 0, 0, 0, 0, 0, .3, .6, .9, 1, 1, .9, .8, .8, 1, 1.3, 1.7, 2, 1.9, 1.3, .3, 0],
+    "shoppi": [.3, .1, 0, 0, 0, 0, .1, .4, .7, .9, 1, 1.1, 1.1, 1, .9, .9, 1, 1.2, 1.5, 1.8, 1.9, 1.6, 1.1, .6],
 }
 PAYDAY = {"Staples": .30, "Snacks": .20, "Household": .25, "Personal Care": .25, "Dairy": .05, "Fresh": .05,
           "Beauty": .20, "Fashion": .25, "Electronics": .25, "Electronics Accessories": .20, "Home": .20, "Sweets": .10}
@@ -154,9 +156,9 @@ def payday_factor(day: date) -> np.ndarray:
 
 
 def _intraday_cdf() -> np.ndarray:
-    """Per platform, the share of a day's demand done by each hour boundary (3 x 25)."""
+    """Per platform, the share of a day's demand done by each hour boundary (platforms x 25)."""
     h = np.array([HOURLY[p] for p in PIDS], float)
-    return np.concatenate([np.zeros((3, 1)), np.cumsum(h, axis=1) / h.sum(axis=1, keepdims=True)], axis=1)
+    return np.concatenate([np.zeros((len(PIDS), 1)), np.cumsum(h, axis=1) / h.sum(axis=1, keepdims=True)], axis=1)
 
 
 class DemandModel:

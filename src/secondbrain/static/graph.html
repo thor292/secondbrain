@@ -184,7 +184,7 @@
 <header class="g-head">
   <div>
     <div class="eyebrow">The SecondBrain network</div>
-    <h1 id="g-h1">One brain over Shopify, Reliance Retail and DMart</h1>
+    <h1 id="g-h1">One brain over the Shoppi merchants</h1>
     <p class="how" id="g-how"><b>How to read this:</b> SecondBrain sits in the centre, each platform is a hub, each dot is a merchant (colour = status, size = revenue today).
       Orders and outcomes flow <b>up</b> the branches; forecasts and signals flow <b>down</b>. Click a merchant to open its brain.</p>
   </div>
@@ -193,7 +193,7 @@
 <div class="g-bar">
   <div class="tabs" id="tabs" role="tablist">
     <button type="button" data-v="net" class="on" role="tab">The network</button>
-    <button type="button" data-v="brain" role="tab"><span class="t-lg">Inside one merchant's brain: Desi Living</span><span class="t-sm">Desi Living's brain</span></button>
+    <button type="button" data-v="brain" role="tab"><span class="t-lg">Inside one merchant's brain: Haldiram's</span><span class="t-sm">Haldiram's brain</span></button>
   </div>
   <span id="net-controls">
     <label class="as">See it as… <select id="net-as" aria-label="See the network as"></select></label>
@@ -224,7 +224,7 @@
 
 <section id="kg-view" class="hidden">
   <p class="kg-intro"><b>Every merchant's brain also holds its own knowledge</b>: documents, people, decisions and facts, not just sales.
-    This is Desi Living's team; choose a person to see only what they are allowed to see.</p>
+    This is the merchant's team; choose a person to see only what they are allowed to see.</p>
   <div class="toolbar">
     <select id="user">
       <option value="">Choose a view…</option>
@@ -269,8 +269,8 @@ const LIGHT = matchMedia("(prefers-color-scheme: light)");
 const isLight = () => LIGHT.matches && document.documentElement.dataset.theme !== "dark";
 
 // ---------------------------------------------------------------- shared look (same as the Live Commerce wall)
-const PLAT = { shopify: ["Shopify", "#95BF47", "#5f8f1d"], reliance: ["Reliance Retail", "#4f8cff", "#2563eb"], dmart: ["DMart", "#f5a524", "#d97706"] };
-const PLAT_ORDER = ["shopify", "reliance", "dmart"];
+const PLAT = { shoppi: ["Shoppi", "#E4572E", "#c2410c"], shopify: ["Shopify", "#95BF47", "#5f8f1d"], reliance: ["Reliance Retail", "#4f8cff", "#2563eb"], dmart: ["DMart", "#f5a524", "#d97706"] };
+const PLAT_ORDER = ["shoppi"];
 const PLAT_EXTRA = [["#f472b6", "#db2777"], ["#33d6f2", "#0e9fbf"], ["#a78bfa", "#7c3aed"]];
 const platCache = {};
 function plat(id) {
@@ -525,9 +525,9 @@ function placeProducts(m, products) {
 function scopeOptions() {
   const ms = allMerchants();
   const dm = ms.filter((m) => m.platform === "dmart").sort((a, b) => a.id.localeCompare(b.id))[0];
-  const dl = ms.find((m) => m.id === "shopify-0001");
+  const dl = ms.find((m) => m.id === "shoppi-haldirams");
   const opts = [["hq", "HQ (everything)"], ...G.hubs.map((h) => ["platform:" + h.pid, h.label])];
-  if (dl) opts.push(["merchant:" + dl.id, `${dl.name} (a Shopify store)`]);
+  if (dl) opts.push(["merchant:" + dl.id, `${dl.name} (a Shoppi merchant)`]);
   if (dm) opts.push(["merchant:" + dm.id, `${dm.name} (a DMart store)`]);
   return opts;
 }
@@ -1679,7 +1679,7 @@ function showView(v) {
   $("scope-line").classList.toggle("hidden", brain); $("net-controls").style.display = brain ? "none" : "";
   $("counts").classList.toggle("hidden", brain);
   document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.v === v));
-  $("g-h1").textContent = brain ? "Inside one merchant's brain: Desi Living" : "One brain over Shopify, Reliance Retail and DMart";
+  $("g-h1").textContent = brain ? "Inside one merchant's brain: Haldiram's" : "One brain over the Shoppi merchants";
   $("g-how").innerHTML = brain ? "<b>How to read this:</b> the same SecondBrain that forecasts sales also keeps each merchant's knowledge. Brains are big circles, people orange, facts and events small dots; click any node for its relationships."
     : "<b>How to read this:</b> SecondBrain sits in the centre, each platform is a hub, each dot is a merchant (colour = status, size = revenue today). Orders and outcomes flow <b>up</b> the branches; forecasts and signals flow <b>down</b>. Click a merchant to open its brain.";
   const q = new URLSearchParams(location.search); brain ? q.set("view", "brain") : q.delete("view"); history.replaceState(null, "", "?" + q.toString());
@@ -1845,9 +1845,9 @@ async function loadUsers() {
     o.value = u.id; o.textContent = `${u.name} — ${u.home_brain}`;
     group.appendChild(o);
   }
-  // Default to Desi Living's CEO: the whole Desi Living brain, as its team sees it.
+  // Default to Haldiram's owner: the whole Haldiram's brain, as its team sees it.
   const wanted = new URLSearchParams(location.search).get("user")
-    || (users.find((u) => u.home_brain === "root.desiliving") || users.find((u) => /desiliving/.test(u.home_brain)) || {}).id;
+    || (users.find((u) => u.id === "haldirams_owner") || users[0] || {}).id;
   if (wanted === "__all__" || (wanted && users.some((u) => u.id === wanted))) { sel.value = wanted; loadGraph(wanted); }
 }
 

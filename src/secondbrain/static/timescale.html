@@ -253,7 +253,7 @@
         <div class="eyebrow">Version 2 · the data platform under the brain</div>
         <h1><span>Timescale<span class="grad-text">DB</span></span> <span class="mode" id="mode">Connecting…</span></h1>
         <p class="sub">Every order, every merchant, in one time-series database.</p>
-        <p class="why">Each order from Shopify, Reliance Retail and DMart is written to TimescaleDB the moment it happens, next to 14 months of sales history.
+        <p class="why">Each order from the Shoppi merchants is written to TimescaleDB the moment it happens, next to 14 months of sales history.
           The database keeps running totals, shrinks old days to a fraction of their size, and checks every merchant every simulated hour, all in plain SQL.</p>
       </div>
       <div class="clock"><div class="d" id="clk-d">Simulated time</div><div class="t" id="clk-t">--:--</div><div class="s" id="clk-s">&nbsp;</div></div>
@@ -332,11 +332,12 @@ SB.nav("timescale");
 
 // ---------------------------------------------------------------- constants (same platform colours as HQ and Live Commerce)
 const PLAT = {
+  shoppi: { name: "Shoppi", dark: "#E4572E", light: "#c2410c" },
   shopify: { name: "Shopify", dark: "#95BF47", light: "#5f8f1d" },
   reliance: { name: "Reliance Retail", dark: "#4f8cff", light: "#2563eb" },
   dmart: { name: "DMart", dark: "#f5a524", light: "#d97706" },
 };
-const PLAT_ORDER = ["shopify", "reliance", "dmart"];
+const PLAT_ORDER = ["shoppi"];
 const pname = (p) => (PLAT[p] ? PLAT[p].name : String(p || "").replace(/^\w/, (c) => c.toUpperCase()));
 const pcol = (p) => (PLAT[p] ? (isLight() ? PLAT[p].light : PLAT[p].dark) : "#a78bfa");
 const pbadge = (p) => el("span", { class: "pbadge", style: `--pc:${pcol(p)}` }, pname(p));
@@ -513,7 +514,7 @@ const FLOW = {
       this.acc += (dt / 1000) * perSec;
       while (this.acc >= 1) {
         this.acc -= 1;
-        const p = PLAT_ORDER[(Math.random() * 3) | 0];
+        const p = PLAT_ORDER[(Math.random() * PLAT_ORDER.length) | 0];
         this.spawn(Math.random() < 0.18 ? [0, 1, 2, 3] : [0, 1, 2], pcol(p), 3.2);
       }
     }
@@ -894,7 +895,7 @@ const MX = {
   quick(top) {
     const ids = [];
     for (const r of top || []) if (!ids.includes(r.merchant)) ids.push(r.merchant);
-    for (const d of ["shopify-0001", "reliance-0001", "dmart-0001"]) if (S.byId.has(d) && !ids.includes(d)) ids.push(d);
+    for (const d of ["shoppi-haldirams", "shoppi-bigbasket", "shoppi-fabindia", "shoppi-bata"]) if (S.byId.has(d) && !ids.includes(d)) ids.push(d);
     const box = $("quick");
     box.replaceChildren(el("span", {}, top && top.length ? "Busiest in the last 24 h:" : "Try:"),
       ...ids.slice(0, 6).filter((id) => S.byId.has(id)).map((id) => el("button", { onclick: () => this.load(id) }, S.byId.get(id).name)));
@@ -1254,7 +1255,7 @@ async function boot() {
     S.byId = new Map(S.merchants.map((m) => [m.id, m]));
     MX.quick([]);
     PLATS.top().then(() => {
-      if (!S.m.id) MX.load(S.byId.has("shopify-0001") ? "shopify-0001" : S.merchants[0]?.id);
+      if (!S.m.id) MX.load(S.byId.has("shoppi-haldirams") ? "shoppi-haldirams" : S.merchants[0]?.id);
     });
   }).catch(() => { $("mview").replaceChildren(el("div", { class: "empty" }, "The Live Commerce engine is not reachable, so merchant names are unavailable.")); });
   connectLive();
