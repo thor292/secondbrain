@@ -197,6 +197,32 @@ DROP FUNCTION IF EXISTS sb_my_grants();
 """
 
 
+def let_owner_through(conn: psycopg.Connection) -> int:
+    """Let the login that owns the tables bypass row-level security, as it does locally.
+
+    Tables use FORCE ROW LEVEL SECURITY, which also applies the policies to their owner.
+    That is harmless where the admin login is a superuser (it bypasses them anyway), but on
+    managed PostgreSQL (Cloud SQL, RDS) it is not, so every admin write would be refused.
+    The API never runs as the owner (it switches to secondbrain_app, which row-level security
+    always applies to), so lifting FORCE for the owner keeps tenants separated.
+    Returns how many tables were changed.
+    """
+    from psycopg.rows import tuple_row
+
+    cur = conn.cursor(row_factory=tuple_row)
+    me = cur.execute("SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = current_user").fetchone()
+    if me and me[0]:
+        return 0
+    tables = [r[0] for r in cur.execute(
+        """SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+           WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p') AND c.relforcerowsecurity
+             AND pg_get_userbyid(c.relowner) = current_user"""
+    ).fetchall()]
+    for table in tables:
+        cur.execute(f'ALTER TABLE public."{table}" NO FORCE ROW LEVEL SECURITY')
+    return len(tables)
+
+
 def create_schema(settings: Settings | None = None, reset: bool = False) -> None:
     # Imported here: evolution imports modules that import this one.
     from secondbrain import evolution as evolution_schema
@@ -217,6 +243,7 @@ def create_schema(settings: Settings | None = None, reset: bool = False) -> None
         # Forecast grades cite forecasts and products.
         conn.execute(evolution_schema.SCHEMA_SQL)
         ingest_store.ensure_schema(conn)
+        let_owner_through(conn)
 
 
 def ensure_relationship_schema(settings: Settings | None = None) -> bool:
@@ -230,6 +257,7 @@ def ensure_relationship_schema(settings: Settings | None = None) -> bool:
         if conn.execute("SELECT to_regclass('entities')").fetchone()[0] is not None:
             return False
         conn.execute(RELATIONSHIP_SQL)
+        let_owner_through(conn)
         return True
 
 

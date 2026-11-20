@@ -112,6 +112,8 @@ def ensure_schema(conn: psycopg.Connection) -> None:
     with conn.cursor(row_factory=tuple_row) as cur:
         if cur.execute("SELECT to_regclass('forecast_accuracy') IS NULL").fetchone()[0]:
             cur.execute(SCHEMA_SQL)
+            from secondbrain.schema import let_owner_through
+            let_owner_through(conn)
 
 
 @dataclass

@@ -124,7 +124,10 @@ def _run(settings, ai: bool, log) -> None:
     if fresh:
         schema.create_schema(settings)
     schema.ensure_relationship_schema(settings)
-    log("Schema created." if fresh else "Schema already there.")
+    with psycopg.connect(settings.admin_database_url) as conn:
+        changed = schema.let_owner_through(conn)
+    log(("Schema created." if fresh else "Schema already there.")
+        + (f" Owner may write past row-level security on {changed} tables." if changed else ""))
 
     with psycopg.connect(settings.admin_database_url) as conn:
         companies = load_merchants(conn, log)
