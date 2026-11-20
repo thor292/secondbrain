@@ -160,7 +160,33 @@ Same image as jobs, with `SB_ADMIN_DATABASE_URL`, the LiteLLM settings and the s
 2. Issue Shoppi an ingest key per merchant: `POST /admin/ingest/keys` (see `docs/INTEGRATION.md`).
 3. Shoppi sends history once with `POST /ingest/{kind}/csv`, then live events with `POST /ingest/{kind}` (`product`, `sale`, `daily_sales`, `inventory`, `purchase_order`, `promotion`). Field definitions: `docs/INTEGRATION.md`.
 
+## 9. Let Shoppi and Media Planner read signals and forecasts
+
+Each system gets its own **platform key**, limited to the merchants it may read. Reads still go
+through row-level security, so a key never sees another merchant. Keys are read-only.
+
+Create a key (admin token from Secret Manager; the key is shown once, store it in that system's secrets):
+```bash
+curl -X POST https://<service-url>/admin/platform-keys -H "X-Admin-Token: <admin token>" -H 'Content-Type: application/json' \
+  -d '{"platform":"Shoppi","companies":["haldirams","bigbasket","fabindia","bata"]}'
+curl -X POST https://<service-url>/admin/platform-keys -H "X-Admin-Token: <admin token>" -H 'Content-Type: application/json' \
+  -d '{"platform":"Media Planner","companies":["haldirams","bigbasket","fabindia","bata"]}'
+```
+List keys: `GET /admin/platform-keys`. Revoke: `DELETE /admin/platform-keys/<id>`.
+
+What the platforms call (header `Authorization: Bearer sbp_...`):
+
+| Call | Returns |
+|---|---|
+| `GET /signals` | open decision signals for its merchants (`company`, `kind`, `title`, `action`, `reason`, `impact_value`, `urgency`, `confidence`, `due`, `evidence`) |
+| `GET /signals?include_closed=true` | also acted-on and dismissed ones |
+| `GET /forecast/products` | its merchants' products (`brain`, `sku`, `name`, ...) |
+| `GET /forecast?product=<SKU>&horizon=28` | daily forecast with ranges, recent sales, stock, related signals |
+| `POST /signals/<id>/feedback` `{"status":"acted"}` | tell the brain a signal was acted on (it learns from this) |
+
+Anything else with a platform key returns 403.
+
 ## Not ready yet (before Shoppi / Media Planner *read* from it)
 
-- `/signals` and `/forecast` identify the caller with an `X-User-Id` header and no password. That's fine inside a demo, **not** for other systems. A read API with per-merchant read keys is the next piece to build.
+- Other systems must use platform keys (step 9). The web pages still identify people with an `X-User-Id` header and no password, so keep the service's ingress **internal** (or behind IAP) until real sign-in is added.
 - The Live Commerce, HQ and TimescaleDB pages show browser-generated demo data when the simulator isn't running. Ignore them in production until they read real data.

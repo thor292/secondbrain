@@ -18,7 +18,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from psycopg.rows import dict_row
 from pydantic import BaseModel
 
-from secondbrain import admin, demo, evolution, learning, live, maintenance, relationships, signals, tree
+from secondbrain import admin, demo, evolution, learning, live, maintenance, platform_keys, relationships, signals, tree
 from secondbrain.commerce import ask as commerce_chat
 from secondbrain.commerce import contract as commerce
 from secondbrain.commerce import tsdb_api
@@ -57,6 +57,44 @@ class CommerceAskRequest(BaseModel):
     scope: CommerceScope = CommerceScope()
 
 
+class PlatformKeyAuth:
+    """Requests with ``Authorization: Bearer sbp_...`` act as that platform's service identity.
+
+    The key decides who is asking (any X-User-Id the client sent is replaced), and the
+    platform may only read: GET requests, plus feedback on a signal.
+    """
+
+    def __init__(self, app, settings: Settings) -> None:
+        self.app = app
+        self.settings = settings
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        headers = dict(scope["headers"])
+        token = headers.get(b"authorization", b"").decode().removeprefix("Bearer ").strip()
+        if not token.startswith(platform_keys.PREFIX):
+            return await self.app(scope, receive, send)
+        path, method = scope["path"], scope["method"]
+        allowed = method == "GET" or (method == "POST" and path.startswith("/signals/") and path.endswith("/feedback"))
+        if not allowed or path.startswith("/admin") or path.startswith("/demo"):
+            return await JSONResponse({"detail": "Platform keys may only read signals and forecasts"},
+                                      status_code=403)(scope, receive, send)
+
+        def lookup() -> str | None:
+            with psycopg.connect(self.settings.admin_database_url) as conn:
+                return platform_keys.verify(conn, token)
+
+        from starlette.concurrency import run_in_threadpool
+        user_id = await run_in_threadpool(lookup)
+        if user_id is None:
+            return await JSONResponse({"detail": "Invalid or revoked platform key"}, status_code=401)(scope, receive, send)
+        scope = dict(scope)
+        scope["headers"] = [(k, v) for k, v in scope["headers"] if k not in (b"x-user-id", b"authorization")] \
+            + [(b"x-user-id", user_id.encode())]
+        return await self.app(scope, receive, send)
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
 
@@ -73,6 +111,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         store.close()
 
     app = FastAPI(title="SecondBrain", lifespan=lifespan)
+    app.add_middleware(PlatformKeyAuth, settings=settings)
     app.include_router(forecast_router())
 
     def brain(request: Request) -> SecondBrain:
@@ -144,8 +183,35 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         with psycopg.connect(settings.admin_database_url, row_factory=dict_row) as conn:
             return conn.execute(
                 """SELECT u.id, u.name, u.home_brain::text AS home_brain, b.name AS brain_name
-                   FROM users u JOIN brains b ON b.path = u.home_brain ORDER BY u.home_brain, u.id"""
+                   FROM users u JOIN brains b ON b.path = u.home_brain
+                   WHERE u.id NOT LIKE 'platform\\_%%' ORDER BY u.home_brain, u.id"""
             ).fetchall()
+
+    class NewPlatformKey(BaseModel):
+        platform: str
+        companies: list[str]
+        sensitivity: Literal["public", "internal", "restricted"] = "internal"
+
+    @app.post("/admin/platform-keys", dependencies=[Depends(require_admin)])
+    def create_platform_key(body: NewPlatformKey):
+        """A read key for another system (Shoppi, Media Planner). The key is in this response only."""
+        with psycopg.connect(settings.admin_database_url) as conn:
+            try:
+                return platform_keys.create(conn, body.platform, body.companies, body.sensitivity)
+            except ValueError as exc:
+                raise HTTPException(400, str(exc))
+
+    @app.get("/admin/platform-keys", dependencies=[Depends(require_admin)])
+    def list_platform_keys():
+        with psycopg.connect(settings.admin_database_url) as conn:
+            return platform_keys.listing(conn)
+
+    @app.delete("/admin/platform-keys/{key_id}", dependencies=[Depends(require_admin)])
+    def revoke_platform_key(key_id: str):
+        with psycopg.connect(settings.admin_database_url) as conn:
+            if not platform_keys.revoke(conn, key_id):
+                raise HTTPException(404, "No such active key")
+        return {"revoked": key_id}
 
     @app.post("/remember")
     def remember(body: RememberRequest, user_id: UserId, brain: Brain):
