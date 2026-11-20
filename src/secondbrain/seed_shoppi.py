@@ -6,6 +6,10 @@ as the API:
     python -m secondbrain.seed_shoppi              # everything
     python -m secondbrain.seed_shoppi --no-ai      # skip document embeddings and signals (no LiteLLM)
 
+or, on a running service, with the admin token (uses the service's own settings and network):
+
+    curl -X POST <service-url>/admin/seed/shoppi -H "X-Admin-Token: <token>"
+
 Steps: create the schema if the database is empty; each merchant becomes a company brain (root.<slug>) with a
 Merchandising department and a <slug>_owner login; 400 days of daily sales, sale periods
 (as promotions) and current stock go into root.<slug>.merchandising; the catalog-and-trends
@@ -55,7 +59,7 @@ def _promotions(sku: str, days: list[dict], regular: float) -> list[dict]:
     return out
 
 
-def load_merchants(conn: psycopg.Connection) -> list[str]:
+def load_merchants(conn: psycopg.Connection, log=print) -> list[str]:
     """Onboard every merchant and save its sales history and stock. Returns the company brains."""
     merchants, products = _read("merchants.csv"), _read("products.csv")
     by_sku = defaultdict(list)
@@ -91,11 +95,11 @@ def load_merchants(conn: psycopg.Connection) -> list[str]:
         store.save_inventory(conn, brain, stock)
         conn.commit()
         companies.append(company)
-        print(f"{brain}: {len(catalog)} products, {len(rows)} daily sales, {len(promos)} promotions", flush=True)
+        log(f"{brain}: {len(catalog)} products, {len(rows)} daily sales, {len(promos)} promotions")
     return companies
 
 
-def import_docs(conn: psycopg.Connection, settings, embedder) -> None:
+def import_docs(conn: psycopg.Connection, settings, embedder, log=print) -> None:
     for folder in sorted(p for p in (DATA / "docs").iterdir() if p.is_dir()):
         brain = f"root.{folder.name}.merchandising"
         docs = [(name, text) for name, text in admin.read_documents(folder)
@@ -103,8 +107,44 @@ def import_docs(conn: psycopg.Connection, settings, embedder) -> None:
                                 (brain, name)).fetchone() is None]
         count = admin.import_documents(conn, embedder, settings, brain, docs, Sensitivity.parse("internal"))
         conn.commit()
-        print(f"{brain}: imported {count} document chunks" if docs else f"{brain}: documents already imported",
-              flush=True)
+        log(f"{brain}: imported {count} document chunks" if docs else f"{brain}: documents already imported")
+
+
+def run(settings, ai: bool = True, log=print) -> None:
+    """Load everything. ``log`` gets one line per step. Only one run at a time per database."""
+    with psycopg.connect(settings.admin_database_url, autocommit=True) as lock:
+        if not lock.execute("SELECT pg_try_advisory_lock(hashtext('secondbrain.seed_shoppi'))").fetchone()[0]:
+            raise RuntimeError("A Shoppi data load is already running")
+        _run(settings, ai, log)
+
+
+def _run(settings, ai: bool, log) -> None:
+    with psycopg.connect(settings.admin_database_url) as conn:
+        fresh = conn.execute("SELECT to_regclass('brains') IS NULL").fetchone()[0]
+    if fresh:
+        schema.create_schema(settings)
+    schema.ensure_relationship_schema(settings)
+    log("Schema created." if fresh else "Schema already there.")
+
+    with psycopg.connect(settings.admin_database_url) as conn:
+        companies = load_merchants(conn, log)
+
+    from secondbrain.forecasting.__main__ import run as run_forecasts
+    for company in companies:
+        results = run_forecasts(settings.admin_database_url, under=company)
+        log(f"{company}: forecasts for {sum(len(f) for f in results.values())} products")
+
+    if not ai:
+        log("Skipped documents and signals (no AI).")
+        return
+    from secondbrain import signals
+    from secondbrain.models import build_models
+    llm, embedder = build_models(settings)
+    with psycopg.connect(settings.admin_database_url) as conn:
+        import_docs(conn, settings, embedder, log)
+    for company, found in signals.run(settings, llm).items():
+        log(f"{company}: {len(found)} open signals")
+    log("Done.")
 
 
 def main() -> None:
@@ -113,33 +153,7 @@ def main() -> None:
     args = parser.parse_args()
     settings = get_settings()
     settings.check_required()
-
-    with psycopg.connect(settings.admin_database_url) as conn:
-        fresh = conn.execute("SELECT to_regclass('brains') IS NULL").fetchone()[0]
-    if fresh:
-        schema.create_schema(settings)
-    schema.ensure_relationship_schema(settings)
-    print("Schema created." if fresh else "Schema already there.", flush=True)
-
-    with psycopg.connect(settings.admin_database_url) as conn:
-        companies = load_merchants(conn)
-
-    from secondbrain.forecasting.__main__ import run as run_forecasts
-    for company in companies:
-        results = run_forecasts(settings.admin_database_url, under=company)
-        print(f"{company}: forecasts for {sum(len(f) for f in results.values())} products", flush=True)
-
-    if args.no_ai:
-        print("Skipped documents and signals (--no-ai).")
-        return
-    from secondbrain import signals
-    from secondbrain.models import build_models
-    llm, embedder = build_models(settings)
-    with psycopg.connect(settings.admin_database_url) as conn:
-        import_docs(conn, settings, embedder)
-    for company, found in signals.run(settings, llm).items():
-        print(f"{company}: {len(found)} open signals", flush=True)
-    print("Done.")
+    run(settings, ai=not args.no_ai, log=lambda line: print(line, flush=True))
 
 
 if __name__ == "__main__":

@@ -213,6 +213,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 raise HTTPException(404, "No such active key")
         return {"revoked": key_id}
 
+    @app.post("/admin/seed/shoppi", dependencies=[Depends(require_admin)])
+    def seed_shoppi(ai: bool = True):
+        """Load the Shoppi sample merchants into this database (safe to repeat). Takes a few minutes."""
+        from secondbrain import seed_shoppi as seed
+
+        lines: list[str] = []
+        try:
+            seed.run(settings, ai=ai, log=lines.append)
+        except Exception as exc:  # report what was done and where it stopped
+            return JSONResponse({"ok": False, "log": lines, "error": f"{type(exc).__name__}: {exc}"}, status_code=500)
+        return {"ok": True, "log": lines}
+
     @app.post("/remember")
     def remember(body: RememberRequest, user_id: UserId, brain: Brain):
         return brain.remember(user_id, body.content, Sensitivity.parse(body.sensitivity))
