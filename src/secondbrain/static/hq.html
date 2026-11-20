@@ -17,6 +17,8 @@
   .mode.on::before { background: var(--good); animation: ping 2s infinite; }
   .mode.demo { color: var(--warn); border-color: rgba(251, 191, 36, .4); background: var(--warn-soft); }
   .mode.demo::before { background: var(--warn); }
+  .mode.db { color: var(--cyan); border-color: rgba(34, 211, 238, .35); }
+  .mode.db::before { background: var(--cyan); }
   .demo-chip { font-size: 11px; font-weight: 700; letter-spacing: .04em; padding: 3px 9px; border-radius: 999px; color: var(--warn);
                background: var(--warn-soft); border: 1px solid rgba(251, 191, 36, .4); cursor: help; white-space: nowrap; }
 
@@ -43,6 +45,10 @@
   .kgrid .kpi .d { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: relative; z-index: 1; }
   .kgrid .kpi .spark { width: 70%; height: 42px; opacity: .5; }
   @media (max-width: 1280px) { .kgrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  /* database mode: four tiles, no per-second sparklines */
+  .kgrid.db { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  @media (max-width: 1280px) { .kgrid.db { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .kgrid.db .spark, .pcard.db .opsbox .spark { display: none; }
   @media (max-width: 900px) { .hero-top { grid-template-columns: 1fr; } .clock { text-align: left; } .hero h1 { font-size: 34px; } .clock .t { font-size: 30px; } }
   @media (max-width: 640px) { .hero { padding: 20px 16px; } .kgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } .kgrid .kpi .v { font-size: 22px; } .kgrid .kpi { min-height: 98px; padding: 12px 13px; } .kgrid .kpi .d { white-space: normal; font-size: 12px; } }
 
@@ -213,7 +219,7 @@
   <div class="scopebar" id="scopebar"></div>
 
   <section class="section">
-    <div class="section-head"><div><h2>Shoppi merchants, one brain</h2><p>Every merchant on each platform, forecast and coached in real time. Click a platform to focus the whole page on it.</p></div><span id="plats-demo"></span></div>
+    <div class="section-head"><div><h2>Shoppi merchants, one brain</h2><p>Every merchant on each platform, forecast and coached by one brain. Click a platform to focus the whole page on it.</p></div><span id="plats-demo"></span></div>
     <div class="plats" id="plats"><div class="shimmer" style="height:380px"></div><div class="shimmer" style="height:380px"></div><div class="shimmer" style="height:380px"></div></div>
   </section>
 
@@ -300,6 +306,11 @@ const sum = (a, f) => a.reduce((t, x) => t + (+f(x) || 0), 0);
 const accOf = (a) => (a && a.merchant_wape != null ? 1 - a.merchant_wape : null);
 // The naive baseline at the same (store-day) level, when the engine reports one.
 const naiveOf = (a) => (a && a.merchant_baseline_wape != null ? 1 - a.merchant_baseline_wape : null);
+// Database mode: the backtest reports wape / baseline_wape (status.accuracy has no merchant_wape).
+const dbAcc = (a) => {
+  const w = a?.merchant_wape ?? a?.wape, b = a?.merchant_baseline_wape ?? a?.baseline_wape;
+  return { acc: w != null && isFinite(w) ? 1 - w : null, naive: b != null && isFinite(b) ? 1 - b : null };
+};
 
 let TK = {};
 function readTokens() {
@@ -369,6 +380,19 @@ const S = {
 // ---------------------------------------------------------------- data access
 const token = () => { try { return sessionStorage.getItem("sb-admin-token"); } catch { return null; } };
 let MOCK = null;
+// Database mode: no simulator; the server answers the engine API from the real database
+// (latest sales day, backtest accuracy, real stock signals). Nothing runs, so no clock, speed or offers.
+const isDB = () => !MOCK && S.status?.source === "database";
+let dbOn = null;
+function applyDB() {
+  const on = isDB();
+  if (dbOn === on) return; dbOn = on;
+  $("kpis").classList.toggle("db", on);
+  $("tm-section").style.display = on ? "none" : "";
+  if (K.upl) for (const k of ["upl", "hit"]) K[k].node.style.display = on ? "none" : "";
+  if (S.mode) setMode(S.mode);
+  HERO._d = HERO._t = HERO._k = null; $("lessons")._k = ""; $("att")._k = "";
+}
 async function http(path, { method = "GET", body } = {}) {
   const res = await fetch("/commerce/api" + path, { method, headers: { "Content-Type": "application/json", "X-Admin-Token": token() || "" }, body: body ? JSON.stringify(body) : undefined });
   if (res.status === 401) { try { sessionStorage.removeItem("sb-admin-token"); } catch {} gate(); const e = new Error("Admin token needed"); e.status = 401; throw e; }
@@ -524,6 +548,7 @@ function onStats(m) {
   S.sim.running = !!m.running;
   const t = parseSim(m.sim_ts);
   if (isFinite(t)) { S.sim.ms = t; S.sim.sentWall = m.sent_ms || Date.now(); }
+  applyDB();
   HERO.render(); KPI.render(); TM.onStats();
 }
 function onSignal(s) {
@@ -550,7 +575,9 @@ const HERO = {
     const names = [];
     ids.forEach((id, i) => { if (i) names.push(el("span", { class: "sep" }, "·")); names.push(el("span", { class: "pl" }, el("i", { style: { background: pcol(id) } }), pinfo(id).name)); });
     const m = p ? p.merchants : st.merchants, c = p ? p.customers : st.customers, se = p ? p.series : st.series;
-    const tail = m ? `— ${num(m)} merchants, ${words(c || 0)} customers, ${num(se || 0)} products forecast live` : "";
+    const db = isDB();
+    const tail = !m ? "" : db ? `— ${num(m)} merchants, ${c > 0 ? words(c) + " customers, " : ""}${num(se || 0)} products forecast`
+      : `— ${num(m)} merchants, ${words(c || 0)} customers, ${num(se || 0)} products forecast live`;
     const key = ids.join() + tail + isLight();
     if (this._k !== key) { this._k = key; $("connected").replaceChildren(...names, el("span", {}, tail)); }
     const f = st.festival, fk = f?.name ? f.name + f.days_to : "";
@@ -562,7 +589,16 @@ const HERO = {
   // The simulated clock runs between stats messages: sim time at sent_ms plus speed × elapsed wall time.
   tick() {
     if (!isFinite(S.sim.ms)) return;
-    let t = S.sim.ms + (S.sim.running ? S.sim.speed * (Date.now() - S.sim.sentWall) : 0);
+    if (isDB()) {   // the latest day with real sales; no time of day
+      const d = new Date(S.sim.ms), k = "db" + d.toISOString().slice(0, 10);
+      if (this._t !== k) {
+        this._t = this._d = k;
+        $("clk-d").textContent = `Latest sales day · ${DOW[d.getUTCDay()]}`;
+        $("clk-t").innerHTML = `${d.getUTCDate()} ${MON[d.getUTCMonth()]}<small> ${d.getUTCFullYear()}</small>`;
+      }
+      return;
+    }
+    let t =S.sim.ms + (S.sim.running ? S.sim.speed * (Date.now() - S.sim.sentWall) : 0);
     if (isFinite(S.sim.shown) && t < S.sim.shown && S.sim.shown - t < Math.max(2000, S.sim.speed * 1500)) t = S.sim.shown;
     S.sim.shown = t;
     const d = new Date(t), ds = `${DOW[d.getUTCDay()]}, ${d.getUTCDate()} ${MON[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
@@ -580,6 +616,11 @@ const simNow = () => (isFinite(S.sim.shown) ? S.sim.shown : S.sim.ms);
 function setMode(mode, off) {
   S.mode = mode;
   const b = $("mode");
+  if (mode === "live" && isDB()) {
+    b.className = "mode db"; b.textContent = "Database";
+    b.title = "Real sales, stock, forecasts and signals from the database";
+    return;
+  }
   b.className = "mode " + (mode === "mock" ? "demo" : off ? "" : "on");
   b.textContent = mode === "mock" ? "Demo data" : off ? "Reconnecting…" : "Live";
   b.title = mode === "mock" ? (Q.get("mock") === "1" ? "Demo mode (?mock=1): every number on this page is generated in this browser" : "The Live Commerce engine isn't reachable, so this browser generates demo data")
@@ -598,11 +639,11 @@ const K = {};
 const KPI = {
   init() {
     $("kpis").replaceChildren(...KDEF.map((d, i) => {
-      const v = el("div", { class: "v" }, "—"), sub = el("div", { class: "d" }, " ");
-      const node = el("div", { class: `kpi rise ${d.glow || ""}`, title: d.tip, style: { animationDelay: i * 50 + "ms" } }, el("div", { class: "k" }, d.label), v, sub);
+      const v = el("div", { class: "v" }, "—"), sub = el("div", { class: "d" }, " "), lab = el("div", { class: "k" }, d.label);
+      const node = el("div", { class: `kpi rise ${d.glow || ""}`, title: d.tip, style: { animationDelay: i * 50 + "ms" } }, lab, v, sub);
       const sp = d.spark ? makeSpark(d.spark) : null;
       if (sp) node.append(sp.node);
-      K[d.k] = { node, v, sub, tw: new Tween(v, d.fmt, d.rate), sp };
+      K[d.k] = { node, v, sub, lab, tw: new Tween(v, d.fmt, d.rate), sp };
       return node;
     }));
   },
@@ -611,6 +652,7 @@ const KPI = {
     const st = S.status || {}, P = S.platforms, p = S.scope && P.find((x) => x.id === S.scope);
     const rows = S.scope ? (p ? [p] : []) : P;
     const rev = sum(rows, (x) => x.revenue_today), orders = sum(rows, (x) => x.orders_today);
+    if (isDB()) return this.renderDB(st, p, rows, rev, orders);
     K.rev.tw.set(rows.length ? rev : null);
     K.rev.sub.textContent = rows.length ? `${num(orders)} orders today` : " ";
     const ops = p ? p.orders_per_sec : st.orders_per_sec;
@@ -633,6 +675,25 @@ const KPI = {
     const hit = p ? p.hit_rate : st.learning?.hit_rate;
     K.hit.tw.set(hit != null ? 100 * hit : null);
     K.hit.sub.textContent = hit != null ? (S.scope ? "of completed offers" : `of ${num(st.learning?.judged ?? st.learning?.outcomes)} measured offers`) : "measured as offers complete";
+  },
+  // Database mode: the latest sales day, real stock signals and the backtest accuracy; offer tiles are hidden.
+  renderDB(st, p, rows, rev, orders) {
+    K.rev.lab.textContent = "Revenue · latest day";
+    K.rev.tw.set(rows.length ? rev : null);
+    K.rev.sub.textContent = rows.length ? `${num(orders)} units` : " ";
+    K.ops.lab.textContent = "Units sold · latest day";
+    K.ops.tw.set(rows.length ? orders : null);
+    const m = p ? p.merchants : st.merchants;
+    K.ops.sub.textContent = m ? `across ${num(m)} merchant${m === 1 ? "" : "s"}` : " ";
+    const sig = p ? p.signals_total : st.signals_total, open = sum(rows, (x) => x.open_signals);
+    K.sig.tw.set(sig ?? null);
+    const kinds = Object.entries((p ? p.signals_by_kind : st.signals_by_kind) || {}).sort((a, b) => b[1] - a[1]).slice(0, 3);
+    K.sig.sub.textContent = `${num(open)} open now` + (kinds.length ? " · " + kinds.map(([k, n]) => `${KIND[k]?.[0] || "•"}${num(n)}`).join(" ") : "");
+    const { acc, naive } = dbAcc(p ? p.accuracy : st.accuracy);
+    K.acc.lab.textContent = "Forecast accuracy";
+    K.acc.node.title = "Forecast accuracy: 100% − WAPE of each product's daily sales, backtested on days the forecast never saw. 'Naive' repeats last week's sales.";
+    K.acc.tw.set(acc != null ? 100 * acc : null);
+    K.acc.sub.textContent = acc != null ? "backtest" + (naive != null ? ` · naive ${(100 * naive).toFixed(0)}%` : "") : "no backtest yet";
   },
   sample() {
     if (!K.rev) return;
@@ -701,8 +762,8 @@ const PLATS = {
       el("div", { class: "in" },
         el("div", { class: "ph" }, el("div", { class: "logo" }, pinfo(p.id).mark), el("div", {}, el("div", { class: "nm" }, p.name), el("div", { class: "kd" }, p.kind || pinfo(p.id).kind)), c.go = el("span", { class: "go" }, "Focus →")),
         el("div", { class: "big" },
-          el("div", {}, el("div", { class: "k" }, "Revenue today"), el("div", { class: "v" }, c.rev.n)),
-          el("div", { class: "opsbox" }, el("div", { class: "k" }, "Orders / sec"), el("div", { class: "v" }, c.ops.n), c.spark.node)),
+          el("div", {}, c.revK = el("div", { class: "k" }, "Revenue today"), el("div", { class: "v" }, c.rev.n)),
+          el("div", { class: "opsbox" }, c.opsK = el("div", { class: "k" }, "Orders / sec"), el("div", { class: "v" }, c.ops.n), c.spark.node)),
         c.s3 = el("div", { class: "stats3" }),
         c.kinds = el("div", { class: "row2" }),
         c.offers = el("div", { class: "offers" }),
@@ -715,18 +776,32 @@ const PLATS = {
     c.node.classList.toggle("dim", !!S.scope && S.scope !== p.id);
     c.node.setAttribute("aria-label", `${p.name}: ${S.scope === p.id ? "back to all platforms" : "focus the page on this platform"}`);
     c.go.textContent = S.scope === p.id ? "Viewing ✓" : "Focus →";
-    c.rev.tw.set(p.revenue_today); c.ops.tw.set(p.orders_per_sec);
+    const db = isDB();
+    c.node.classList.toggle("db", db);
+    if (db) { c.revK.textContent = "Revenue · latest day"; c.opsK.textContent = "Units sold · latest day"; }
+    c.rev.tw.set(p.revenue_today); c.ops.tw.set(db ? p.orders_today : p.orders_per_sec);
     c.spark.update(S.hist.plat[p.id] || []);
+    let s3;
+    if (db) {   // real backtest accuracy; customers only when the database knows them
+      const { acc, naive } = dbAcc(p.accuracy), cats = p.categories || [];
+      const accTxt = acc != null ? (100 * acc).toFixed(1) + "%" : "—";
+      const accSub = acc != null ? "backtest" + (naive != null ? ` · naive ${(100 * naive).toFixed(0)}%` : "") : "no backtest yet";
+      s3 = [["Merchants", num(p.merchants), `${num(p.series)} products`],
+        p.customers > 0 ? ["Customers", words(p.customers), `${num(p.active_customers_today)} buying`] : ["Categories", num(cats.length), cats[0] ? `top: ${cats[0].name}` : " "],
+        ["Accuracy", accTxt, accSub]];
+    } else {
     const acc = accOf(p.accuracy), naive = naiveOf(p.accuracy);
     const accTxt = acc != null ? (100 * acc).toFixed(1) + "%" : "—";
     const accSub = acc != null ? (naive != null ? `store-day · naive ${(100 * naive).toFixed(0)}%` : "store-day") : "after day 1";
-    const s3 = [["Merchants", num(p.merchants), `${num(p.series)} products`], ["Customers", words(p.customers || 0), `${num(p.active_customers_today)} buying today`], ["Accuracy", accTxt, accSub]];
+    s3 = [["Merchants", num(p.merchants), `${num(p.series)} products`], ["Customers", words(p.customers || 0), `${num(p.active_customers_today)} buying today`], ["Accuracy", accTxt, accSub]];
+    }
     c.s3.replaceChildren(...s3.map(([k, v, s]) => el("div", {}, el("div", { class: "k" }, k), el("div", { class: "v" }, v), el("div", { class: "s" }, s))));
     const kinds = Object.entries(p.signals_by_kind || {}).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).slice(0, 4);
     c.kinds.replaceChildren(el("span", { class: "chip " + (p.open_signals ? "warn" : "") }, `${num(p.open_signals)} open signals`),
       ...kinds.map(([k, n]) => el("span", { class: "chip", title: `${KIND[k]?.[1] || k}: ${n} open` }, `${KIND[k]?.[0] || "•"} ${num(n)}`)));
     c.offers.replaceChildren(el("b", {}, num(p.offers_applied)), " offers applied · ", el("span", { class: p.uplift_revenue < 0 ? "bad" : "g" }, plusInr(p.uplift_revenue)), " uplift",
       ...(p.hit_rate != null ? [" · ", el("b", {}, pct0(p.hit_rate)), " hit rate"] : []));
+    c.offers.style.display = db && !(p.offers_applied > 0) && !p.uplift_revenue && p.hit_rate == null ? "none" : "";
     const top = (p.categories || []).slice(0, 3), max = Math.max(1, ...top.map((x) => x.revenue_today || 0));
     const key = top.map((x) => x.name + x.merchants).join();
     if (c._ck !== key) {
@@ -917,7 +992,7 @@ const TREE = {
       g.font = `700 ${phone ? 11 : 13.5}px Inter, system-ui, sans-serif`;
       g.lineWidth = 4; g.strokeStyle = TK.bg; g.strokeText(pn.d.name, pn.x, ly); g.fillStyle = TK.text; g.fillText(pn.d.name, pn.x, ly);
       if (!phone || this.single) {
-        const sub = `${inr(pn.d.revenue_today)} today · ${num(pn.d.open_signals)} open`, y2 = ly + (phone ? 13 : 16);
+        const sub = `${inr(pn.d.revenue_today)} ${isDB() ? "latest day" : "today"} · ${num(pn.d.open_signals)} open`, y2 = ly + (phone ? 13 : 16);
         g.font = `500 ${phone ? 10 : 11.5}px Inter, system-ui, sans-serif`;
         g.strokeText(sub, pn.x, y2); g.fillStyle = TK.muted; g.fillText(sub, pn.x, y2);
       }
@@ -961,7 +1036,7 @@ const TREE = {
     if (!n) { this.tip.classList.add("hidden"); return; }
     let t;
     if (n.kind === "m") t = [el("b", {}, n.name), `${pinfo(n.plat.id).name} · ${n.city || ""} · ${n.category}`, el("br"),
-      `${n.status === "urgent" ? "Urgent signal" : n.status === "signal" ? "Open signal" : "All good"} · ${inr(n.revenue_today)} today · click for more`];
+      `${n.status === "urgent" ? "Urgent signal" : n.status === "signal" ? "Open signal" : "All good"} · ${inr(n.revenue_today)} ${isDB() ? "on the latest day" : "today"} · click for more`];
     else if (n.kind === "plat") t = [el("b", {}, n.d.name), `${num(sum(this.cats.filter((c) => c.plat === n), (c) => c.ms.length))} merchants · click to ${S.scope ? "see all platforms" : "focus"}`];
     else if (n.kind === "root") t = [el("b", {}, "SecondBrain"), S.scope ? "Click to see all platforms" : "The root brain: anonymous lessons from every merchant"];
     else t = [el("b", {}, n.name), `${n.ms.length} merchants on ${pinfo(n.plat.id).name}`];
@@ -985,7 +1060,9 @@ const TREE = {
       el("button", { class: "x", "aria-label": "Close", onclick: () => this.closeCard() }, "×"),
       el("div", { class: "row" }, el("span", { class: "pbadge", style: "--pc:" + (col) }, pinfo(m.plat.id).name), st),
       el("h3", {}, m.name), el("div", { class: "w" }, `${m.city || ""} · ${m.category}`),
-      el("div", { class: "g4" }, ...[["Revenue today", inr(m.revenue_today)], ["Orders today", num(m.orders_today)], ["Open signals", num(m.open_signals)], ["Offers applied", num(m.offers_applied)]]
+      el("div", { class: "g4" }, ...(isDB()
+        ? [["Revenue · latest day", inr(m.revenue_today)], ["Units sold", num(m.orders_today)], ["Open signals", num(m.open_signals)], ["Category", m.category || "—"]]
+        : [["Revenue today", inr(m.revenue_today)], ["Orders today", num(m.orders_today)], ["Open signals", num(m.open_signals)], ["Offers applied", num(m.offers_applied)]])
         .map(([k, v]) => el("div", {}, el("div", { class: "k" }, k), el("div", { class: "v" }, v)))),
       el("a", { class: "btn sm primary", href: "/commerce?merchant=" + encodeURIComponent(m.id) }, "Open in Live Commerce →"));
     this.card.classList.remove("hidden");
@@ -1052,6 +1129,13 @@ const LESSONS = {
     const box = $("lessons"), prev = this.seen;
     this.seen = new Map((list || []).map((l) => [l.id, l]));
     if (!list || !list.length) {
+      if (isDB()) {
+        if (box._k === "empty-db") return; box._k = "empty-db";
+        box.replaceChildren(el("div", { class: "card lempty" }, el("div", { class: "orb" }),
+          el("div", {}, el("h3", { style: { margin: "0 0 4px" } }, "No lessons yet"),
+            el("p", { class: "muted", style: { margin: 0 } }, "Lessons form as signals are acted on and their outcomes are measured. Once a pattern holds across merchants, it is shared with all of them."))));
+        return;
+      }
       if (box._k === "empty") return; box._k = "empty";
       box.replaceChildren(el("div", { class: "card lempty" }, el("div", { class: "orb" }),
         el("div", {}, el("h3", { style: { margin: "0 0 4px" } }, "No lessons yet"),
@@ -1078,6 +1162,15 @@ const LESSONS = {
   card(l, fresh, oldNode) {
     const [ic, kname] = LKIND[l.kind] || ["🧠", l.kind];
     const pl = l.platform ? el("span", { class: "pbadge", style: "--pc:" + (pcol(l.platform)) }, pinfo(l.platform).name) : el("span", { class: "chip" }, "All platforms");
+    if (isDB()) {   // database lessons: lists for learned_from / applies_to, category may be missing
+      const cnt = (x) => (Array.isArray(x) ? x.length : +x || 0), lf = cnt(l.learned_from), ap = cnt(l.applies_to);
+      return el("article", { class: `card lesson ${fresh ? "fresh" : ""}`, "data-id": l.id },
+        el("div", { class: "lt" }, el("span", { class: "lic" }, ic), el("span", { class: "lk" }, kname), l.category ? el("span", { class: "chip" }, l.category) : null, pl),
+        el("h3", {}, l.title || ""), l.detail && l.detail !== l.title ? el("p", {}, l.detail) : null,
+        this.viz(l, oldNode),
+        lf || ap ? el("div", { class: "evi" }, "Learned from", el("b", {}, num(lf) + " merchant" + (lf === 1 ? "" : "s")), el("span", { class: "arr" }, "→"),
+          "now applied to", el("b", {}, num(ap)), el("span", { class: "faint" }, `· ${num(l.evidence_n)} results`)) : null);
+    }
     return el("article", { class: `card lesson ${fresh ? "fresh" : ""}`, "data-id": l.id },
       el("div", { class: "lt" }, el("span", { class: "lic" }, ic), el("span", { class: "lk" }, kname), el("span", { class: "chip" }, l.category), pl),
       el("h3", {}, l.title), l.detail ? el("p", {}, l.detail) : null,
@@ -1116,7 +1209,7 @@ const ATT = {
     demoChip("att-demo", "attention");
     const box = $("att");
     if (!list || !list.length) {
-      const paused = !!S.status && !S.status.running, k = "empty" + paused;
+      const paused = !!S.status && !S.status.running && !isDB(), k = "empty" + paused;
       if (box._k === k) return; box._k = k;
       box.replaceChildren(el("div", { class: "card empty" }, el("div", { style: { fontSize: "28px" } }, "✓"),
         el("div", { style: { fontWeight: 700, color: "var(--text)", margin: "4px 0" } }, "Nothing needs attention right now"),
@@ -1396,7 +1489,9 @@ async function boot() {
   if (Q.get("mock") === "1") return startMock("forced");
   let status;
   const waiting = () => { const b = $("mode"); if (b) { b.className = "mode"; b.textContent = "Engine busy, connecting…"; } };
-  try { status = await SB.engineFetch("/commerce/api/status", { onWait: waiting }); } catch { return startMock("offline"); }
+  await SB.adminToken();
+  try { status = await SB.engineFetch("/commerce/api/status", { onWait: waiting }); }
+  catch (e) { if (e.status === 401) { try { sessionStorage.removeItem("sb-admin-token"); } catch {} return gate(); } return startMock("offline"); }
   if (!status || !status.sim_ts) return startMock("offline");
   await SB.adminToken();
   if (!token()) return gate();

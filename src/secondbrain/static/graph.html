@@ -338,6 +338,16 @@ async function getJSON(path, timeout = 6000) {
   } finally { clearTimeout(t); }
 }
 const api = (path) => (MOCK ? MOCK.api(path) : getJSON(path));
+// Database mode: no simulator; the server answers the engine API from the real database (status.source === "database").
+// Only real data is shown then: no live rates, no generated outcomes or lessons.
+const isDB = () => !MOCK && D.status?.source === "database";
+// In database mode the "today" figures are the latest sales day in the data.
+const dayWord = () => (isDB() ? "latest day" : "today");
+const revL = () => (isDB() ? "Revenue · latest day" : "Revenue today");
+const ordL = () => (isDB() ? "Orders · latest day" : "Orders today");
+// A product's size for sorting and drawing: its forecast today, or (database mode, no forecast for that day) units sold.
+const pSize = (p) => p?.today?.forecast ?? p?.today?.actual ?? 0;
+const plural = (n, one, many = one + "s") => num(n) + " " + (n === 1 ? one : many);
 
 const D = {
   mode: null,             // "live" (broker), "poll" (HTTP), "mock" (this browser)
@@ -509,7 +519,7 @@ function sizeMerchants() {
 
 // Products orbit the selected merchant, on arcs facing away from the centre.
 function placeProducts(m, products) {
-  const list = [...products].sort((a, b) => (b._sig ? 1 : 0) - (a._sig ? 1 : 0) || (b.today?.forecast || 0) - (a.today?.forecast || 0));
+  const list = [...products].sort((a, b) => (b._sig ? 1 : 0) - (a._sig ? 1 : 0) || pSize(b) - pSize(a));
   const per = 11, out = [];
   list.forEach((p, i) => {
     const ring = Math.floor(i / per), inRing = Math.min(per, list.length - ring * per), j = i - ring * per;
@@ -635,6 +645,13 @@ function updateDemoBadge() {
 function setMode(mode, sub) {
   D.mode = mode;
   const b = $("net-mode");
+  if (mode === "poll" && isDB()) {
+    b.className = "mode on"; b.textContent = "Database";
+    b.title = "Real sales, stock, forecasts and signals from the database";
+    $("tok-btn").classList.add("hidden"); $("tok-form").classList.add("hidden");
+    $("g-how").innerHTML = $("g-how").innerHTML.replace("size = revenue today", "size = revenue on the latest day"); renderLegend();
+    updateDemoBadge(); return;
+  }
   b.className = "mode " + (mode === "mock" ? "demo" : sub === "off" ? "" : "on");
   b.textContent = mode === "mock" ? "Demo data" : sub === "off" ? "Reconnecting…" : mode === "poll" ? "Live (HTTP)" : "Live";
   b.title = mode === "mock" ? "Everything on this page is generated in this browser (?mock=1 or the engine is offline)"
@@ -862,7 +879,7 @@ function draw(now, dt) {
       const c = covClass(p.data), col = c === "low" ? TH.urgent : p.data._sig ? TH.signal : c === "mid" ? TH.warn : TH.good;
       ctx.globalAlpha = 1; ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(p.r, 2.2 * px), 0, Math.PI * 2);
       ctx.fillStyle = TH.L ? "#fff" : "#0d1428"; ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = Math.max(1.5, 1.6 * px); ctx.stroke();
-      const f = Math.min(1, (p.data.today?.forecast || 0) / Math.max(1, ...SEL.products.map((x) => x.data.today?.forecast || 0)));
+      const f = Math.min(1, pSize(p.data) / Math.max(1, ...SEL.products.map((x) => pSize(x.data))));
       ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(p.r, 2.2 * px) * (0.35 + 0.5 * f), 0, Math.PI * 2); ctx.fillStyle = col; ctx.fill();
       if (SEL.product === p.data.sku) { ctx.beginPath(); ctx.arc(p.x, p.y, p.r + 3, 0, Math.PI * 2); ctx.strokeStyle = TH.text; ctx.lineWidth = Math.max(1, 1.2 * px); ctx.stroke(); }
     }
@@ -915,7 +932,7 @@ function drawLabels() {
     const off = h.r * k + 12;
     let lx = onRim ? rx : x + ox * off; const ly = (onRim ? ry : y + oy * off) + (oy > 0.3 ? 9 : oy < -0.3 ? -9 : 0);
     const align = ox > 0.35 ? "left" : ox < -0.35 ? "right" : "center";
-    const sub = SCOPE.merchant ? "" : `${num(n)} merchants · ${inr(h.data.revenue_today || 0)} today`;
+    const sub = SCOPE.merchant ? "" : `${num(n)} merchants · ${inr(h.data.revenue_today || 0)} ${dayWord()}`;
     ctx.font = "500 11.5px Inter, system-ui"; const tw = Math.max(ctx.measureText(sub).width, h.label.length * 9);
     const left = align === "left" ? lx : align === "right" ? lx - tw : lx - tw / 2, shift = Math.min(0, W - 6 - (left + tw)) + Math.max(0, 6 - left);
     lx += shift;
@@ -990,18 +1007,19 @@ function showTip(n, px, py) {
   const d = scopedData(n) || {};
   if (n.type === "merchant") {
     s = `${plat(n.pid).name} · ${d.category} · ${d.city}`;
-    rows.push(["Revenue today", inr(d.revenue_today)], ["Orders today", num(d.orders_today)], ["Open signals", num(d.open_signals)], ["Status", STATUS[d.status || "ok"][0]]);
+    rows.push([revL(), inr(d.revenue_today)], [ordL(), num(d.orders_today)], ["Open signals", num(d.open_signals)], ["Status", STATUS[d.status || "ok"][0]]);
     if (d.offers_applied) rows.push(["Offers applied", num(d.offers_applied)]);
   } else if (n.type === "platform") {
-    s = "Platform brain"; rows.push(["Merchants", num(count(d))], ["Revenue today", inr(d.revenue_today)], ["Orders today", num(d.orders_today)], ["Open signals", num(d.open_signals)]);
+    s = "Platform brain"; rows.push(["Merchants", num(count(d))], [revL(), inr(d.revenue_today)], [ordL(), num(d.orders_today)], ["Open signals", num(d.open_signals)]);
   } else if (n.type === "group") {
     s = `${plat(n.pid).name} · ${n.byCity ? (n.sub || "") + " stores in this city" : "category"}`;
-    const ms = n.kids.filter(inScope); rows.push(["Merchants", num(ms.length)], ["Revenue today", inr(ms.reduce((a, m) => a + (m.data.revenue_today || 0), 0))], ["Open signals", num(ms.reduce((a, m) => a + (m.data.open_signals || 0), 0))]);
+    const ms = n.kids.filter(inScope); rows.push(["Merchants", num(ms.length)], [revL(), inr(ms.reduce((a, m) => a + (m.data.revenue_today || 0), 0))], ["Open signals", num(ms.reduce((a, m) => a + (m.data.open_signals || 0), 0))]);
   } else if (n.type === "root") {
-    s = "The root brain: forecasts, signals and shared lessons"; rows.push(["Revenue today", inr(d.revenue_today)], ["Orders today", num(d.orders_today)], ["Open signals", num(d.open_signals)]);
+    s = "The root brain: forecasts, signals and shared lessons"; rows.push([revL(), inr(d.revenue_today)], [ordL(), num(d.orders_today)], ["Open signals", num(d.open_signals)]);
   } else if (n.type === "product") {
     t = d.name; s = `${d.category} · ${inr(d.price)}`;
-    rows.push(["Forecast today", fmtUnits(d.today?.forecast) + " units"], ["Sold so far", `${fmtUnits(d.today?.actual)} of ${fmtUnits(d.today?.expected_so_far)} expected`], ["Stock cover", d.cover_days == null ? "—" : (+d.cover_days).toFixed(1) + " days"]);
+    if (!isDB()) rows.push(["Forecast today", fmtUnits(d.today?.forecast) + " units"]);
+    rows.push(isDB() ? ["Sold · latest day", fmtUnits(d.today?.actual)] : ["Sold so far", `${fmtUnits(d.today?.actual)} of ${fmtUnits(d.today?.expected_so_far)} expected`], ["Stock cover", d.cover_days == null ? "—" : (+d.cover_days).toFixed(1) + " days"]);
   }
   tip.innerHTML = "";
   tip.append(el("div", { class: "t" }, t), el("div", { class: "s" }, s), ...rows.map(([a, b]) => el("div", { class: "r" }, el("span", {}, a), el("b", {}, b))));
@@ -1143,27 +1161,30 @@ const PANEL = {
       box.append(el("div", { class: "pc click", onclick: () => hub && selectNode(hub) },
         el("div", { class: "plat-row" }, el("span", { class: "sw", style: { background: pcol(p.id) } }),
           el("div", {}, el("div", { class: "nm" }, p.name || plat(p.id).name), el("div", { class: "muted-note" }, `${num(count(p))} merchants · ${p.categories.length} ${p.categories.length === 1 ? "category" : "categories"}`)),
-          el("div", { class: "vals" }, el("b", {}, inr(p.revenue_today)), " today", el("br"), el("b", {}, num(p.open_signals)), " open signals"))));
+          el("div", { class: "vals" }, el("b", {}, inr(p.revenue_today)), " " + dayWord(), el("br"), el("b", {}, num(p.open_signals)), " open signals"))));
     }
-    this.lessons(box, D.lessons, "What the network learned once and shared");
-    box.append(el("div", { class: "p-eyebrow" }, "Latest signals", el("span", {}, D.mode === "mock" ? "demo feed" : "live")), el("div", { id: "ov-sigs" }));
+    this.lessons(box, D.lessons, "What the network learned once and shared", isDB());
+    box.append(el("div", { class: "p-eyebrow" }, "Latest signals", el("span", {}, D.mode === "mock" ? "demo feed" : isDB() ? "open, from the database" : "live")), el("div", { id: "ov-sigs" }));
     this.overviewSignals();
   },
   overviewSignals() {
     const host = $("ov-sigs"); if (!host) return;
     const sigs = D.recent.filter((s) => !SCOPE.ids || SCOPE.ids.has(s.merchant)).slice(0, 6);
     host.replaceChildren(...(sigs.length ? sigs.map((s) => this.sigCard(s, true))
-      : [el("p", { class: "muted-note" }, D.status && !D.status.running ? "The simulation is paused, so no new signals are arriving. Signals and outcomes animate here the moment they happen." : "Waiting for the next signal…")]));
+      : [el("p", { class: "muted-note" }, isDB() ? "No open signals right now." : D.status && !D.status.running ? "The simulation is paused, so no new signals are arriving. Signals and outcomes animate here the moment they happen." : "Waiting for the next signal…")]));
   },
-  lessons(box, lessons, title) {
-    if (!lessons?.length) return;
+  lessons(box, lessons, title, emptyNote) {
+    if (!lessons?.length) {
+      if (emptyNote) box.append(el("div", { class: "p-eyebrow" }, title), el("p", { class: "muted-note" }, "No shared lessons yet. They form as signals are acted on and their outcomes are measured."));
+      return;
+    }
     box.append(el("div", { class: "p-eyebrow" }, title, el("span", {}, D.lessonsFrom === "demo" ? "demo data" : "")));
     for (const l of lessons.slice(0, 6)) {
       const from = l._learned_total ?? lessonCount(l.learned_from), to = lessonCount(l.applies_to);
       const card = el("div", { class: "pc click lesson" + (LESSON.active === l.id ? " on" : ""), onclick: () => showLesson(l, card) },
         el("div", { class: "top" }, el("span", {}, LESSON_ICON[l.kind] || "💡"), el("span", {}, l.category + (l.platform ? " · " + plat(l.platform).name : " · all platforms"))),
         el("div", { class: "ttl" }, l.title),
-        el("div", { class: "flow" }, "Learned from ", el("b", {}, num(from) + " merchants"), " → now improves ", el("b", {}, num(to)), l.prior != null ? el("span", { class: "pill" }, `prior ${l.prior} → ${l.value}`) : null));
+        el("div", { class: "flow" }, "Learned from ", el("b", {}, plural(from, "merchant")), " → now improves ", el("b", {}, num(to)), l.prior != null ? el("span", { class: "pill" }, `prior ${l.prior} → ${l.value}`) : null));
       box.append(card);
     }
   },
@@ -1172,7 +1193,7 @@ const PANEL = {
     const p = scopedData(n);
     box.append(el("div", { class: "p-eyebrow" }, "Platform brain"), el("div", { class: "p-title", style: { color: pcol(n.pid) } }, n.label),
       el("div", { class: "p-sub" }, `${num(count(p))} merchants · ${p.kind || ""}`),
-      el("div", { class: "pstats" }, st("Revenue today", inr(p.revenue_today)), st("Orders today", num(p.orders_today)), st("Open signals", num(p.open_signals))),
+      el("div", { class: "pstats" }, st(revL(), inr(p.revenue_today)), st(ordL(), num(p.orders_today)), st("Open signals", num(p.open_signals))),
       el("div", { class: "p-eyebrow" }, n.data.categories.length === 1 ? "Stores by city" : "Categories"));
     for (const g of G.groups.filter((g) => g.pid === n.pid && inScope(g))) box.append(groupRow(g));
     topMerchants(box, G.groups.filter((g) => g.pid === n.pid).flatMap((g) => g.kids));
@@ -1181,7 +1202,7 @@ const PANEL = {
     this.back(box);
     box.append(el("div", { class: "p-eyebrow" }, plat(n.pid).name + (n.byCity ? " · city" : " · category")), el("div", { class: "p-title" }, n.label),
       el("div", { class: "p-sub" }, `${num(n.kids.filter(inScope).length)} merchants${n.sub ? " · " + n.sub : ""}`),
-      el("div", { class: "pstats" }, st("Revenue today", inr(n.kids.filter(inScope).reduce((a, m) => a + (m.data.revenue_today || 0), 0))), st("Orders today", num(n.kids.filter(inScope).reduce((a, m) => a + (m.data.orders_today || 0), 0))), st("Open signals", num(n.kids.filter(inScope).reduce((a, m) => a + (m.data.open_signals || 0), 0)))));
+      el("div", { class: "pstats" }, st(revL(), inr(n.kids.filter(inScope).reduce((a, m) => a + (m.data.revenue_today || 0), 0))), st(ordL(), num(n.kids.filter(inScope).reduce((a, m) => a + (m.data.orders_today || 0), 0))), st("Open signals", num(n.kids.filter(inScope).reduce((a, m) => a + (m.data.open_signals || 0), 0)))));
     topMerchants(box, n.kids, 12);
   },
   async merchant(box, n) {
@@ -1202,7 +1223,7 @@ const PANEL = {
     placeProducts(n, d.products || []);
     if (!SEL.product || !(d.products || []).some((p) => p.sku === SEL.product)) {
       const first = (d.open_signals || [])[0]?.sku;
-      SEL.product = first || [...(d.products || [])].sort((a, b) => (b.today?.forecast || 0) - (a.today?.forecast || 0))[0]?.sku || null;
+      SEL.product = first || [...(d.products || [])].sort((a, b) => pSize(b) - pSize(a))[0]?.sku || null;
     }
     renderCounts();
     this.fillMerchant(body, n, d);
@@ -1211,9 +1232,9 @@ const PANEL = {
     body.textContent = "";
     const prods = d.products || [], open = d.open_signals || [], outs = d.outcomes || [];
     const fc = prods.reduce((a, p) => a + (p.today?.forecast || 0), 0), act = prods.reduce((a, p) => a + (p.today?.actual || 0), 0), exp = prods.reduce((a, p) => a + (p.today?.expected_so_far || 0), 0);
-    body.append(el("div", { class: "pstats" }, st("Revenue today", inr(d.revenue_today)), st("Orders today", num(d.orders_today)),
-      st("Units vs expected", exp ? signedPct(act / exp - 1) : "—", exp ? (act >= exp ? "good" : act < exp * 0.85 ? "bad" : "") : "")));
-    body.append(el("p", { class: "muted-note", style: { marginTop: "8px" } }, `${num(prods.length)} products forecast · ${fmtUnits(fc)} units expected today` + (d.autopilot ? " · autopilot applies safe offers" : "")));
+    body.append(el("div", { class: "pstats" }, st(revL(), inr(d.revenue_today)), st(ordL(), num(d.orders_today)),
+      isDB() ? st("Units · latest day", fmtUnits(act)) : st("Units vs expected", exp ? signedPct(act / exp - 1) : "—", exp ? (act >= exp ? "good" : act < exp * 0.85 ? "bad" : "") : "")));
+    body.append(el("p", { class: "muted-note", style: { marginTop: "8px" } }, (isDB() ? `${num(prods.length)} products forecast · pick one to see its next two weeks` : `${num(prods.length)} products forecast · ${fmtUnits(fc)} units expected today`) + (d.autopilot ? " · autopilot applies safe offers" : "")));
     // signals
     body.append(el("div", { class: "p-eyebrow" }, "Open signals", el("span", {}, open.length ? `${open.length} waiting` : "")));
     if (!open.length) body.append(el("p", { class: "muted-note" }, "Nothing needs attention: every product is tracking its forecast."));
@@ -1223,17 +1244,17 @@ const PANEL = {
     const chartBox = el("div", { class: "chart", id: "fc-box" }, el("div", { class: "shimmer", style: { height: "170px" } }));
     body.append(chartBox);
     // products
-    body.append(el("div", { class: "p-eyebrow" }, "Products", el("span", {}, "today vs forecast, stock cover")));
-    const sorted = [...prods].sort((a, b) => (b._sig ? 1 : 0) - (a._sig ? 1 : 0) || (b.today?.forecast || 0) - (a.today?.forecast || 0));
+    body.append(el("div", { class: "p-eyebrow" }, "Products", el("span", {}, isDB() ? "units sold on the latest day, stock cover" : "today vs forecast, stock cover")));
+    const sorted = [...prods].sort((a, b) => (b._sig ? 1 : 0) - (a._sig ? 1 : 0) || pSize(b) - pSize(a));
     const tb = el("tbody", {}, sorted.map((p) => {
-      const t = p.today || {}, ratio = t.expected_so_far ? t.actual / t.expected_so_far - 1 : null, c = covClass(p);
+      const t = p.today || {}, ratio = !isDB() && t.expected_so_far ? t.actual / t.expected_so_far - 1 : null, c = covClass(p);
       return el("tr", { "data-sku": p.sku, class: SEL.product === p.sku ? "on" : "", onclick: () => { SEL.product = p.sku; this.loadSeries(); this.markProduct(); } },
         el("td", { class: "nm" }, el("div", { title: p.name }, p._sig ? "⚡ " : "", p.name.replace(d.name + " ", "")), el("div", { class: "faint", style: { fontSize: "11px" } }, inr(p.price) + (p.offer ? " · offer live" : ""))),
-        el("td", { class: "r" }, fmtUnits(t.forecast)),
-        el("td", { class: "r" }, `${fmtUnits(t.actual)}/${fmtUnits(t.expected_so_far)}`, el("div", { class: ratio == null ? "faint" : ratio >= 0 ? "good" : ratio < -0.15 ? "bad" : "muted", style: { fontSize: "11px" } }, ratio == null ? "—" : signedPct(ratio))),
+        isDB() ? null : el("td", { class: "r" }, fmtUnits(t.forecast)),
+        isDB() ? el("td", { class: "r" }, fmtUnits(t.actual)) : el("td", { class: "r" }, `${fmtUnits(t.actual)}/${fmtUnits(t.expected_so_far)}`, el("div", { class: ratio == null ? "faint" : ratio >= 0 ? "good" : ratio < -0.15 ? "bad" : "muted", style: { fontSize: "11px" } }, ratio == null ? "—" : signedPct(ratio))),
         el("td", { class: "r" }, el("span", { class: "cov " + c }, p.cover_days == null ? "—" : (+p.cover_days).toFixed(1) + "d")));
     }));
-    body.append(el("table", { class: "prods" }, el("thead", {}, el("tr", {}, el("th", {}, "Product"), el("th", { class: "r" }, "Forecast"), el("th", { class: "r" }, "Sold/exp."), el("th", { class: "r" }, "Cover"))), tb));
+    body.append(el("table", { class: "prods" }, el("thead", {}, el("tr", {}, el("th", {}, "Product"), isDB() ? null : el("th", { class: "r" }, "Forecast"), el("th", { class: "r" }, isDB() ? "Sold · latest day" : "Sold/exp."), el("th", { class: "r" }, "Cover"))), tb));
     // offers and outcomes
     body.append(el("div", { class: "p-eyebrow" }, "Offers applied and how they worked"));
     const live = prods.filter((p) => p.offer);
@@ -1262,8 +1283,8 @@ const PANEL = {
       el("div", { class: "ttl" }, s.title),
       withMerchant ? null : el("div", { class: "det" }, s.detail),
       el("div", { class: "foot" }, el("span", { class: "pill vi" }, actionText(s.action)),
-        s.expected?.revenue != null ? el("span", {}, el("span", { class: "imp" }, inr(s.expected.revenue)), el("span", { class: "muted" }, " expected")) : null,
-        s.expected?.margin != null && !withMerchant ? el("span", { class: "muted" }, `margin ${inr(s.expected.margin)}`) : null,
+        s.expected?.revenue != null ? el("span", {}, el("span", { class: "imp" }, inr(s.expected.revenue)), el("span", { class: "muted" }, isDB() && s.kind === "restock" ? " sales protected" : " expected")) : null,
+        s.expected?.margin != null && !withMerchant ? el("span", { class: "muted" }, `margin ${isDB() && Math.abs(s.expected.margin) <= 1 ? pct0(s.expected.margin) : inr(s.expected.margin)}`) : null,
         s.autopilot ? el("span", { class: "pill gd" }, "Autopilot applied") : null,
         s.confidence != null && !withMerchant ? el("span", { class: "faint" }, `${pct0(s.confidence)} sure`) : null));
   },
@@ -1283,7 +1304,7 @@ function groupRow(g) {
   const ks = g.kids.filter(inScope), rev = ks.reduce((a, m) => a + (m.data.revenue_today || 0), 0), sig = ks.reduce((a, m) => a + (m.data.open_signals || 0), 0);
   return el("div", { class: "pc click", onclick: () => selectNode(g) }, el("div", { class: "plat-row" },
     el("div", {}, el("div", { class: "nm" }, g.label), el("div", { class: "muted-note" }, `${ks.length} merchants`)),
-    el("div", { class: "vals" }, el("b", {}, inr(rev)), " today", el("br"), el("b", {}, num(sig)), " signals")));
+    el("div", { class: "vals" }, el("b", {}, inr(rev)), " " + dayWord(), el("br"), el("b", {}, num(sig)), " signals")));
 }
 function topMerchants(box, ms, n = 8) {
   const list = ms.filter(inScope).sort((a, b) => (b.data.open_signals || 0) - (a.data.open_signals || 0) || (b.data.revenue_today || 0) - (a.data.revenue_today || 0)).slice(0, n);
@@ -1317,20 +1338,21 @@ function forecastChart(s, p) {
   }
   // band + forecast
   if (fc.length) {
-    const up = [[ti, today.forecast || 0], ...fc.map((d, i) => [ti + 1 + i, d.hi ?? d.f])], lo = [[ti, today.forecast || 0], ...fc.map((d, i) => [ti + 1 + i, d.lo ?? d.f])].reverse();
+    const f0 = today.forecast == null ? [] : [[ti, today.forecast || 0]];
+    const up = [...f0, ...fc.map((d, i) => [ti + 1 + i, d.hi ?? d.f])], lo = [...f0, ...fc.map((d, i) => [ti + 1 + i, d.lo ?? d.f])].reverse();
     node.append(svg("polygon", { points: [...up, ...lo].map(([i, v]) => `${x(i)},${y(v)}`).join(" "), fill: "var(--violet)", opacity: 0.16 }));
-    node.append(svg("polyline", { points: [[ti, today.forecast || 0], ...fc.map((d, i) => [ti + 1 + i, d.f])].map(([i, v]) => `${x(i)},${y(v)}`).join(" "), fill: "none", stroke: "var(--violet)", "stroke-width": 2, "stroke-linejoin": "round" }));
+    node.append(svg("polyline", { points: [...f0, ...fc.map((d, i) => [ti + 1 + i, d.f])].map(([i, v]) => `${x(i)},${y(v)}`).join(" "), fill: "none", stroke: "var(--violet)", "stroke-width": 2, "stroke-linejoin": "round" }));
   }
   node.append(svg("polyline", { points: hist.map((d, i) => `${x(i)},${y(d.units)}`).join(" ") + (hist.length ? ` ${x(ti)},${y(today.actual || 0)}` : ""), fill: "none", stroke: "var(--muted)", "stroke-width": 1.6, "stroke-linejoin": "round" }));
   node.append(svg("line", { x1: x(ti), x2: x(ti), y1: T, y2: H - B, stroke: "var(--faint)", "stroke-dasharray": "3 3" }));
-  node.append(svg("circle", { cx: x(ti), cy: y(today.forecast || 0), r: 4, fill: "var(--panel-solid)", stroke: "var(--violet)", "stroke-width": 2 }));
+  if (today.forecast != null) node.append(svg("circle", { cx: x(ti), cy: y(today.forecast || 0), r: 4, fill: "var(--panel-solid)", stroke: "var(--violet)", "stroke-width": 2 }));
   node.append(svg("circle", { cx: x(ti), cy: y(today.actual || 0), r: 4, fill: "var(--cyan)", stroke: "var(--panel-solid)", "stroke-width": 2 }));
-  for (const [i, t] of [[0, fmtDay(days[0])], [ti, "Today"], [n - 1, fmtDay(days[n - 1])]]) node.append(svg("text", { x: x(i), y: H - 5, "text-anchor": i === 0 ? "start" : i === n - 1 ? "end" : "middle", "font-size": 10, fill: "var(--muted)" }, t));
+  for (const [i, t] of [[0, fmtDay(days[0])], [ti, isDB() ? "Latest day" : "Today"], [n - 1, fmtDay(days[n - 1])]]) node.append(svg("text", { x: x(i), y: H - 5, "text-anchor": i === 0 ? "start" : i === n - 1 ? "end" : "middle", "font-size": 10, fill: "var(--muted)" }, t));
   // hover crosshair
   const cross = svg("line", { y1: T, y2: H - B, stroke: "var(--text)", opacity: 0, "stroke-width": 1 });
   node.append(cross);
   const read = el("div", { class: "read" }, todayRead());
-  function todayRead() { return `Today: ${fmtUnits(today.actual)} sold of ${fmtUnits(today.expected_so_far)} expected so far · forecast ${fmtUnits(today.forecast)} for the day`; }
+  function todayRead() { if (isDB()) return `Latest sales day: ${fmtUnits(today.actual)} sold` + (fc[0]?.f != null ? ` · next day forecast ${fmtUnits(fc[0].f)}` : ""); return `Today: ${fmtUnits(today.actual)} sold of ${fmtUnits(today.expected_so_far)} expected so far · forecast ${fmtUnits(today.forecast)} for the day`; }
   const hit = svg("rect", { x: L, y: 0, width: W - L - R, height: H, fill: "transparent" });
   hit.addEventListener("pointermove", (ev) => {
     const r = node.getBoundingClientRect(), vx = ((ev.clientX - r.left) / r.width) * W;
@@ -1347,7 +1369,7 @@ function forecastChart(s, p) {
     s.model ? el("div", { class: "faint", style: { fontSize: "11px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }, title: s.model }, "Model: " + s.model) : null,
     node, read,
     el("div", { class: "lg" }, el("span", {}, el("i", { style: { borderColor: "var(--muted)" } }), "Sold"), el("span", {}, el("i", { style: { borderColor: "var(--violet)" } }), "Forecast (band = likely range)"),
-      el("span", {}, el("i", { style: { borderColor: "var(--cyan)", borderTopWidth: "6px", width: "6px", borderRadius: "3px" } }), "Today so far"), (s.offers || []).length ? el("span", {}, el("i", { style: { borderColor: "var(--pink)", opacity: 0.5, borderTopWidth: "6px" } }), "Offer running") : null));
+      el("span", {}, el("i", { style: { borderColor: "var(--cyan)", borderTopWidth: "6px", width: "6px", borderRadius: "3px" } }), isDB() ? "Latest day" : "Today so far"), (s.offers || []).length ? el("span", {}, el("i", { style: { borderColor: "var(--pink)", opacity: 0.5, borderTopWidth: "6px" } }), "Offer running") : null));
 }
 
 // A lesson: green rings where it was learned, pulses up to the root, then down to every merchant it now improves.
@@ -1369,7 +1391,7 @@ function showLesson(l, card) {
   from.slice(0, 14).forEach((m, i) => pulse(m, "up", TH.good, { dur: 1300, from: i * 70 }));
   const down = to.sort(() => Math.random() - 0.5).slice(0, 60);
   down.forEach((m, i) => pulse(m, "down", TH.signal, { dur: 1300, from: 1500 + i * 25, size: 0.6, onArrive: () => { m.flash = 0.8; m.flashCol = TH.signal; } }));
-  caption(`<b>Learned once</b> from ${num(l._learned_total ?? lessonCount(l.learned_from))} merchants → <b>shared</b> with ${num(ids ? to.length : lessonCount(l.applies_to))}${SCOPE.ids ? " in this view" : ""}: ${esc(l.title)}`, 8000);
+  caption(`<b>Learned once</b> from ${plural(l._learned_total ?? lessonCount(l.learned_from), "merchant")} → <b>shared</b> with ${num(ids ? to.length : lessonCount(l.applies_to))}${SCOPE.ids ? " in this view" : ""}: ${esc(l.title)}`, 8000);
 }
 
 let capTimer = null;
@@ -1384,7 +1406,7 @@ function renderLegend() {
   const tg = el("button", { class: "x", type: "button", title: "Show or hide the legend", onclick: () => { box.classList.toggle("min"); tg.textContent = box.classList.contains("min") ? "Legend +" : "–"; } }, "–");
   box.append(tg,
     el("div", { class: "lh" }, "Merchants"),
-    el("div", { class: "row" }, it(dot(TH.ok), "On track"), it(dot(TH.signal), "Has a signal"), it(dot(TH.urgent, true), "Urgent"), el("span", { class: "it" }, "size = revenue today")),
+    el("div", { class: "row" }, it(dot(TH.ok), "On track"), it(dot(TH.signal), "Has a signal"), it(dot(TH.urgent, true), "Urgent"), el("span", { class: "it" }, "size = revenue " + (isDB() ? "on the latest day" : "today"))),
     el("div", { class: "lh" }, "Platforms"),
     el("div", { class: "row" }, ...PLAT_ORDER.map((p) => it(dot(pcol(p)), plat(p).name))),
     el("div", { class: "lh" }, "Flows"),
@@ -1413,6 +1435,7 @@ function onSignal(s, quiet) {
   else if (!SEL.node) overviewSoon();
 }
 function onOutcome(o, merchantId) {
+  if (isDB()) return;
   const m = G.byId.get(merchantId); if (!m) return;
   if (!inScope(m)) return;
   pulse(m, "up", TH.good, { dur: 1500, onArrive: () => {
@@ -1468,7 +1491,7 @@ async function pollStatus() { try { D.status = await api("/status"); renderCount
 
 // Live notices need the admin token (the broker's monitor login); without it the page polls over HTTP.
 async function connectLive() {
-  if (MOCK) return false;
+  if (MOCK || isDB()) return false;
   await SB.adminToken();
   if (!token()) return false;
   let res; try { res = await fetch("/admin/live/monitor", { headers: { "X-Admin-Token": token() } }); } catch { res = null; }
@@ -1606,15 +1629,38 @@ function makeMock() {
 // =====================================================================================
 // Boot
 // =====================================================================================
+// The network view covers every merchant: it needs the root operator's admin token (asked once per tab).
+function networkGate() {
+  if (document.getElementById("net-gate")) return;
+  const input = el("input", { type: "password", placeholder: "Admin token", autocomplete: "off", "aria-label": "Admin token",
+    style: { flex: "1", padding: "10px 12px", borderRadius: "10px", border: "1px solid var(--line, #d0d5e2)", font: "inherit" } });
+  const wrap = el("div", { id: "net-gate", style: { position: "fixed", inset: "0", display: "grid", placeItems: "center", zIndex: "50",
+      background: "rgba(15, 23, 42, .35)", backdropFilter: "blur(4px)" } },
+    el("div", { class: "card", style: { width: "min(420px, calc(100vw - 32px))", padding: "24px", borderRadius: "16px", background: "var(--card, #fff)" } },
+      el("div", { class: "eyebrow" }, "SecondBrain network"),
+      el("h2", { style: { margin: "6px 0 8px" } }, "Admin token needed"),
+      el("p", { class: "muted", style: { margin: "0 0 14px" } }, "The network view shows every merchant, so it needs the root operator's admin token."),
+      el("form", { style: { display: "flex", gap: "8px" }, onsubmit: (e) => { e.preventDefault(); const v = input.value.trim(); if (!v) return;
+          try { sessionStorage.setItem("sb-admin-token", v); } catch {} location.reload(); } },
+        input, el("button", { class: "btn primary" }, "Open")),
+      el("p", { style: { marginTop: "14px", fontSize: "13px" } }, el("a", { href: "?mock=1" }, "See the demo data instead"))));
+  document.body.append(wrap); setTimeout(() => input.focus(), 50);
+}
+
 async function boot() {
   resize(); renderLegend(); renderCounts(); PANEL.render();
   requestAnimationFrame((t) => { lastT = t; frame(t); });
   let offline = false;
   if (!FORCE_MOCK) {
+    await SB.adminToken();
     try { await SB.engineFetch("/commerce/api/merchants", { onWait: () => caption("The engine is busy; connecting…", 2000) }); }
-    catch (e) { offline = true; }
+    catch (e) {
+      if (e.status === 401) { try { sessionStorage.removeItem("sb-admin-token"); } catch {} return networkGate(); }
+      offline = true;
+    }
   }
   if (FORCE_MOCK || offline) { MOCK = makeMock(); setMode("mock"); if (offline) caption("The Live Commerce engine isn't reachable, so this browser is showing <b>demo data</b>.", 8000); }
+  if (!MOCK) { try { const st = await getJSON("/status"); if (st?.source === "database") D.status = st; } catch {} }
   await refreshTree();
   if (!G.nodes.length) return;
   fitAll(true);
@@ -1653,6 +1699,7 @@ function showView(v) {
   $("g-h1").textContent = brain ? "Inside one merchant's brain: Haldiram's" : "One brain over the Shoppi merchants";
   $("g-how").innerHTML = brain ? "<b>How to read this:</b> the same SecondBrain that forecasts sales also keeps each merchant's knowledge. Brains are big circles, people orange, facts and events small dots; click any node for its relationships."
     : "<b>How to read this:</b> SecondBrain sits in the centre, each platform is a hub, each dot is a merchant (colour = status, size = revenue today). Orders and outcomes flow <b>up</b> the branches; forecasts and signals flow <b>down</b>. Click a merchant to open its brain.";
+  if (!brain && isDB()) $("g-how").innerHTML = $("g-how").innerHTML.replace("size = revenue today", "size = revenue on the latest day");
   const q = new URLSearchParams(location.search); brain ? q.set("view", "brain") : q.delete("view"); history.replaceState(null, "", "?" + q.toString());
   if (brain) KG.start(); else { resize(); }
 }

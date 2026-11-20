@@ -14,6 +14,7 @@ from typing import Annotated, Literal
 import httpx
 import psycopg
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse, JSONResponse, Response
 from psycopg.rows import dict_row
 from pydantic import BaseModel
@@ -21,6 +22,7 @@ from pydantic import BaseModel
 from secondbrain import admin, demo, evolution, learning, live, maintenance, platform_keys, relationships, signals, tree
 from secondbrain.commerce import ask as commerce_chat
 from secondbrain.commerce import contract as commerce
+from secondbrain.commerce import db_engine as commerce_db
 from secondbrain.commerce import tsdb_api
 from secondbrain.documents import UnsupportedDocument, extract_text
 from secondbrain.forecasting.api import build_router as forecast_router
@@ -414,7 +416,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         except httpx.TimeoutException:   # running, but busy (a big batch or the first history fit)
             raise HTTPException(504, "The Live Commerce engine is busy; try again in a moment")
         except httpx.HTTPError:
-            raise HTTPException(503, "The Live Commerce engine is not running (uv run python -m secondbrain.commerce)")
+            # No simulator (e.g. Cloud Run): answer reads from the database's real sales, stock,
+            # forecasts and signals. Simulator controls (speed, offers, time machine) don't apply.
+            # Every merchant's data, read with the admin login: the root operator's view only.
+            require_admin(request.headers.get("x-admin-token"))
+            if request.method != "GET":
+                return JSONResponse({"detail": "Showing the database's real data; the live simulator isn't running, "
+                                               "so its controls are off."}, status_code=409)
+            from starlette.concurrency import run_in_threadpool
+
+            def from_db():
+                with psycopg.connect(settings.admin_database_url) as conn:
+                    return commerce_db.answer(conn, path, dict(request.query_params))
+
+            code, body = await run_in_threadpool(from_db)
+            return JSONResponse(jsonable_encoder(body), status_code=code)
         return Response(r.content, r.status_code, media_type=r.headers.get("content-type"))
 
     @app.get("/timescale", include_in_schema=False)

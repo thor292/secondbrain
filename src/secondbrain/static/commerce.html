@@ -276,6 +276,13 @@
 
   @media (max-width: 720px) { .wall { padding-left: 16px; padding-right: 16px; } .card { padding: 15px; } .card.tight { padding: 14px; } }
   @media (prefers-reduced-motion: reduce) { .drawer { transition: none; } }
+
+  /* ---------- database mode: real sales from the database, no simulator ---------- */
+  body.db .ticker, body.db #speed, body.db #startwrap, body.db #clk-t, body.db .db-hide { display: none !important; }
+  body.db .wall { padding-bottom: 32px; }
+  body.db .kstrip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  body.db .g2b { grid-template-columns: minmax(0, 1fr); }
+  @media (max-width: 640px) { body.db .kstrip { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 </style>
 </head>
 <body>
@@ -502,7 +509,34 @@ const S = {
   accHist: [], baseHist: [], opsHist: [], revHist: [], platHist: {},
   rates: [0, 0, 0, 0, 0, 0],
   tickerOrders: 0,
+  db: false,               // the server answers from the real database (no simulator): status.source === "database"
 };
+
+// Database mode: the engine API is served from real sales, stock, forecasts and signals. There is no
+// simulator, so live-only parts (controls, rates, latency, offers, ticker) are hidden and wording is honest.
+function enterDbMode() {
+  if (S.db) return;
+  S.db = true;
+  document.body.classList.add("db");
+  const txt = (sel, t) => { const n = document.querySelector(sel); if (n) n.textContent = t; };
+  txt(".lc-head .eyebrow", "SecondBrain · decision signals from real sales");
+  txt("#map-sub", "One dot per connected merchant. Hover for its latest sales day; click to open the store.");
+  const mapH = $("map-sub")?.previousElementSibling; if (mapH) mapH.textContent = "Every store on one map";
+  const feedH = $("feed-sub")?.previousElementSibling; if (feedH) feedH.textContent = "Signals from the latest forecast run";
+  txt("#fc-sub", "Actual sales vs the forecast, with its 80% band.");
+  $("pipe").closest("section").classList.add("db-hide");
+  $("learn").closest("section").classList.add("db-hide");
+  // KPI strip: latest-day totals instead of live rates; tiles with no data are hidden
+  for (const k of ["cust", "off", "upl", "lat"]) K[k].node.classList.add("db-hide");
+  K.ops.node.querySelector(".k").textContent = "Units sold · latest day";
+  K.ops.tw.fmt = num; K.ops.tw.rate = false;
+  K.rev.node.querySelector(".k").textContent = "Revenue · latest day";
+  for (const k of ["ops", "rev"]) K[k].sp?.node.classList.add("db-hide");
+  K.acc.node.title = "100% − WAPE of daily sales on days the forecast never saw (backtest); the subline compares a naive baseline and the product-level score";
+  LEGEND.built = ""; LEGEND.build();
+  setMode(S.mode);
+}
+const latestDay = () => (S.stats?.sim_ts ? String(S.stats.sim_ts).slice(0, 10) : null);
 
 // ---------------------------------------------------------------- data access
 const token = () => { try { return sessionStorage.getItem("sb-admin-token"); } catch { return null; } };
@@ -569,7 +603,7 @@ const HEAD = {
     const cur = S.sim.running ? S.sim.key : "pause";
     for (const b of $("speed").children) b.classList.toggle("on", b.dataset.k === cur);
     const w = $("startwrap");
-    if (S.stats && !S.sim.running) {
+    if (S.stats && !S.sim.running && !S.db) {
       if (!w.firstChild) w.append(el("button", { class: "btn primary start-btn", onclick: () => { S.sim.running = true; this.render(); control({ cmd: "start" }); } }, "▶ Start the live feed"));
     } else w.replaceChildren();
     const f = S.stats?.festival;
@@ -577,11 +611,16 @@ const HEAD = {
       const d = f.days_to;
       $("fest").replaceChildren(el("span", { class: "fest" }, festIcon(f.name) + " " + (d <= 0 ? `${f.name} today` : d === 1 ? `${f.name} tomorrow` : `${f.name} in ${d} days`)));
     } else $("fest").replaceChildren();
-    if (S.stats) $("sub-n").textContent = `· ${num(S.stats.merchants)} merchants · ${num(S.stats.customers)} customers`;
+    if (S.stats) $("sub-n").textContent = `· ${num(S.stats.merchants)} merchants` + (S.db && !S.stats.customers ? "" : ` · ${num(S.stats.customers)} customers`);
   },
   // The simulated clock runs between stats messages: sim time at sent_ms plus speed × elapsed wall time.
   tick() {
     if (!isFinite(S.sim.ms)) return;
+    if (S.db) { // no simulated clock: show the latest day that has sales
+      const d = new Date(S.sim.ms), ds = `${DOW[d.getUTCDay()]}, ${d.getUTCDate()} ${MON[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+      if (this._d !== ds + "db") { this._d = ds + "db"; $("clk-d").textContent = `Latest sales day · ${ds}`; }
+      return;
+    }
     let t = S.sim.ms + (S.sim.running ? S.sim.speed * (Date.now() - S.sim.sentWall) : 0);
     if (isFinite(S.sim.shown) && t < S.sim.shown && S.sim.shown - t < Math.max(2000, S.sim.speed * 1500)) t = S.sim.shown; // never tick backwards
     S.sim.shown = t;
@@ -604,6 +643,10 @@ const simNow = () => (isFinite(S.sim.shown) ? S.sim.shown : S.sim.ms);
 function setMode(mode, label) {
   S.mode = mode;
   const b = $("mode");
+  if (S.db && mode !== "mock") {
+    b.className = "mode on"; b.textContent = "Database";
+    b.title = "Real sales, stock, forecasts and signals from the database"; return;
+  }
   b.className = "mode " + (mode === "mock" ? "demo" : label === "off" ? "" : "on");
   b.textContent = mode === "mock" ? "Demo feed" : label === "off" ? "Reconnecting…" : mode === "poll" ? "Live (HTTP)" : "Live";
   b.title = mode === "mock" ? "Generated in this browser: the commerce engine is not connected" : "Connected to the Live Commerce engine";
@@ -669,6 +712,7 @@ function onStats(m) {
       r(p.signals_raised, q.signals_raised), r(p.delivered, q.delivered)];
   } else S.rates = [m.msgs_per_sec || 0, m.msgs_per_sec || 0, m.orders_per_sec || 0, 0, 0, 0];
   S.prevStats = prev; S.stats = m; S.statsWall = now;
+  if (m.source === "database") enterDbMode();
   const sp = m.speed, key = typeof sp === "string" ? sp : Object.keys(SPEED_VAL).find((k) => SPEED_VAL[k] === sp);
   S.sim.key = key || S.sim.key || "1h";
   S.sim.speed = typeof sp === "number" ? sp : SPEED_VAL[key] || 0;
@@ -678,8 +722,13 @@ function onStats(m) {
   if (S.merchants.size === 0 || (m.merchants && m.merchants > S.merchants.size)) refreshMerchants();
 
   // KPIs
-  K.ops.tw.set(m.orders_per_sec);
-  K.ops.sub.textContent = `${num(m.orders_total)} orders · ${num(m.msgs_per_sec)} msg/s`;
+  if (S.db) {
+    K.ops.tw.set(m.units_total ?? m.orders_total);
+    K.ops.sub.textContent = latestDay() ? `on ${fmtDayShort(latestDay())} · ${num(m.merchants)} merchants` : " ";
+  } else {
+    K.ops.tw.set(m.orders_per_sec);
+    K.ops.sub.textContent = `${num(m.orders_total)} orders · ${num(m.msgs_per_sec)} msg/s`;
+  }
   K.cust.tw.set(m.active_customers_today);
   K.cust.sub.textContent = m.customers ? `of ${num(m.customers)} customers` : " ";
   if (prev && m.signals_total > prev.signals_total) flashKpi("sig");
@@ -707,7 +756,7 @@ function onStats(m) {
   if (a.wape != null && (!S._accAt || now - S._accAt > 1500)) { S._accAt = now; push(S.accHist, 100 * (1 - a.wape), 160); push(S.baseHist, a.baseline_wape != null ? 100 * (1 - a.baseline_wape) : 0, 160); }
   for (const [pid, p] of Object.entries(m.platforms || {})) { const h = (S.platHist[pid] ||= []); push(h, p.orders_per_sec, 60); }
 
-  HEAD.render(); LEGEND.update(); PIPE.update(); LEARN.update(); FEED.meta();
+  HEAD.render(); LEGEND.update(); if (!S.db) { PIPE.update(); LEARN.update(); } FEED.meta();
 }
 
 // ---------------------------------------------------------------- 3. map of India
@@ -807,7 +856,7 @@ const MAP = {
     c.strokeStyle = rgba(TK.violet, 0.6); c.beginPath(); c.arc(hx, hy, 19, -this.spin * 0.7, -this.spin * 0.7 + 3.4); c.stroke();
     c.fillStyle = TK.violet; c.beginPath(); c.arc(hx, hy, 7, 0, 6.283); c.fill();
     c.fillStyle = TK.text; c.font = "700 12px Inter, system-ui"; c.textAlign = "center"; c.fillText("SecondBrain", hx, hy + 38);
-    c.fillStyle = TK.muted; c.font = "500 10.5px Inter, system-ui"; c.fillText(S.stats ? `${num(S.stats.series)} live forecasts` : "", hx, hy + 52);
+    c.fillStyle = TK.muted; c.font = "500 10.5px Inter, system-ui"; c.fillText(S.stats ? `${num(S.stats.series)} ${S.db ? "" : "live "}forecasts` : "", hx, hy + 52);
     if (this.hover) { const m = this.hover; c.strokeStyle = TK.text; c.lineWidth = 1.5; c.beginPath(); c.arc(m.px, m.py, R + 5, 0, 6.283); c.stroke(); }
   },
   pick(ev) {
@@ -822,7 +871,7 @@ const MAP = {
       this.cv.style.cursor = m ? "pointer" : "crosshair";
       if (!m) { this.tip.style.opacity = 0; return; }
       this.tip.replaceChildren(el("b", {}, m.name), el("div", { class: "muted" }, `${plat(m.platform).name} · ${m.city} · ${m.category || ""}`),
-        el("div", {}, `${num(m.orders_today)} orders today · ${inr(m.revenue_today)}`),
+        el("div", {}, S.db ? `${num(m.orders_today)} units · ${inr(m.revenue_today)} on the latest day` : `${num(m.orders_today)} orders today · ${inr(m.revenue_today)}`),
         m.open_signals ? el("div", { class: "warn" }, `${m.open_signals} open signal${m.open_signals === 1 ? "" : "s"}`) : null);
       this.tip.style.left = Math.min(this.w - 190, x + 14) + "px"; this.tip.style.top = Math.max(0, y - 20) + "px"; this.tip.style.opacity = 1;
     });
@@ -843,22 +892,26 @@ const LEGEND = {
     const kinds = { shoppi: window.SHOPPI_WORLD?.platform?.kind || "Marketplace merchants" };
     $("legend").replaceChildren(...pids.map((pid) => {
       const n = S.list.filter((m) => m.platform === pid).length;
-      const opsN = el("span", {}, "—"), ops = el("div", { class: "ops" }, opsN, el("small", {}, " orders/s")), sp = makeSpark(pcol(pid), { h: 34 });
+      const opsN = el("span", {}, "—"), ops = el("div", { class: "ops" }, opsN, el("small", {}, S.db ? " units · latest day" : " orders/s")), sp = makeSpark(pcol(pid), { h: 34 });
+      if (S.db) sp.node.classList.add("db-hide");
       this.rows[pid] = { ops, sp, tw: new Tween(opsN, (v) => num(v), true) };
       const card = el("div", { class: "plat", style: `--pc: ${pcol(pid)}` },
         el("div", { class: "nm" }, el("i"), plat(pid).name),
         el("div", { class: "meta" }, `${num(n)} merchants · ${kinds[pid] || "connected"}`), ops, sp.node);
       return card;
-    }), el("div", { class: "mapnote" }, el("b", {}, `${num(S.list.length)} merchants`), " streaming orders into one brain. Click any dot to open the store."));
+    }), S.db ? el("div", { class: "mapnote" }, el("b", {}, `${num(S.list.length)} merchants`), el("span", { id: "mapnote-rev" }, ""), " Click any dot to open the store.")
+      : el("div", { class: "mapnote" }, el("b", {}, `${num(S.list.length)} merchants`), " streaming orders into one brain. Click any dot to open the store."));
     this.update();
   },
   update() {
     const P = S.stats?.platforms || {};
     for (const [pid, r] of Object.entries(this.rows)) {
       const p = P[pid]; if (!p) continue;
+      if (S.db) { r.tw.set(p.units_total ?? p.orders_total); continue; }
       r.tw.set(p.orders_per_sec);
       r.sp.update(S.platHist[pid] || []);
     }
+    const nr = $("mapnote-rev"); if (S.db && nr && S.stats) nr.textContent = ` · latest day ${inr(S.stats.revenue_total, 2)}.`;
   },
 };
 
@@ -1023,7 +1076,7 @@ const FEED = {
     this.shown++; this.meta();
     FOCUS.maybeFollow(s);
   },
-  canApply(s) { return !s.autopilot && ["discount", "coupon"].includes(s.action?.type); },
+  canApply(s) { return !S.db && !s.autopilot && ["discount", "coupon"].includes(s.action?.type); },
   card(s) {
     const [ic] = KIND[s.kind] || ["•"];
     const ex = s.expected || {}, a = s.action || {};
@@ -1033,15 +1086,15 @@ const FEED = {
     if (a.type === "restock" && a.units) imp.push(el("span", { class: "chip warn" }, `Order ${num(a.units)} units`));
     if (a.type === "hold_price") imp.push(el("span", { class: "chip" }, "Hold price"));
     if (ex.uplift_units) imp.push(el("span", { class: "chip good" }, `+${num(ex.uplift_units)} units`));
-    if (ex.revenue) imp.push(el("span", { class: "chip" }, `${inr(ex.revenue)} revenue`));
+    if (ex.revenue) imp.push(el("span", { class: "chip" }, `${inr(ex.revenue)} ${S.db && (s.kind === "restock" || a.type === "restock") ? "sales protected" : "revenue"}`));
     if (ex.margin != null) imp.push(el("span", { class: "chip" }, `${Math.round(ex.margin * 100)}% margin`));
     const lat = s.latency_ms != null ? el("span", { class: "lat" }, "⚡ raised ", el("b", {}, ms(s.latency_ms)), " after the order")
-      : el("span", { class: "lat" }, "🌙 from the end-of-day re-plan");
+      : el("span", { class: "lat" }, S.db ? "📊 from the latest forecast run" : "🌙 from the end-of-day re-plan");
     const card = el("article", { class: `sig ${s.urgency || "low"} ${reduced() ? "" : "fresh"}`, "data-id": s.id, onclick: (e) => { if (!e.target.closest("button")) DRAWER.open(s.merchant, s.sku); } },
       el("div", { class: "top" }, el("span", { class: "kic" }, ic), el("span", { class: "urg" }, s.urgency || ""),
         el("span", { class: "pdot", style: { background: pcol(s.platform) } }),
         el("span", { class: "where" }, el("b", {}, s.merchant_name || s.merchant), " · " + (s.city || "")),
-        el("span", { class: "when" }, s.sim_ts ? String(s.sim_ts).slice(11, 16) : "")),
+        el("span", { class: "when" }, s.sim_ts ? (S.db ? fmtDayShort(s.sim_ts) : String(s.sim_ts).slice(11, 16)) : "")),
       el("h3", {}, s.title || "Signal"), s.detail ? el("p", { class: "det" }, s.detail) : null,
       imp.length ? el("div", { class: "imp" }, imp) : null,
       el("div", { class: "meter" }, el("span", {}, "Confidence"), el("div", { class: "bar" }, el("i")), el("b", {}, pct0(s.confidence))),
@@ -1085,7 +1138,8 @@ const FEED = {
     $("feed-meta").replaceChildren(el("span", { class: "chip accent" }, `${num(total)} raised`),
       ...kinds.map(([k, n]) => el("span", { class: "chip" }, `${KIND[k]?.[0] || "•"} ${KIND[k]?.[1] || k} ${num(n)}`)),
       ...(this.queue.length ? [el("span", { class: "chip warn" }, `${this.queue.length} queued`)] : []));
-    $("feed-sub").textContent = `Showing the latest ${Math.min(this.MAX, this.shown)}. Each one is measured from the order that triggered it.`;
+    $("feed-sub").textContent = S.db ? `Real decision signals from the latest forecast run. Showing the latest ${Math.min(this.MAX, this.shown)}.`
+      : `Showing the latest ${Math.min(this.MAX, this.shown)}. Each one is measured from the order that triggered it.`;
   },
 };
 
@@ -1221,10 +1275,10 @@ function makeChart(host) {
       const bx = xs(ti) + sw * 0.18, bw = sw * 0.64;
       if (td.forecast != null) g.append(svg("rect", { x: bx, y: y(td.forecast), width: bw, height: Math.max(0, y(0) - y(td.forecast)), fill: "none", stroke: "var(--violet)", "stroke-dasharray": "3 3", rx: 3 }));
       if (td.actual != null) g.append(svg("rect", { x: bx, y: y(td.actual), width: bw, height: Math.max(0, y(0) - y(td.actual)), fill: "url(#todayFill)", rx: 3 }));
-      if (td.expected_so_far != null) g.append(svg("line", { x1: bx - 5, x2: bx + bw + 5, y1: y(td.expected_so_far), y2: y(td.expected_so_far), stroke: "var(--text)", "stroke-width": 2.2 }),
+      if (td.expected_so_far != null && !S.db) g.append(svg("line", { x1: bx - 5, x2: bx + bw + 5, y1: y(td.expected_so_far), y2: y(td.expected_so_far), stroke: "var(--text)", "stroke-width": 2.2 }),
         svg("text", { x: bx + bw + 8, y: y(td.expected_so_far) + 4, style: "fill: var(--text); font-weight: 700" }, "expected by now"));
       nowLine = svg("line", { y1: P.t - 6, y2: H - P.b, stroke: "var(--cyan)", "stroke-width": 1.6, "stroke-dasharray": "4 4" });
-      nowTxt = svg("text", { y: P.t - 9, "text-anchor": "middle", style: "fill: var(--cyan); font-weight: 800" }, "NOW");
+      nowTxt = svg("text", { y: P.t - 9, "text-anchor": "middle", style: "fill: var(--cyan); font-weight: 800" }, S.db ? "LATEST" : "NOW");
       g.append(nowLine, nowTxt);
     }
     // x labels: every week
@@ -1241,7 +1295,7 @@ function makeChart(host) {
       cross.setAttribute("x1", xc(i)); cross.setAttribute("x2", xc(i)); cross.setAttribute("opacity", 1);
       const dt = new Date(dayMs(p.day));
       tip.replaceChildren(el("b", {}, `${DOW[dt.getUTCDay()]} ${fmtDayShort(p.day)}`),
-        p.today ? el("div", {}, `Sold so far ${num(p.today.actual)} · expected by now ${num(p.today.expected_so_far)}`) : null,
+        p.today ? el("div", {}, S.db ? `Sold ${num(p.today.actual)}` + (p.today.forecast != null ? ` · forecast ${num(p.today.forecast)}` : "") : `Sold so far ${num(p.today.actual)} · expected by now ${num(p.today.expected_so_far)}`) : null,
         p.a != null ? el("div", {}, `Sold ${num(p.a)} units`) : null,
         p.f != null ? el("div", {}, `Forecast ${num(p.f)} units`) : null,
         p.lo != null && p.hi != null && p.lo !== p.hi ? el("div", { class: "muted" }, `80% range ${num(p.lo)}–${num(p.hi)}`) : null);
@@ -1269,6 +1323,13 @@ function todayTiles(d) {
   const td = d.today || {}, a = td.actual, e = td.expected_so_far;
   const dev = a != null && e ? (a - e) / e : null;
   const tile = (k, v, s, cls) => el("div", { class: "t" }, el("div", { class: "k" }, k), el("div", { class: "v " + (cls || "") }, v), el("div", { class: "s" }, s));
+  if (S.db) return el("div", { class: "fc-today" },
+    tile("Sold · latest day", a == null ? "—" : num(a), td.day ? fmtDayShort(td.day) + ", actual" : "actual"),
+    tile("Forecast · latest day", td.forecast == null ? "—" : num(td.forecast), td.forecast == null ? "forecasts start the next day" : "units for the day"),
+    td.forecast == null || !td.forecast ? tile("vs forecast", "—", "no forecast for the latest day; see the next 14 days")
+      : tile("vs forecast", (a - td.forecast >= 0 ? "+" : "") + Math.round(((a - td.forecast) / td.forecast) * 100) + "%", a >= td.forecast ? "ahead of forecast" : "behind forecast",
+        Math.abs((a - td.forecast) / td.forecast) < 0.08 ? "" : a > td.forecast ? "good" : "bad"),
+    tile("Model", d.wape != null ? (100 * (1 - d.wape)).toFixed(1) + "%" : "—", d.model ? `${d.model} accuracy` : "accuracy"));
   return el("div", { class: "fc-today" },
     tile("Sold today", num(a), "so far, actual"),
     tile("Expected by now", num(e), `of ${num(td.forecast)} forecast for the day`),
@@ -1296,7 +1357,8 @@ const FOCUS = {
   },
   async refresh(force) {
     if (!this.m || !this.sku || this.busy || (document.hidden && !force)) return;
-    this.busy = true;
+    if (S.db && !force && performance.now() - (this._at || 0) < 30000) return; // database data changes slowly
+    this.busy = true; this._at = performance.now();
     const m = this.m, sku = this.sku;
     try {
       const d = await api(`/merchants/${encodeURIComponent(m)}/series/${encodeURIComponent(sku)}`);
@@ -1304,14 +1366,14 @@ const FOCUS = {
       const mer = S.merchants.get(m), sg = [...S.signals.values()].reverse().find((s) => s.merchant === m && s.sku === sku);
       const product = d.product || sg?.product || sku;
       $("fc-title").replaceChildren(product, el("span", { class: "muted", style: { fontWeight: 500 } }, ` · ${mer?.name || sg?.merchant_name || m} · ${mer?.city || sg?.city || ""}`));
-      $("fc-sub").textContent = sg ? `Signal: ${sg.title}` : "Actual sales vs the live forecast, with its 80% band.";
+      $("fc-sub").textContent = sg ? `Signal: ${sg.title}` : S.db ? "Actual sales vs the forecast, with its 80% band." : "Actual sales vs the live forecast, with its 80% band.";
       const host = $("fc-host");
       if (!this.chart || this._k !== m + "|" + sku) {
         this._k = m + "|" + sku;
         host.replaceChildren(el("div", { id: "fc-tiles" }), el("div", { id: "fc-chart" }),
           el("div", { class: "legend" }, el("span", {}, el("i", { style: { background: "var(--muted)" } }), "Actual"), el("span", {}, el("i", { style: { background: "var(--grad)" } }), "Forecast"),
-            el("span", {}, el("i", { style: { background: "rgba(139,123,255,.35)", height: "10px" } }), "80% range"), el("span", {}, el("i", { style: { background: "var(--cyan)" } }), "Today so far"),
-            el("span", {}, el("i", { style: { background: "rgba(244,114,182,.5)", height: "10px" } }), "Offer window")));
+            el("span", {}, el("i", { style: { background: "rgba(139,123,255,.35)", height: "10px" } }), "80% range"), el("span", {}, el("i", { style: { background: "var(--cyan)" } }), S.db ? "Latest day" : "Today so far"),
+            S.db ? null : el("span", {}, el("i", { style: { background: "rgba(244,114,182,.5)", height: "10px" } }), "Offer window")));
         this.chart = makeChart($("fc-chart"));
       }
       $("fc-tiles").replaceChildren(todayTiles(d));
@@ -1341,7 +1403,7 @@ const DRAWER = {
       el("h2", {}, m?.name || id), el("div", { class: "muted", style: { fontSize: "13px" } }, m?.category || ""),
       el("div", { id: "dr-body" }, el("div", { class: "shimmer", style: { height: "220px", marginTop: "16px" } })));
     d.classList.add("open"); $("scrim").classList.add("open"); d.scrollTop = 0;
-    clearInterval(this.timer); this.timer = setInterval(() => this.refresh(), 1500);
+    clearInterval(this.timer); this.timer = setInterval(() => this.refresh(), S.db ? 30000 : 1500);
     this.refresh();
   },
   close() { this.id = null; clearInterval(this.timer); $("drawer").classList.remove("open"); $("scrim").classList.remove("open"); },
@@ -1365,21 +1427,21 @@ const DRAWER = {
         el("div", { class: "row", style: { marginTop: "8px" } }, el("button", { class: "btn sm", onclick: () => { FOCUS.set(this.id, this.sku, true); SB.toast("📌", "Pinned to the wall", "The forecast panel now shows this product.", { ms: 2500 }); } }, "📌 Pin to wall")),
         el("div", { class: "subh" }, "Open signals"), el("div", { id: "dr-sigs" }),
         el("div", { class: "subh" }, "Products · stock cover"), el("div", { style: { overflowX: "auto" } }, el("table", { class: "prods", id: "dr-prods" })),
-        el("div", { class: "subh" }, "Recent outcomes"), el("div", { id: "dr-outs", class: "outs" }));
+        el("div", { class: "subh" + (S.db ? " db-hide" : "") }, "Recent outcomes"), el("div", { id: "dr-outs", class: "outs" + (S.db ? " db-hide" : "") }));
       this.chart = makeChart($("dr-chart"));
     }
     const rev = d.revenue_today ?? S.merchants.get(this.id)?.revenue_today, ord = d.orders_today ?? S.merchants.get(this.id)?.orders_today;
     const open = d.open_signals || [];
     $("dr-stats").replaceChildren(
-      el("div", {}, el("div", { class: "k" }, "Orders today"), el("div", { class: "v" }, num(ord))),
-      el("div", {}, el("div", { class: "k" }, "Revenue today"), el("div", { class: "v" }, inr(rev))),
+      el("div", {}, el("div", { class: "k" }, S.db ? "Units sold · latest day" : "Orders today"), el("div", { class: "v" }, num(ord))),
+      el("div", {}, el("div", { class: "k" }, S.db ? "Revenue · latest day" : "Revenue today"), el("div", { class: "v" }, inr(rev))),
       el("div", {}, el("div", { class: "k" }, "Open signals"), el("div", { class: "v " + (open.length ? "warn" : "") }, Array.isArray(open) ? open.length : num(open))));
     const p = prods.find((x) => x.sku === this.sku);
     $("dr-fc-title").textContent = p ? `${p.name}` : this.sku || "";
     if (series) { $("dr-tiles").replaceChildren(todayTiles(series)); this._k = this.id + "|" + this.sku; this.chart.set(series, this._k); }
     $("dr-sigs").replaceChildren(...(Array.isArray(open) && open.length ? open.slice(0, 6).map((s) => el("div", { class: "dsig " + (s.urgency || ""), onclick: () => { this.sku = s.sku; this._k = null; this.refresh(); } },
       el("b", {}, s.title), el("div", { class: "muted" }, s.detail || ""))) : [el("div", { class: "muted", style: { fontSize: "13px" } }, "Nothing needs attention right now.")]));
-    const head = el("thead", {}, el("tr", {}, el("th", {}, "Product"), el("th", {}, "Price"), el("th", {}, "Stock"), el("th", {}, "Cover"), el("th", {}, "Today vs forecast")));
+    const head = el("thead", {}, el("tr", {}, el("th", {}, "Product"), el("th", {}, "Price"), el("th", {}, "Stock"), el("th", {}, "Cover"), el("th", {}, S.db ? "Latest day: sold vs forecast" : "Today vs forecast")));
     const rows = prods.map((x) => {
       const cover = x.cover_days ?? x.cover, lead = x.lead_days ?? 3;
       const ta = x.today?.actual ?? x.today_actual ?? x.actual_today, tf = x.today?.forecast ?? x.today_forecast ?? x.forecast_today;
@@ -1388,7 +1450,7 @@ const DRAWER = {
         el("td", {}, x.name), el("td", {}, inrFull(x.price)), el("td", {}, num(x.stock)),
         el("td", {}, cover == null ? "—" : el("span", { class: "cov " + (cover < lead ? "low" : cover < lead * 2 ? "mid" : "ok") }, cover >= 99 ? "99+ d" : cover.toFixed(1) + " d")),
         el("td", {}, el("div", { style: { display: "flex", gap: "8px", alignItems: "center" } }, el("div", { class: "tbar" }, el("i", { style: { width: ratio * 100 + "%" } })),
-          el("span", { class: "muted", style: { fontSize: "12px", whiteSpace: "nowrap" } }, `${num(ta)} / ${num(tf)}`))));
+          el("span", { class: "muted", style: { fontSize: "12px", whiteSpace: "nowrap" } }, S.db && tf == null ? (ta == null ? "—" : `${num(ta)} sold · no forecast`) : `${num(ta)} / ${num(tf)}`))));
     });
     $("dr-prods").replaceChildren(head, el("tbody", {}, rows));
     const outs = d.outcomes || d.recent_outcomes || [];
@@ -1462,7 +1524,7 @@ function frame(now) {
     const tw = K.rev.tw; if (tw.v == null) tw.set(target); else tw.t = Math.max(tw.t ?? 0, target);
   }
   for (const t of TWEENS) t.step(Math.min(1000, raw));
-  if (S.stats && K.rev.tw.v != null) { const s = `${inrFull(K.rev.tw.v)} · ${inr(S.stats.revenue_per_sec)}/s`; if (K.rev.sub.textContent !== s) K.rev.sub.textContent = s; }
+  if (S.stats && K.rev.tw.v != null) { const s = S.db ? `${inrFull(K.rev.tw.v)} · ${num(S.stats.merchants)} merchants` : `${inrFull(K.rev.tw.v)} · ${inr(S.stats.revenue_per_sec)}/s`; if (K.rev.sub.textContent !== s) K.rev.sub.textContent = s; }
   HEAD.tick();
   MAP.draw(now, dt); PIPE.draw(now, dt); TICKER.step(dt);
   FOCUS.chart?.tick(); DRAWER.chart?.tick();
@@ -1530,8 +1592,8 @@ async function startLive(merchants) {
   }
   // No live broker: fall back to polling the engine's HTTP API.
   setMode("poll");
-  setInterval(async () => { try { onStats(await api("/status")); } catch {} }, 500);
-  setInterval(async () => { try { const l = await api("/signals?limit=20"); for (const s of [...l].reverse()) onSignal(s); } catch {} }, 2000);
+  setInterval(async () => { try { onStats(await api("/status")); } catch {} }, S.db ? 30000 : 500);
+  setInterval(async () => { try { const l = await api("/signals?limit=20"); for (const s of [...l].reverse()) onSignal(s); } catch {} }, S.db ? 30000 : 2000);
 }
 
 async function boot() {
@@ -1539,8 +1601,9 @@ async function boot() {
   if (q.get("mock") === "1") return startMock("forced");
   let merchants;
   const waiting = () => { const b = $("mode"); b.className = "mode"; b.textContent = "Engine busy, connecting…"; };
+  await SB.adminToken();
   try { merchants = await SB.engineFetch("/commerce/api/merchants", { onWait: waiting }); }
-  catch { return startMock("offline"); }
+  catch (e) { if (e.status === 401) { try { sessionStorage.removeItem("sb-admin-token"); } catch {} return gate(); } return startMock("offline"); }
   if (!Array.isArray(merchants)) return startMock("offline");
   await SB.adminToken();
   if (!token()) return gate();

@@ -139,7 +139,8 @@ const SB = (() => {
     for (let n = 0; ; n++) {
       const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), timeout);
       try {
-        const r = await fetch(url, { signal: ctl.signal });
+        let tok = null; try { tok = sessionStorage.getItem("sb-admin-token"); } catch {}
+        const r = await fetch(url, { signal: ctl.signal, headers: tok ? { "X-Admin-Token": tok } : {} });
         if (r.ok) return await r.json();
         if (r.status !== 504) { const e = new Error(r.statusText); e.status = r.status; throw e; }
       } catch (e) {
