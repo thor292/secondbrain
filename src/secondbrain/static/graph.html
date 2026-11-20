@@ -253,6 +253,7 @@
 </section>
 
 <script src="/static/sb.js"></script>
+<script src="/static/shoppi_world.js"></script>
 <script>
 // =====================================================================================
 // The commerce network: SecondBrain -> platforms -> categories (or cities) -> merchants -> products.
@@ -269,7 +270,7 @@ const LIGHT = matchMedia("(prefers-color-scheme: light)");
 const isLight = () => LIGHT.matches && document.documentElement.dataset.theme !== "dark";
 
 // ---------------------------------------------------------------- shared look (same as the Live Commerce wall)
-const PLAT = { shoppi: ["Shoppi", "#E4572E", "#c2410c"], shopify: ["Shopify", "#95BF47", "#5f8f1d"], reliance: ["Reliance Retail", "#4f8cff", "#2563eb"], dmart: ["DMart", "#f5a524", "#d97706"] };
+const PLAT = { shoppi: ["Shoppi", "#E4572E", "#c2410c"] };
 const PLAT_ORDER = ["shoppi"];
 const PLAT_EXTRA = [["#f472b6", "#db2777"], ["#33d6f2", "#0e9fbf"], ["#a78bfa", "#7c3aed"]];
 const platCache = {};
@@ -395,13 +396,13 @@ function allMerchants() { const out = []; for (const p of D.hq?.platforms || [])
 function demoLessons(list, scope = {}) {
   const h = (s) => { let x = 2166136261; for (let i = 0; i < s.length; i++) x = Math.imul(x ^ s.charCodeAt(i), 16777619); return x >>> 0; };
   const T = [
-    ["price_response", ["Fashion"], null, "Fashion shoppers answer small discounts strongly: 10% off lifts units about 22%.", "Measured on applied offers across Shopify and Reliance Trends stores; the category prior was too cautious.", -2.2, -1.7],
-    ["festival_lift", ["Home", "Home Decor"], null, "Home and décor sell 2.6× normal in the five days before Diwali.", "Learned from last week's Dhanteras run-up; every home merchant's forecast now carries the lift.", 2.6, 1.8],
-    ["no_discount", ["Grocery", "Hypermarket"], null, "Staples sell without discounts in Diwali week; discounting them only gives margin away.", "Discounted staples moved no extra units in 9 of 11 trials.", -0.4, -1.1],
-    ["winback", ["Beauty"], null, "A ₹50 coupon brings back about 1 in 3 lapsed beauty regulars.", "Win-back coupons were redeemed by 34% of lapsed customers, against 20% assumed.", 0.34, 0.2],
-    ["restock", ["Electronics", "Electronics Accessories"], null, "Reorder electronics 6 days before a festival: suppliers slow down in the last week.", "Lead times stretched from 3 to 6 days ahead of Dussehra; restock signals now fire earlier.", 6, 3],
-    ["surge", ["Hypermarket"], "dmart", "Hypermarket demand peaks on Saturday evenings; hold prices then instead of discounting.", "Saturday 5–9 pm orders run 1.3× the weekday rate across DMart stores.", 1.3, 1.1],
-    ["price_response", ["Gourmet"], null, "Sweets and dry-fruit boxes respond to festive bundles more than to straight discounts.", "Bundled offers beat equal-value discounts at 6 of 8 gourmet stores.", -1.3, -1.6],
+    ["price_response", ["Fashion"], null, "Fashion shoppers answer small discounts strongly: 10% off kurtas and footwear lifts units about 22%.", "Measured on applied offers at FabIndia and Bata; the category prior was too cautious.", -2.2, -1.7],
+    ["festival_lift", ["Gourmet"], null, "Namkeen and sweets sell 2.6× normal in the five days before Diwali.", "Learned from Haldiram's Dhanteras run-up; gifting packs led the lift and the forecast now carries it.", 2.6, 1.8],
+    ["no_discount", ["Grocery"], null, "Staples sell without discounts in Diwali week; discounting them only gives margin away.", "Discounted atta, dal and oil at BigBasket moved no extra units in 9 of 11 trials.", -0.4, -1.1],
+    ["winback", ["Grocery"], null, "A ₹50 coupon brings back about 1 in 3 lapsed grocery regulars.", "Win-back coupons at BigBasket were redeemed by 34% of lapsed customers, against 20% assumed.", 0.34, 0.2],
+    ["restock", ["Gourmet"], null, "Reorder gifting boxes 6 days before a festival: suppliers slow down in the last week.", "Haldiram's lead times stretched from 3 to 6 days ahead of Dussehra; restock signals now fire earlier.", 6, 3],
+    ["surge", ["Grocery", "Home"], "shoppi", "Grocery and household demand peaks on Saturday evenings; hold prices then instead of discounting.", "Saturday 5–9 pm orders run 1.3× the weekday rate at BigBasket.", 1.3, 1.1],
+    ["price_response", ["Gourmet"], null, "Sweets and gifting boxes respond to festive bundles more than to straight discounts.", "Bundled offers beat equal-value discounts on 6 of 8 Haldiram's gifting packs.", -1.3, -1.6],
   ];
   const inScope = new Set(list.filter((m) => (!scope.platform || m.platform === scope.platform) && (!scope.merchant || m.id === scope.merchant)).map((m) => m.id));
   const out = [];
@@ -425,7 +426,7 @@ const R_HUB = 130, R_GROUP = 255, R_LEAF = 330, LEAF_STEP = 12.5;
 const G = { nodes: [], byId: new Map(), merchants: [], groups: [], hubs: [], root: null, outerR: 600, sig: "" };
 const SCOPE = { key: "hq", platform: null, merchant: null, ids: null };
 
-// A platform with one big category (DMart: all hypermarkets) is split by city, so the tree still has a readable middle layer.
+// A platform with one big category (40+ merchants in it) is split by city, so the tree still has a readable middle layer.
 function groupsOf(p) {
   if (p.categories.length === 1 && p.categories[0].merchants.length > 40) {
     const cat = p.categories[0], byCity = new Map();
@@ -524,11 +525,10 @@ function placeProducts(m, products) {
 // ---------------------------------------------------------------- scope (the "See it as…" selector)
 function scopeOptions() {
   const ms = allMerchants();
-  const dm = ms.filter((m) => m.platform === "dmart").sort((a, b) => a.id.localeCompare(b.id))[0];
-  const dl = ms.find((m) => m.id === "shoppi-haldirams");
-  const opts = [["hq", "HQ (everything)"], ...G.hubs.map((h) => ["platform:" + h.pid, h.label])];
-  if (dl) opts.push(["merchant:" + dl.id, `${dl.name} (a Shoppi merchant)`]);
-  if (dm) opts.push(["merchant:" + dm.id, `${dm.name} (a DMart store)`]);
+  // Haldiram's first, then the other merchants; a platform choice only when there is more than one platform.
+  const mine = ms.filter((m) => m.platform === "shoppi").sort((a, b) => (b.id === "shoppi-haldirams") - (a.id === "shoppi-haldirams") || a.name.localeCompare(b.name));
+  const opts = [["hq", "HQ (everything)"], ...(G.hubs.length > 1 ? G.hubs.map((h) => ["platform:" + h.pid, h.label]) : [])];
+  for (const m of mine) opts.push(["merchant:" + m.id, `${m.name} (a ${plat(m.platform).name} merchant)`]);
   return opts;
 }
 function renderScopeSelect() {
@@ -536,8 +536,9 @@ function renderScopeSelect() {
   const sig = opts.map((o) => o.join("=")).join("|");
   if (sel.dataset.sig !== sig) {
     sel.textContent = "";
+    const popts = opts.filter((o) => o[0].startsWith("platform:"));
     sel.append(el("optgroup", { label: "The root operator" }, el("option", { value: "hq" }, "HQ (everything)")),
-      el("optgroup", { label: "A platform's brain" }, opts.filter((o) => o[0].startsWith("platform:")).map(([v, l]) => el("option", { value: v }, l))),
+      ...(popts.length ? [el("optgroup", { label: "A platform's brain" }, popts.map(([v, l]) => el("option", { value: v }, l)))] : []),
       el("optgroup", { label: "One merchant's brain" }, opts.filter((o) => o[0].startsWith("merchant:")).map(([v, l]) => el("option", { value: v }, l))));
     sel.dataset.sig = sig;
   }
@@ -837,7 +838,7 @@ function draw(now, dt) {
     gr.addColorStop(0, "#ffffffcc"); gr.addColorStop(0.35, col); gr.addColorStop(1, col);
     ctx.beginPath(); ctx.arc(h.x, h.y, r, 0, Math.PI * 2); ctx.fillStyle = gr; ctx.fill(); ctx.shadowBlur = 0;
     ctx.fillStyle = "#0b0e14"; ctx.font = "800 11px Inter, system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText({ shopify: "S", reliance: "R", dmart: "D" }[h.pid] || h.label[0], h.x, h.y + 0.5);
+    ctx.fillText({ shoppi: "S" }[h.pid] || h.label[0], h.x, h.y + 0.5);
   }
   {
     const n = G.root, r = n.r * (1 + (reduced() ? 0 : Math.sin(now / 600) * 0.04));
@@ -1494,47 +1495,17 @@ function makeMock() {
   const mulberry = (a) => () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return h >>> 0; };
   const R = mulberry(20261106), rnd = () => R(), pick = (a) => a[(rnd() * a.length) | 0];
-  const CAT = {
-    Fashion: [["Cotton Kurta Set", 1299], ["Banarasi Silk Saree", 3499], ["Nehru Jacket", 1899], ["Kolhapuri Chappals", 799], ["Festive Lehenga", 4999], ["Chikankari Dupatta", 899], ["Linen Shirt", 1499], ["Block-print Kurti", 999]],
-    Beauty: [["Kumkumadi Face Oil", 899], ["Ubtan Face Pack", 449], ["Vitamin C Serum", 599], ["Rose Water Toner", 299], ["Sandalwood Soap 4-pack", 240], ["Kajal Stick", 199], ["Hair Oil 200ml", 349]],
-    "Electronics Accessories": [["Fast Charger 33W", 999], ["Braided USB-C Cable", 349], ["Power Bank 20000", 1999], ["TWS Earbuds", 1499], ["Phone Case", 499], ["Smartwatch Strap", 399]],
-    Home: [["Terracotta Diya Set (12)", 199], ["Brass Puja Thali", 899], ["Rangoli Colours Kit", 249], ["Scented Candles Trio", 599], ["Toran Door Hanging", 349], ["Steel Dinner Set 24pc", 1899], ["Cotton Bedsheet", 1199]],
-    "Home Decor": [["Handwoven Cotton Dhurrie", 2199], ["Brass Diya Pair", 1499], ["Macramé Wall Hanging", 999], ["Block-print Cushion Cover", 549], ["Terracotta Planter", 699], ["Jute Table Runner", 449]],
-    Gourmet: [["Kaju Katli 500g", 549], ["Dry Fruit Gift Box", 1199], ["Masala Chai Blend 250g", 349], ["Filter Coffee 500g", 420], ["Mango Pickle 400g", 260]],
-    Grocery: [["Tata Salt 1kg", 28], ["India Gate Basmati 5kg", 649], ["Aashirvaad Atta 10kg", 489], ["Fortune Sunflower Oil 1L", 155], ["Amul Butter 500g", 285], ["Toor Dal 1kg", 172], ["Red Label Tea 1kg", 560], ["Amul Ghee 1L", 650]],
-    Electronics: [["Samsung 43\" Smart TV", 31990], ["LED Bulb 9W 4-pack", 399], ["Induction Cooktop", 2499], ["Mixer Grinder 750W", 3299], ["Bluetooth Speaker", 1799], ["Air Fryer 4L", 5499]],
-  };
-  CAT.Hypermarket = [...CAT.Grocery, ["Surf Excel Matic 2kg", 425], ["Maggi Noodles 12-pack", 168], ["Cadbury Celebrations", 249], ["Steel Kadai", 599], ["Diwali LED String Lights", 349], ["Haldiram's Soan Papdi 500g", 199]];
-  const CITIES = ["Mumbai", "Delhi", "Bengaluru", "Hyderabad", "Chennai", "Kolkata", "Pune", "Ahmedabad", "Jaipur", "Lucknow", "Surat", "Kochi", "Chandigarh", "Indore", "Bhopal", "Nagpur", "Thane", "Vadodara", "Coimbatore", "Goa"];
-  const DMART_CITIES = ["Mumbai", "Mumbai", "Mumbai", "Thane", "Thane", "Pune", "Pune", "Hyderabad", "Hyderabad", "Bengaluru", "Ahmedabad", "Surat", "Nashik", "Nagpur", "Indore", "Jaipur", "Chennai", "Vadodara"];
-  const LOC = ["Powai", "Malad", "Andheri", "Whitefield", "Koramangala", "Saket", "Rohini", "Kukatpally", "Velachery", "Salt Lake", "Kothrud", "Wakad", "Satellite", "Vesu", "Mansarovar", "Gomti Nagar", "Ambattur", "Vashi", "Ghodbunder", "Hadapsar", "Baner", "Bopal", "Vijay Nagar", "Dharampeth", "College Road", "Anna Nagar", "Gotri", "Kandivali", "Mulund", "LB Nagar"];
-  const BRANDS = ["Urban Threads", "Masala Box", "Kaapi Kulture", "Khadi Loom", "Desi Glow", "Bombay Brew Co", "Chai Tales", "Indigo Weave", "Nimbu Naturals", "Saffron Skin", "Pahadi Pantry", "Jaipur Juttis", "Coastal Spice Co", "Mitti Home", "Kesar Kitchen", "Banyan Basics", "Rangrez", "Ghar Decor", "Svasti Ayurveda", "Bloom Botanics", "Thread & Tale", "Bindi Box", "Kulhad Co", "Peacock Prints", "Cotton Crate", "Neel Studio", "Sutra Silks", "Amrit Organics", "Chandni Lights", "Zari House", "Volt Lane", "Charge Bazaar", "Tulsi Tonics", "Patang Store", "Haveli Crafts"];
-  const RFMT = { Grocery: ["Reliance Smart Bazaar", "Reliance Fresh", "Reliance Smart Point"], Electronics: ["Reliance Digital"], Fashion: ["Reliance Trends"] };
-  const SPEC = [["shopify", [["Fashion", 71], ["Beauty", 60], ["Electronics Accessories", 48], ["Home", 41], ["Gourmet", 19]]], ["reliance", [["Grocery", 126], ["Electronics", 42], ["Fashion", 42]]], ["dmart", [["Hypermarket", 150]]]];
-  const merchants = [], used = new Set();
-  const mk = (pid, n, name, city, cat) => {
-    let nm = name, k = 2; while (used.has(nm)) nm = `${name} ${k++}`; used.add(nm);
-    const pool = CAT[cat], np = pid === "dmart" ? 18 : pid === "reliance" ? 14 : 8 + ((rnd() * 8) | 0), products = [];
-    for (let i = 0; i < np; i++) {
-      const [pn, price] = pool[i % pool.length], v = i >= pool.length ? " (" + ["XL", "pack of 2", "family", "gift"][(i / pool.length | 0) % 4] + ")" : "";
-      products.push({ sku: `${cat.slice(0, 3).toUpperCase()}${String(i).padStart(3, "0")}`, name: (pid === "shopify" ? nm + " " : "") + pn + v, category: cat, price, cost: Math.round(price * 0.7),
-        stock: Math.round(20 + rnd() * 300), lead_days: 2 + ((rnd() * 6) | 0), perishable: cat === "Grocery" && rnd() < 0.3, pop: (pid === "dmart" ? 24 : pid === "reliance" ? 14 : 4) * (0.3 + rnd() * 1.7) * (price > 5000 ? 0.15 : price > 1000 ? 0.5 : 1) });
-    }
-    const w = (pid === "dmart" ? 2.4 : pid === "reliance" ? 1.4 : 0.5) * (0.2 + Math.pow(rnd(), 1.6) * 2.4);
-    const m = { id: `${pid}-${String(n).padStart(4, "0")}`, platform: pid, name: nm, city, category: cat, products, w, orders_today: 0, revenue_today: 0, open: [], outs: [], offers_applied: 0, autopilot: rnd() < 0.4 };
-    const o = Math.round(w * 220 * (0.7 + rnd() * 0.6)); m.orders_today = o; m.revenue_today = o * products.reduce((a, p) => a + p.price, 0) / products.length * 0.6;
-    merchants.push(m); return m;
-  };
-  mk("shopify", 1, "Desi Living", "Bengaluru", "Home Decor");
-  let n = 2;
-  for (const [pid, cats] of SPEC) {
-    if (pid !== "shopify") n = 1;
-    for (const [cat, cnt] of cats) for (let i = 0; i < cnt; i++) {
-      if (pid === "shopify") mk(pid, n++, BRANDS[(n * 7) % BRANDS.length], pick(CITIES.slice(0, 14)), cat);
-      else if (pid === "reliance") { const c = pick(CITIES); mk(pid, n++, `${pick(RFMT[cat])} ${pick(LOC)}`, c, cat); }
-      else { const c = n === 1 ? "Jaipur" : pick(DMART_CITIES); mk(pid, n++, n === 2 ? "DMart Mansarovar" : `DMart ${pick(LOC)}`, c, cat); }
-    }
-  }
+  // The one platform and its real merchants and catalogs (window.SHOPPI_WORLD, from examples/shoppi).
+  const W = window.SHOPPI_WORLD || { platform: { id: "shoppi" }, customers: 0, merchants: [] };
+  const merchants = W.merchants.map((sm) => {
+    const products = sm.products.map((p) => ({ sku: p.sku, name: p.name, category: p.category, price: p.price, cost: p.cost, stock: p.stock,
+      lead_days: p.lead_days, perishable: !!p.perishable, pop: Math.max(0.5, (p.sold_30d || 0) / 30) }));
+    const w = (sm.size || 3) / 3 * (0.8 + rnd() * 0.4);
+    const m = { id: sm.id, platform: W.platform.id, name: sm.name, city: sm.city, category: sm.categories[0] || products[0]?.category || "Grocery", products, w,
+      orders_today: 0, revenue_today: 0, open: [], outs: [], offers_applied: 0, autopilot: rnd() < 0.5 };
+    const o = Math.round(w * 220 * (0.7 + rnd() * 0.6)); m.orders_today = o; m.revenue_today = o * products.reduce((a, p) => a + p.price, 0) / Math.max(1, products.length) * 0.6;
+    return m;
+  });
   const byId = new Map(merchants.map((m) => [m.id, m]));
   const cum = []; { let t = 0; for (const m of merchants) { t += m.w; cum.push(t); } }
   const pickM = () => { const r = rnd() * cum[cum.length - 1]; let lo = 0, hi = cum.length - 1; while (lo < hi) { const mid = (lo + hi) >> 1; if (cum[mid] < r) lo = mid + 1; else hi = mid; } return merchants[lo]; };
@@ -1579,8 +1550,8 @@ function makeMock() {
     return { o, m };
   }
   // a realistic starting point: some merchants already have signals and closed offers
-  for (let i = 0; i < 120; i++) makeSignal();
-  for (let i = 0; i < 25; i++) closeOne();
+  for (let i = 0; i < 8; i++) makeSignal();
+  for (let i = 0; i < 3; i++) closeOne();
   merchants[0].open = []; makeSignal(merchants[0]); makeSignal(merchants[0]);
   const wk = (day) => [1.25, 0.9, 0.88, 0.9, 0.95, 1.05, 1.3][new Date(day + "T00:00:00Z").getUTCDay()];
   const addD = (d, n) => new Date(Date.parse(d + "T00:00:00Z") + n * 864e5).toISOString().slice(0, 10);
@@ -1608,7 +1579,7 @@ function makeMock() {
     const scope = { platform: qs.get("platform"), merchant: qs.get("merchant") };
     if (seg[0] === "tree") return deriveTree(list(), scope);
     if (seg[0] === "lessons") return demoLessons(list(), scope);
-    if (seg[0] === "status") return { running: true, merchants: merchants.length, customers: 120000, series: merchants.reduce((a, m) => a + m.products.length, 0), orders_per_sec: 140 };
+    if (seg[0] === "status") return { running: true, merchants: merchants.length, customers: W.customers || 0, series: merchants.reduce((a, m) => a + m.products.length, 0), orders_per_sec: 140 };
     if (seg[0] === "signals") return recent.slice(0, +(qs.get("limit") || 50));
     if (seg[0] === "merchants" && !seg[1]) return list();
     if (seg[0] === "merchants") {

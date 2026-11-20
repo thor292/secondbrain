@@ -374,6 +374,7 @@
 <aside class="drawer" id="drawer" aria-label="Merchant"></aside>
 
 <script src="/static/sb.js"></script>
+<script src="/static/shoppi_world.js"></script>
 <script>
 "use strict";
 const { el, svg } = SB;
@@ -388,7 +389,7 @@ const SPEEDS = [["pause", "Pause"], ["1x", "Real time"], ["1min", "1 min/s"], ["
 const SPEED_VAL = { "1x": 1, "1min": 60, "1h": 3600, "1day": 14400 };
 const FESTIVALS = [["2026-10-20", "Dussehra"], ["2026-11-06", "Dhanteras"], ["2026-11-08", "Diwali"], ["2026-11-11", "Bhai Dooj"], ["2026-11-24", "Wedding season"], ["2026-12-25", "Christmas"]];
 const KIND = { discount: ["🏷️", "Discount"], restock: ["📦", "Restock"], winback: ["💌", "Win-back"], surge: ["📈", "Demand surge"], festival: ["🪔", "Festival"], clearance: ["⏳", "Clearance"] };
-const PLAT = { shoppi: ["Shoppi", "#E4572E", "#c2410c"], shopify: ["Shopify", "#95BF47", "#5f8f1d"], reliance: ["Reliance Retail", "#4f8cff", "#2563eb"], dmart: ["DMart", "#f5a524", "#d97706"] };
+const PLAT = { shoppi: ["Shoppi", "#E4572E", "#c2410c"] };
 const PLAT_EXTRA = [["#f472b6", "#db2777"], ["#33d6f2", "#0e9fbf"], ["#a78bfa", "#7c3aed"]];
 const platCache = {};
 function plat(id) {
@@ -834,12 +835,12 @@ const LEGEND = {
   rows: {}, built: "",
   build() {
     const pids = [...new Set(S.list.map((m) => m.platform))];
-    const ord = ["shoppi", "shopify", "reliance", "dmart"];
+    const ord = ["shoppi"];
     pids.sort((a, b) => (ord.indexOf(a) + 1 || 9) - (ord.indexOf(b) + 1 || 9));
     const sig = pids.join(",") + S.list.length + isLight();
     if (sig === this.built) return;
     this.built = sig;
-    const kinds = { shopify: "D2C online stores", reliance: "Stores and JioMart", dmart: "Hypermarkets" };
+    const kinds = { shoppi: window.SHOPPI_WORLD?.platform?.kind || "Marketplace merchants" };
     $("legend").replaceChildren(...pids.map((pid) => {
       const n = S.list.filter((m) => m.platform === pid).length;
       const opsN = el("span", {}, "—"), ops = el("div", { class: "ops" }, opsN, el("small", {}, " orders/s")), sp = makeSpark(pcol(pid), { h: 34 });
@@ -1553,64 +1554,24 @@ function makeMock() {
   const mulberry = (a) => () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619); return h >>> 0; };
   const R = mulberry(20261108), rnd = () => R(), pick = (a) => a[(rnd() * a.length) | 0];
-  const CITY = {
-    Mumbai: [72.88, 19.08, ["Powai", "Malad", "Goregaon", "Mulund", "Kandivali", "Andheri", "Borivali", "Vashi"]], Delhi: [77.21, 28.61, ["Saket", "Rohini", "Dwarka", "Lajpat Nagar", "Karol Bagh"]],
-    Bengaluru: [77.59, 12.97, ["Whitefield", "Koramangala", "Electronic City", "Marathahalli", "Jayanagar"]], Hyderabad: [78.49, 17.39, ["Kukatpally", "Ameerpet", "LB Nagar", "Gachibowli"]],
-    Chennai: [80.27, 13.08, ["T Nagar", "Velachery", "Anna Nagar", "Tambaram"]], Kolkata: [88.36, 22.57, ["Salt Lake", "Howrah", "Park Street", "New Town"]],
-    Pune: [73.86, 18.52, ["Kothrud", "Hadapsar", "Wakad", "Baner", "Pimpri"]], Ahmedabad: [72.57, 23.02, ["Satellite", "Naroda", "Maninagar", "Bopal"]],
-    Jaipur: [75.79, 26.91, ["Malviya Nagar", "Vaishali Nagar", "Mansarovar"]], Lucknow: [80.95, 26.85, ["Gomti Nagar", "Hazratganj", "Aliganj"]], Surat: [72.83, 21.17, ["Adajan", "Vesu", "Varachha"]],
-    Kochi: [76.27, 9.93, ["Edappally", "Kakkanad"]], Chandigarh: [76.78, 30.73, ["Sector 17", "Sector 35"]], Indore: [75.86, 22.72, ["Vijay Nagar", "Palasia"]], Bhopal: [77.41, 23.26, ["MP Nagar", "Kolar Road"]],
-    Nagpur: [79.09, 21.15, ["Sitabuldi", "Dharampeth"]], Patna: [85.14, 25.59, ["Boring Road", "Kankarbagh"]], Bhubaneswar: [85.82, 20.3, ["Saheed Nagar", "Patia"]], Guwahati: [91.74, 26.14, ["Paltan Bazaar", "Dispur"]],
-    Coimbatore: [76.96, 11.02, ["RS Puram", "Gandhipuram"]], Visakhapatnam: [83.22, 17.69, ["MVP Colony", "Dwaraka Nagar"]], Thane: [72.98, 19.2, ["Thane West", "Ghodbunder Road", "Majiwada"]],
-    Vadodara: [73.18, 22.31, ["Alkapuri", "Gotri"]], Nashik: [73.79, 20.0, ["College Road", "Nashik Road"]], Mysuru: [76.64, 12.3, ["Vijayanagar", "Saraswathipuram"]], Kanpur: [80.33, 26.45, ["Swaroop Nagar", "Kidwai Nagar"]],
-    Ludhiana: [75.86, 30.9, ["Model Town", "Sarabha Nagar"]], Goa: [73.83, 15.49, ["Panaji", "Margao"]], Thiruvananthapuram: [76.94, 8.52, ["Pattom", "Kowdiar"]], Dehradun: [78.03, 30.32, ["Rajpur Road"]],
-    Raipur: [81.63, 21.25, ["Shankar Nagar"]], Ranchi: [85.31, 23.34, ["Lalpur"]], Madurai: [78.12, 9.93, ["Anna Nagar"]], Vijayawada: [80.65, 16.51, ["Benz Circle", "Governorpet"]], Amritsar: [74.87, 31.63, ["Ranjit Avenue"]],
-    Srinagar: [74.8, 34.08, ["Lal Chowk"]], Varanasi: [82.97, 25.32, ["Lanka", "Sigra"]],
-  };
-  const CAT = {
-    Grocery: [["Tata Salt 1kg", 28], ["India Gate Basmati 5kg", 649], ["Aashirvaad Atta 10kg", 489], ["Fortune Sunflower Oil 1L", 155], ["Amul Butter 500g", 285], ["Maggi Noodles 12-pack", 168],
-      ["Surf Excel Matic 2kg", 425], ["Toor Dal 1kg", 172], ["Red Label Tea 1kg", 560], ["Amul Ghee 1L", 650], ["Cadbury Celebrations", 249], ["Haldiram's Soan Papdi 500g", 199]],
-    Electronics: [["boAt Airdopes 141", 1299], ["Mi Power Bank 20000", 1999], ["Philips LED 9W 4-pack", 399], ["Diwali LED String Lights", 349], ["Prestige Induction Cooktop", 2499], ["Samsung 43\" Smart TV", 31990]],
-    Fashion: [["Cotton Kurta Set", 1299], ["Banarasi Silk Saree", 3499], ["Men's Nehru Jacket", 1899], ["Kolhapuri Chappals", 799], ["Festive Lehenga", 4999], ["Chikankari Dupatta", 899]],
-    Beauty: [["Kumkumadi Face Oil", 899], ["Ubtan Face Pack", 449], ["Vitamin C Serum", 599], ["Rose Water Toner", 299], ["Sandalwood Soap 4-pack", 240]],
-    Home: [["Terracotta Diya Set (12)", 199], ["Brass Puja Thali", 899], ["Rangoli Colours Kit", 249], ["Scented Candles Trio", 599], ["Toran Door Hanging", 349], ["Steel Dinner Set 24pc", 1899]],
-    Gourmet: [["Kaju Katli 500g", 549], ["Dry Fruit Gift Box", 1199], ["Masala Chai Blend 250g", 349], ["Filter Coffee 500g", 420], ["Mango Pickle 400g", 260]],
-  };
   const PRIOR = { Grocery: -1.1, Electronics: -2.1, Fashion: -1.7, Beauty: -1.5, Home: -1.6, Gourmet: -1.3 };
   const TRUE = { Grocery: -1.45, Electronics: -1.75, Fashion: -2.2, Beauty: -1.3, Home: -2.0, Gourmet: -1.6 };
-  const BRANDS = ["Urban Threads", "Masala Box", "Kaapi Kulture", "Khadi Loom", "Desi Glow", "Bombay Brew Co", "Chai Tales", "Indigo Weave", "Nimbu Naturals", "Saffron Skin", "Pahadi Pantry", "Jaipur Juttis",
-    "Coastal Spice Co", "Tiffin Tales", "Mitti Home", "Kesar Kitchen", "Banyan Basics", "Rangrez", "Ghar Decor", "Svasti Ayurveda", "Bloom Botanics", "Mango Monk", "Thread & Tale", "Bindi Box", "Kulhad Co",
-    "Peacock Prints", "Lotus Leaf Tea", "Dhaba Dips", "Cotton Crate", "Neel Studio", "Haveli Crafts", "Sutra Silks", "Amrit Organics", "Chandni Lights", "Malabar Masala", "Kashmir Kahwa", "Dilli Darbar Sweets", "Patang Toys", "Zari House", "Tulsi Tonics"];
-  const RFMT = [["Reliance Smart Bazaar", ["Grocery", "Home"]], ["Reliance Fresh", ["Grocery"]], ["Reliance Digital", ["Electronics"]], ["Reliance Trends", ["Fashion"]], ["Reliance Smart Point", ["Grocery"]]];
-  const PLATS = [
-    { id: "shopify", n: 80, mult: 0.7, cities: ["Bengaluru", "Mumbai", "Delhi", "Pune", "Hyderabad", "Chennai", "Kolkata", "Jaipur", "Ahmedabad", "Kochi", "Chandigarh", "Indore", "Goa", "Lucknow", "Guwahati", "Dehradun", "Srinagar", "Varanasi", "Amritsar", "Coimbatore"] },
-    { id: "reliance", n: 140, mult: 1.0, cities: Object.keys(CITY) },
-    { id: "dmart", n: 110, mult: 1.4, cities: ["Mumbai", "Mumbai", "Thane", "Thane", "Pune", "Pune", "Nashik", "Nagpur", "Ahmedabad", "Surat", "Vadodara", "Hyderabad", "Hyderabad", "Vijayawada", "Visakhapatnam", "Bengaluru", "Mysuru", "Indore", "Bhopal", "Jaipur", "Chennai", "Raipur"] },
-  ];
-  const merchants = [], used = new Set();
-  let sid = 0;
-  for (const P of PLATS) for (let i = 0; i < P.n; i++) {
-    const city = pick(P.cities), [lon, lat, locs] = CITY[city], loc = pick(locs);
-    let name, cats;
-    if (P.id === "shopify") { name = BRANDS[i % BRANDS.length] + (i >= BRANDS.length ? " " + city : ""); cats = [pick(["Fashion", "Beauty", "Home", "Gourmet"])]; }
-    else if (P.id === "dmart") { name = `DMart ${loc}`; cats = ["Grocery", "Home"]; }
-    else { const [f, c] = pick(RFMT); name = `${f} ${loc}`; cats = c; }
-    let nm = name, k = 2; while (used.has(nm)) nm = `${name} ${k++}`; used.add(nm);
-    const products = [];
-    for (const c of cats) {
-      const pool = [...CAT[c]].sort(() => rnd() - 0.5).slice(0, cats.length > 1 ? 4 : 5);
-      for (const [pn, price] of pool) products.push({ sku: `${c.slice(0, 3).toUpperCase()}-${hash(pn) % 10000}`, name: pn, category: c, price, cost: Math.round(price * 0.72),
-        stock: Math.round(40 + rnd() * 400), lead_days: 2 + ((rnd() * 5) | 0), perishable: c === "Grocery" && rnd() < 0.3, pop: (P.id === "dmart" ? 30 : P.id === "reliance" ? 18 : 6) * (0.4 + rnd() * 1.6) * (price > 5000 ? 0.15 : price > 1000 ? 0.5 : 1) });
-    }
-    const spread = city === "Mumbai" || city === "Delhi" || city === "Bengaluru" ? 0.75 : 0.4;
-    const [x, y] = proj(lon + (rnd() - 0.5) * spread, lat + (rnd() - 0.5) * spread);
-    merchants.push({ id: `${P.id}-${String(++sid).padStart(4, "0")}`, platform: P.id, name: nm, city, category: cats[0], x, y, products, w: P.mult * Math.pow(rnd(), 1.8) * 3 + 0.2,
-      orders_today: 0, revenue_today: 0, open: [], outs: [] });
-  }
+  // Shoppi only: the 4 real merchants and their catalogs (same world as commerce/world.py _shoppi).
+  const W = window.SHOPPI_WORLD || { platform: { id: "shoppi" }, customers: 40000, merchants: [] };
+  const merchants = W.merchants.map((sm) => {
+    const [x, y] = proj(sm.lng, sm.lat), sz = sm.size || 1;
+    // units/day from the last 30 days, nudged up for bigger merchants
+    const products = sm.products.map((p) => ({ sku: p.sku, name: p.name, category: p.category, price: p.price, cost: p.cost, stock: p.stock, lead_days: p.lead_days,
+      perishable: p.perishable, pop: Math.max(0.3, (p.sold_30d / 30) * (0.7 + sz / 20) * (0.85 + rnd() * 0.3)) }));
+    return { id: sm.id || `shoppi-${sm.slug}`, platform: "shoppi", name: sm.name, city: sm.city, category: sm.categories?.[0] || products[0]?.category, x, y, products, w: sz,
+      orders_today: 0, revenue_today: 0, open: [], outs: [] };
+  });
   const cum = []; { let t = 0; for (const m of merchants) { t += m.w; cum.push(t); } }
   const pickM = () => { const r = rnd() * cum[cum.length - 1]; let lo = 0, hi = cum.length - 1; while (lo < hi) { const mid = (lo + hi) >> 1; if (cum[mid] < r) lo = mid + 1; else hi = mid; } return merchants[lo]; };
   const byId = new Map(merchants.map((m) => [m.id, m]));
-  const CUSTOMERS = 120000;
+  const CUSTOMERS = W.customers || 40000;
+  const CATS = new Set(merchants.flatMap((m) => m.products.map((p) => p.category)));
+  const POP = merchants.reduce((a, m) => a + m.products.reduce((b, p) => b + p.pop, 0), 0);
   const HOURLY = [0.2, 0.1, 0.05, 0.05, 0.08, 0.2, 0.5, 0.9, 1.2, 1.4, 1.6, 1.8, 1.9, 1.7, 1.5, 1.4, 1.5, 1.7, 2.0, 2.2, 2.1, 1.6, 1.0, 0.5];
   const HSUM = HOURLY.reduce((a, b) => a + b, 0);
   const cumDay = (frac) => { const h = frac * 24, i = Math.floor(h); let s = 0; for (let k = 0; k < i; k++) s += HOURLY[k]; return (s + HOURLY[Math.min(23, i)] * (h - i)) / HSUM; };
@@ -1629,9 +1590,9 @@ function makeMock() {
     sim: Date.parse("2026-11-06T09:00:00Z"), speed: "1h", running: true,
     orders_total: 0, units_total: 0, revenue_total: 0, active: 0, ordersToday: 0, day: "2026-11-06",
     signals_total: 0, by_kind: {}, offers_applied: 0, uplift: 0, msgs: 0,
-    plat: { shopify: { orders_total: 0, revenue_total: 0, w: [] }, reliance: { orders_total: 0, revenue_total: 0, w: [] }, dmart: { orders_total: 0, revenue_total: 0, w: [] } },
+    plat: { shoppi: { orders_total: 0, revenue_total: 0, w: [] } },
     pipe: { ingested: 0, forecasts_updated: 0, delivered: 0 }, win: [], tick: [], recent: [], offers: [], outcomes: 0, hits: 0,
-    el: Object.fromEntries(Object.entries(PRIOR).map(([c, p]) => [c, { prior: p, learned: p, n: 0 }])),
+    el: Object.fromEntries(Object.entries(PRIOR).filter(([c]) => CATS.has(c)).map(([c, p]) => [c, { prior: p, learned: p, n: 0 }])),
     t0: Date.now(), days_scored: 56,
   };
   for (let i = 0; i < 6; i++) { st.orders_total += 0; }
@@ -1640,7 +1601,7 @@ function makeMock() {
     const diurnal = HOURLY[h] + (HOURLY[(h + 1) % 24] - HOURLY[h]) * (hf - h);
     const fest = festMult(isoDay(st.sim), "Home") * 0.5 + 0.5;
     const spd = { "1x": 0.25, "1min": 0.55, "1h": 1, "1day": 1.5 }[st.speed];
-    return 230 * (0.25 + diurnal / 1.4) * fest * spd;
+    return Math.min(15, POP / 400) * (0.25 + diurnal / 1.4) * fest * spd;
   };
   let H = {};
   const lognorm = (mu, s) => Math.exp(mu + s * Math.sqrt(-2 * Math.log(rnd() + 1e-9)) * Math.cos(6.283 * rnd()));
@@ -1693,7 +1654,7 @@ function makeMock() {
     const upl = Math.round(p.pop * (disc ? -el_ * disc * 4 : 0.5) * (1 + rnd()) + 5);
     const s = { id: "sig-" + (++st.signals_total) + "-" + ((rnd() * 1e6) | 0), sent_ms: Date.now() - Math.round(2 + rnd() * 6), sim_ts: new Date(st.sim).toISOString().slice(0, 19),
       platform: m.platform, merchant: m.id, merchant_name: m.name, city: m.city, sku: p.sku, product: p.name, category: p.category, kind, urgency: t.urgency, title: t.title, detail: t.detail,
-      action: t.action, expected: { units: upl + Math.round(p.pop), revenue: Math.round((upl + p.pop) * p.price * (1 - disc)), margin: Math.round(upl * (p.price * (1 - disc) - p.cost)), uplift_units: upl },
+      action: t.action, expected: { units: upl + Math.round(p.pop), revenue: Math.round((upl + p.pop) * p.price * (1 - disc)), margin: +((p.price * (1 - disc) - p.cost) / (p.price * (1 - disc))).toFixed(4), uplift_units: upl },
       confidence: +(0.55 + rnd() * 0.4).toFixed(2), evidence: { actual: Math.round(p.pop * 0.7), forecast: Math.round(p.pop), deviation: -0.25, stock: p.stock, cover_days: 6, elasticity: el_ },
       latency_ms: Math.round(l.broker + l.process + l.signal), autopilot: t.action.type === "discount" && rnd() < 0.35 };
     st.by_kind[kind] = (st.by_kind[kind] || 0) + 1;
@@ -1749,7 +1710,7 @@ function makeMock() {
       signals_total: st.signals_total, signals_by_kind: { ...st.by_kind }, offers_applied: st.offers_applied, uplift_revenue: st.uplift, platforms: pl,
       latency_ms: { broker_p50: pctl(latWin.map((l) => l.broker), 0.5), broker_p95: pctl(latWin.map((l) => l.broker), 0.95), process_p50: pctl(latWin.map((l) => l.process), 0.5),
         signal_p50: pctl(latWin.map((l) => l.signal), 0.5), end_to_end_p50: pctl(e2e, 0.5), end_to_end_p95: pctl(e2e, 0.95) },
-      accuracy: { wape, baseline_wape: 0.29 + (rnd() - 0.5) * 0.004, days_scored: st.days_scored, series_scored: merchants.reduce((a, m) => a + m.products.length, 0), by_platform: { shopify: wape * 1.2, reliance: wape, dmart: wape * 0.85 } },
+      accuracy: { wape, baseline_wape: 0.29 + (rnd() - 0.5) * 0.004, days_scored: st.days_scored, series_scored: merchants.reduce((a, m) => a + m.products.length, 0), by_platform: { shoppi: wape } },
       learning: { outcomes: st.outcomes, hit_rate: st.outcomes ? st.hits / st.outcomes : null, elasticity: JSON.parse(JSON.stringify(st.el)) },
       pipeline: { ingested: st.pipe.ingested, forecasts_updated: st.pipe.forecasts_updated, signals_raised: st.signals_total, delivered: st.pipe.delivered },
       festival: festInfo() };

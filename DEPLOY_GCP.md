@@ -104,6 +104,24 @@ gcloud run jobs create sb-schema \
 gcloud run jobs execute sb-schema --region REGION --wait
 ```
 
+## 5b. Load the Shoppi merchants (once, on an empty database)
+
+Creates the schema if needed, then the 4 Shoppi merchants (companies, owner logins, 400 days
+of sales, stock, catalog documents), forecasts and signals. Safe to run again.
+
+```bash
+gcloud run jobs create sb-seed-shoppi \
+  --image REGION-docker.pkg.dev/PROJECT/secondbrain/api:shoppi --region REGION \
+  --network VPC --subnet SUBNET --vpc-egress private-ranges-only \
+  --set-cloudsql-instances <instance connection name> \
+  --set-secrets SB_ADMIN_DATABASE_URL=sb-admin-db-url:latest,SB_LITELLM_API_KEY=sb-litellm-key:latest \
+  --set-env-vars SB_MODEL_PROVIDER=litellm,SB_LITELLM_BASE_URL=<as in .env>,SB_LLM_MODEL=<model>,SB_EMBEDDING_MODEL=<model>,SB_EMBEDDING_DIM=<dim> \
+  --task-timeout 30m --memory 2Gi \
+  --command python --args=-m,secondbrain.seed_shoppi
+gcloud run jobs execute sb-seed-shoppi --region REGION --wait
+```
+Without LiteLLM reachable, add `--no-ai` to the args (skips documents and signals; run again later without it).
+
 ## 6. Deploy the API
 
 ```bash

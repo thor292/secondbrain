@@ -248,6 +248,7 @@
   </div>
 </main>
 <script src="/static/sb.js"></script>
+<script src="/static/shoppi_world.js"></script>
 <script>
 const { el, svg } = SB;
 const $ = (id) => document.getElementById(id);
@@ -265,9 +266,6 @@ const KIND = { discount: ["🏷️", "Discount"], restock: ["📦", "Restock"], 
 const LKIND = { price_response: ["🏷️", "Price response"], no_discount: ["🛡️", "Hold the price"], festival_lift: ["🪔", "Festival lift"], winback: ["💌", "Win-back"], restock: ["📦", "Restock timing"], surge: ["📈", "Demand surges"] };
 const PLAT = {
   shoppi: { name: "Shoppi", kind: "Haldiram's, BigBasket, FabIndia, Bata", dark: "#E4572E", light: "#c2410c", cust: 1, mark: "S" },
-  shopify: { name: "Shopify", kind: "D2C online stores", dark: "#95BF47", light: "#5f8f1d", cust: 0.27, mark: "S" },
-  reliance: { name: "Reliance Retail", kind: "Smart, Digital, Trends · JioMart sellers", dark: "#4f8cff", light: "#2563eb", cust: 0.4, mark: "R" },
-  dmart: { name: "DMart", kind: "Hypermarkets", dark: "#f5a524", light: "#d97706", cust: 0.33, mark: "D" },
 };
 const PLAT_ORDER = ["shoppi"];
 const pinfo = (id) => PLAT[id] || { name: String(id || "").replace(/^\w/, (c) => c.toUpperCase()), kind: "", dark: "#a78bfa", light: "#7c3aed", cust: 0, mark: String(id || "?")[0].toUpperCase() };
@@ -871,7 +869,7 @@ const TREE = {
     // merchants, batched by colour
     const r = this.rdot, groups = new Map();
     for (const m of this.ms) {
-      const col = m.status === "urgent" ? TK.bad : m.status === "signal" ? TK.pink : pcol(m.plat.id, m.plat.d.color); // pink, not amber: DMart is amber
+      const col = m.status === "urgent" ? TK.bad : m.status === "signal" ? TK.pink : pcol(m.plat.id, m.plat.d.color); // pink, so open signals stand apart from urgent red
       let gp = groups.get(col); if (!gp) groups.set(col, (gp = [])); gp.push(m);
     }
     for (const [col, list] of groups) {
@@ -1406,8 +1404,8 @@ async function boot() {
 }
 
 // ================================================================ demo data (mock engine)
-// Runs a small market in the browser: the real engine's merchants when it is reachable (else a
-// generated 600), revenue that follows the day and the festival calendar, signals, offers and their
+// Runs a small market in the browser: the Shoppi merchants (the real engine's list when it is reachable,
+// else window.SHOPPI_WORLD) selling their real catalogs, revenue that follows the day and the festival calendar, signals, offers and their
 // outcomes, and lessons that form from those outcomes. Answers the HQ endpoints in contract shapes.
 function makeMock(seedMerchants, realStatus) {
   const mulberry = (a) => () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
@@ -1441,31 +1439,28 @@ function makeMock(seedMerchants, realStatus) {
   const HSUM = HOURLY.reduce((a, b) => a + b, 0);
   const dens = (t) => HOURLY[new Date(t).getUTCHours()] / HSUM; // share of a day's sales in this hour
 
-  // ----- world: the real merchants when we have them
-  let world = seedMerchants && seedMerchants.length ? seedMerchants.map((m) => ({ id: m.id, platform: m.platform, name: m.name, city: m.city, category: m.category })) : null;
-  if (!world) {
-    world = [];
-    const CITIES = ["Mumbai", "Delhi", "Bengaluru", "Hyderabad", "Chennai", "Kolkata", "Pune", "Ahmedabad", "Jaipur", "Lucknow", "Surat", "Kochi", "Indore", "Nagpur", "Thane", "Vadodara", "Bhopal", "Chandigarh", "Coimbatore", "Patna"];
-    const LOC = ["Powai", "Andheri", "Saket", "Rohini", "Whitefield", "Koramangala", "Kukatpally", "T Nagar", "Salt Lake", "Kothrud", "Satellite", "Malviya Nagar", "Gomti Nagar", "Vesu", "Edappally", "Vijay Nagar"];
-    const BR = ["Desi", "Kesar", "Mitti", "Indigo", "Saffron", "Banyan", "Lotus", "Peacock", "Zari", "Tulsi", "Neel", "Chandni", "Sutra", "Haveli", "Amrit", "Kulhad"], SUF = ["Living", "Label", "Studio", "Loom", "Naturals", "Co", "House", "Crafts"];
-    const plan = [["shopify", [["Fashion", 71], ["Beauty", 60], ["Electronics Accessories", 48], ["Home", 42], ["Gourmet", 19]]], ["reliance", [["Grocery", 126], ["Electronics", 42], ["Fashion", 42]]], ["dmart", [["Hypermarket", 150]]]];
-    let i = 0;
-    for (const [pid, cats] of plan) for (const [cat, n] of cats) for (let k = 0; k < n; k++) {
-      const loc = pick(LOC);
-      const name = pid === "shopify" ? (i === 0 ? "Desi Living" : `${pick(BR)} ${pick(SUF)}`) : pid === "dmart" ? `DMart ${loc}`
-        : `${cat === "Grocery" ? "Reliance Smart" : cat === "Electronics" ? "Reliance Digital" : "Reliance Trends"} ${loc}`;
-      world.push({ id: `${pid}-${String(++i).padStart(4, "0")}`, platform: pid, name, city: pick(CITIES), category: cat });
-    }
-  }
-  const SIZE = { shopify: [90000, 650], reliance: [320000, 420], dmart: [1100000, 360] }; // ₹ a day, average order value
+  // ----- world: the Shoppi merchants and their real catalogs (shoppi_world.js), the engine's list when we have it
+  const SW = window.SHOPPI_WORLD || { platform: { id: "shoppi" }, customers: 40000, merchants: [] }, swById = new Map(SW.merchants.map((m) => [m.id, m]));
+  // Shoppi's own categories -> the brain's product categories (same map as the engine's world.py)
+  const SHOPPI_CAT = { Namkeen: "Snacks", "Ready Meals": "Snacks", Frozen: "Snacks", Sweets: "Sweets", Gifting: "Sweets", Staples: "Staples", Beverages: "Staples", Dairy: "Dairy",
+    "Fruits & Vegetables": "Fresh", Household: "Household", Clothing: "Fashion", Outerwear: "Fashion", Accessories: "Fashion", Footwear: "Fashion" };
+  const seeded = (seedMerchants || []).filter((m) => m.platform === SW.platform.id);
+  const world = seeded.length ? seeded.map((m) => ({ id: m.id, platform: m.platform, name: m.name, city: m.city, category: m.category }))
+    : SW.merchants.map((m) => ({ id: m.id, platform: SW.platform.id, name: m.name, city: m.city, category: m.categories[0] }));
+  const SIZE = { shoppi: [400000, 450] }; // ₹ a day, average order value, for a merchant without a catalog
   const W = world.map((m) => {
-    const [d, aov] = SIZE[m.platform] || [200000, 500], k = 0.35 + Math.pow(R(), 1.6) * 2.2;
-    return { ...m, D: d * k, aov: aov * (0.8 + R() * 0.4), pcats: pcatsOf(m.category).filter((c) => PRODUCTS[c]), rev: 0, ord: 0, offers: 0, open: 0, festy: /Gourmet|Electronics|Home/.test(m.category) };
+    const prods = {}, cat = swById.get(m.id)?.products || [];
+    for (const p of cat) (prods[SHOPPI_CAT[p.shoppi_category] || "Home"] ||= []).push([p.name, p.price, p.sku]);
+    // ₹ a day from the catalog's last 30 days of sales; order value ≈ two lines at the average price
+    const D = sum(cat, (p) => p.price * p.sold_30d / 30) * (0.9 + R() * 0.2), units = sum(cat, (p) => p.sold_30d / 30);
+    const [d, aov] = SIZE[m.platform] || SIZE.shoppi;
+    return { ...m, D: D || d, aov: units ? (D / units) * 2 * (0.8 + R() * 0.4) : aov, prods: cat.length ? prods : PRODUCTS,
+      pcats: cat.length ? Object.keys(prods) : pcatsOf(m.category).filter((c) => PRODUCTS[c]), rev: 0, ord: 0, offers: 0, open: 0, festy: /Gourmet|Fashion|Home/.test(m.category) };
   });
   for (const m of W) if (!m.pcats.length) m.pcats = ["Staples"];
   const byId = new Map(W.map((m) => [m.id, m]));
   const pids = [...new Set(W.map((m) => m.platform))];
-  const customersTotal = realStatus?.customers || 120000, seriesTotal = realStatus?.series || 16291;
+  const customersTotal = realStatus?.customers || SW.customers || 40000, seriesTotal = realStatus?.series || sum(SW.merchants, (m) => m.products.length) || 88;
   let st;
 
   function lesson(kind, cat, prior, truth) {
@@ -1490,7 +1485,7 @@ function makeMock(seedMerchants, realStatus) {
     st.daysRun++;
   }
   function newSignal(m, emit) {
-    const pc = pick(m.pcats), [product, price] = pick(PRODUCTS[pc]), prior = (ELAST[pc] || [-1.2])[0];
+    const pc = pick(m.pcats), [product, price, sku] = pick(m.prods[pc] || PRODUCTS[pc] || PRODUCTS.Staples), prior = (ELAST[pc] || [-1.2])[0];
     const perishable = pc === "Fresh" || pc === "Dairy", r = R();
     const kind = perishable && r < 0.45 ? "clearance" : r < 0.42 ? "discount" : r < 0.7 ? "restock" : r < 0.82 ? "winback" : r < 0.93 ? "surge" : "festival";
     const units = Math.round(Math.max(3, Math.min(2500, (m.D / price) * (0.015 + R() * 0.05))));
@@ -1524,7 +1519,7 @@ function makeMock(seedMerchants, realStatus) {
       action = { type: "hold_price" }; rev = units * price * 0.6;
     }
     const s = { id: `sig-${++st.seq}`, sent_ms: Date.now(), sim_ts: simIso(st.t), platform: m.platform, merchant: m.id, merchant_name: m.name, city: m.city,
-      sku: pc.slice(0, 3).toUpperCase() + "-" + ((product.length * 37) % 997), product, category: pc, kind, urgency, title, detail, action,
+      sku: sku || pc.slice(0, 3).toUpperCase() + "-" + ((product.length * 37) % 997), product, category: pc, kind, urgency, title, detail, action,
       expected: { units: units + Math.max(0, lift), revenue: Math.round(rev), margin: 0.18 + R() * 0.2, uplift_units: Math.max(0, lift) },
       confidence: 0.62 + R() * 0.33, evidence: { cover_days: +cover, elasticity: prior }, latency_ms: 3 + R() * 9,
       autopilot: kind === "discount" && urgency !== "high" && R() < 0.3 };
@@ -1564,8 +1559,8 @@ function makeMock(seedMerchants, realStatus) {
       const rev = m.D * f, o = rev / m.aov;
       m.rev += rev; m.ord += o; st.tot.rev += rev; st.tot.ord += o; st.ordTick += o; st.P[m.platform].ordTick += o;
     }
-    // signals: about 18 an hour across the market, more in busy hours and on festival days
-    const n = poisson(18 * dtH * (0.5 + dens(t1) * 12) * (0.6 + fm * 0.4));
+    // signals: about 3 an hour across the Shoppi merchants, more in busy hours and on festival days
+    const n = poisson(3 * dtH * (0.5 + dens(t1) * 12) * (0.6 + fm * 0.4));
     for (let i = 0; i < n; i++) newSignal(W[(R() * W.length) | 0], emit && emit.length < 6 ? emit : null);
     // merchants act on some open offers; the rest expire (restocks and surges still teach the brain)
     for (const rec of [...st.open.values()]) {
@@ -1580,7 +1575,7 @@ function makeMock(seedMerchants, realStatus) {
   }
   // Accuracy improves a little with every simulated day the brain learns from.
   function accuracy() {
-    const k = Math.exp(-st.daysRun / 25), BASE = { shopify: [0.17, 0.33, 0.43], reliance: [0.12, 0.26, 0.38], dmart: [0.09, 0.21, 0.33] };
+    const k = Math.exp(-st.daysRun / 25), BASE = { shoppi: [0.15, 0.29, 0.4] };
     const per = {}, w = {};
     for (const p of pids) { const b = BASE[p] || [0.13, 0.27, 0.38]; per[p] = { merchant_wape: b[0] * (0.8 + 0.2 * k), wape: b[1] * (0.85 + 0.15 * k), baseline_wape: b[2] }; w[p] = sum(W.filter((m) => m.platform === p), (m) => m.D); }
     const tw = sum(pids, (p) => w[p]) || 1, avg = (f) => sum(pids, (p) => per[p][f] * w[p]) / tw;
@@ -1602,7 +1597,7 @@ function makeMock(seedMerchants, realStatus) {
       festival: (() => { const d = dayKey(st.t), f = FESTIVALS.find(([x]) => x >= d); return f ? { name: f[1], date: f[0], days_to: Math.round((Date.parse(f[0]) - Date.parse(d)) / 864e5) } : null; })() };
   }
   function base() {
-    const acc = accuracy(), P = st.P, custW = { shopify: 0.27, reliance: 0.4, dmart: 0.33 };
+    const acc = accuracy(), P = st.P, custW = { shoppi: 1 };
     const merchants = W.map((m) => ({ id: m.id, platform: m.platform, name: m.name, city: m.city, category: m.category, orders_today: Math.round(m.ord), revenue_today: m.rev, open_signals: m.open, offers_applied: m.offers }));
     const extra = Object.fromEntries(pids.map((p) => {
       const ms = W.filter((m) => m.platform === p), cust = Math.round(customersTotal * (custW[p] || 1 / pids.length));

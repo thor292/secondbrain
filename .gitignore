@@ -7,3 +7,4 @@ __pycache__/
 data/
 docker/live-broker/passwd
 docker/live-broker/acl
+.env.cloudrun
